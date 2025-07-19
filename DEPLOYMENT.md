@@ -30,7 +30,8 @@ DB_USER=portanal_user
 DB_PASSWORD=iAthbnJVh3kqOBfeTWiG8sG6mr7DQ44G
 ```
 
-**Important**: 
+**Important**:
+
 - Use the internal hostname (without .render.com) for better connectivity within Render
 - The database password should be set directly in Render's environment variables dashboard and never committed to Git
 - The application will automatically try both internal and external hostnames if connection fails

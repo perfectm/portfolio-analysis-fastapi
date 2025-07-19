@@ -30,8 +30,17 @@ elif os.getenv("RENDER") or os.getenv("DB_HOST"):
     DB_NAME = os.getenv("DB_NAME", "portanal")
     DB_USER = os.getenv("DB_USER", "portanal_user")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+    
+    # Check if password is provided
+    if not DB_PASSWORD:
+        logger.error("DB_PASSWORD environment variable is not set or is empty!")
+        logger.error("Please set DB_PASSWORD in your Render environment variables.")
+        logger.error("Expected password: iAthbnJVh3kqOBfeTWiG8sG6mr7DQ44G")
+    
     DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     logger.info(f"Using Render database configuration with host: {DB_HOST}")
+    logger.info(f"Database user: {DB_USER}, Database name: {DB_NAME}")
+    logger.info(f"Password provided: {'Yes' if DB_PASSWORD else 'NO - THIS WILL CAUSE CONNECTION FAILURE'}")
 else:
     # Local development fallback
     DATABASE_URL = "postgresql://postgres:password@localhost:5432/portfolio_analysis"
@@ -60,7 +69,23 @@ def create_database_engine():
         return True
         
     except Exception as e:
+        error_msg = str(e)
         logger.error(f"Failed to create PostgreSQL engine: {e}")
+        
+        # Check for specific error types and provide helpful messages
+        if "no password supplied" in error_msg or "password authentication failed" in error_msg:
+            logger.error("🔑 AUTHENTICATION ERROR:")
+            logger.error("  - Make sure DB_PASSWORD is set in your Render environment variables")
+            logger.error("  - Expected password: iAthbnJVh3kqOBfeTWiG8sG6mr7DQ44G")
+            logger.error("  - Check Render dashboard > Environment tab")
+        elif "could not translate host name" in error_msg:
+            logger.error("🌐 HOSTNAME ERROR:")
+            logger.error("  - Check DB_HOST environment variable")
+            logger.error("  - Try internal hostname: dpg-d1u03gbipnbc73cqnl2g-a")
+        elif "timeout" in error_msg.lower():
+            logger.error("⏱️ CONNECTION TIMEOUT:")
+            logger.error("  - Database server may be starting up")
+            logger.error("  - Wait a few minutes and retry")
         
         # If on Render and the external hostname failed, try internal hostname
         if os.getenv("RENDER") and "render.com" in DATABASE_URL:
