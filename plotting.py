@@ -9,9 +9,17 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
+import warnings
 from typing import List, Optional, Dict, Any
 
 from config import UPLOAD_FOLDER
+
+# Suppress common warnings
+warnings.filterwarnings('ignore', message='use_inf_as_na option is deprecated')
+warnings.filterwarnings('ignore', message='Unable to import Axes3D')
+warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib.projections')
+warnings.filterwarnings('ignore', message='Format strings passed to MaskedConstant are ignored')
+warnings.filterwarnings('ignore', category=FutureWarning, module='seaborn.matrix')
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +67,13 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
     # Plot 3: Daily Returns Distribution (bottom left)
     ax3 = plt.subplot(2, 2, 3)
     dollar_returns = df['Daily Return'].dropna() * df['Account Value'].shift(1)
-    sns.histplot(data=dollar_returns, bins=20, kde=True, ax=ax3)
+    # Clean data for seaborn - remove infinite values and NaNs
+    dollar_returns_clean = dollar_returns.replace([np.inf, -np.inf], np.nan).dropna()
+    if len(dollar_returns_clean) > 0:
+        sns.histplot(data=dollar_returns_clean, bins=20, kde=True, ax=ax3)
+    else:
+        # Fallback if no valid data
+        ax3.text(0.5, 0.5, 'No valid return data', ha='center', va='center', transform=ax3.transAxes)
     ax3.set_title('Distribution of Daily Returns')
     ax3.set_xlabel('Daily Return ($)')
     ax3.set_ylabel('Frequency')
@@ -127,15 +141,24 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         # Create a mask for the upper triangle to show only lower triangle + diagonal
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
         
-        # Generate the heatmap
-        sns.heatmap(correlation_matrix, 
-                   annot=True, 
+        # Clean correlation matrix for seaborn - replace infinite values with NaN
+        correlation_matrix_clean = correlation_matrix.replace([np.inf, -np.inf], np.nan)
+        
+        # Fill NaN values in correlation matrix with 0 for display
+        correlation_matrix_display = correlation_matrix_clean.fillna(0)
+        
+        # Create custom annotation array to handle NaN values properly
+        annotations = correlation_matrix_display.round(3).astype(str)
+        
+        # Generate the heatmap without automatic annotations first
+        sns.heatmap(correlation_matrix_display, 
+                   annot=annotations,
+                   fmt='',  # Use empty format since we're providing custom annotations
                    cmap='RdYlBu_r', 
                    vmin=-1, 
                    vmax=1,
                    center=0,
                    square=True, 
-                   fmt='.3f',
                    cbar_kws={"shrink": .8},
                    mask=mask)
         

@@ -7,6 +7,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from typing import List
 import logging
+import warnings
+
+# Suppress matplotlib warnings about Axes3D
+warnings.filterwarnings('ignore', message='Unable to import Axes3D')
+warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib.projections')
 
 # Import our modular components
 from config import (
@@ -44,6 +49,7 @@ async def upload_files(
     use_trading_filter: bool = Form(True),
     starting_capital: float = Form(DEFAULT_STARTING_CAPITAL),
     weighting_method: str = Form("equal"),
+    rebalance_weighting_method: str = Form(None),
     weights: List[float] = Form(None)
 ):
     """
@@ -66,12 +72,15 @@ async def upload_files(
     logger.info(f"Received {len(files)} files for processing")
     logger.info(f"Parameters: rf_rate={rf_rate}, sma_window={sma_window}, "
                 f"use_trading_filter={use_trading_filter}, starting_capital={starting_capital}")
-    logger.info(f"Weighting method: {weighting_method}, weights: {weights}")
+    
+    # Handle both initial and rebalance weighting method
+    effective_weighting_method = rebalance_weighting_method if rebalance_weighting_method else weighting_method
+    logger.info(f"Weighting method: {effective_weighting_method}, weights: {weights}")
     
     # Process weighting
     portfolio_weights = None
     if len(files) > 1:
-        if weighting_method == "custom" and weights is not None:
+        if effective_weighting_method == "custom" and weights is not None:
             # Validate custom weights
             if len(weights) != len(files):
                 return templates.TemplateResponse(
@@ -224,6 +233,15 @@ async def upload_files(
         except Exception as e:
             logger.error(f"Error creating Monte Carlo simulation: {str(e)}")
     
+    # Store parameters for rebalancing
+    analysis_params = {
+        'rf_rate': rf_rate,
+        'daily_rf_rate': daily_rf_rate,
+        'sma_window': sma_window,
+        'use_trading_filter': use_trading_filter,
+        'starting_capital': starting_capital
+    }
+    
     # Return the results
     return templates.TemplateResponse(
         "results.html",
@@ -233,7 +251,8 @@ async def upload_files(
             "blended_result": blended_result,
             "multiple_portfolios": len(files_data) > 1,
             "heatmap_url": heatmap_url,
-            "monte_carlo_url": monte_carlo_url
+            "monte_carlo_url": monte_carlo_url,
+            "analysis_params": analysis_params
         }
     )
 
