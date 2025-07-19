@@ -1,13 +1,12 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Portfolio Analysis</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
+{% extends "base.html" %}
+
+{% block title %}Portfolio Analysis - Upload{% endblock %}
+
+{% block nav_upload_active %}active{% endblock %}
+
+{% block extra_styles %}
+        .main-content {
             max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
         }
         .form-group {
             margin-bottom: 15px;
@@ -71,9 +70,9 @@
             font-size: 0.9em;
             font-style: italic;
         }
-    </style>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <h1>Portfolio Analysis</h1>
     <form action="/upload" method="post" enctype="multipart/form-data">
         <div class="form-group">
@@ -263,6 +262,8 @@
                 }
             }
         });
+{% endblock %}
+
+{% block extra_scripts %}
     </script>
-</body>
-</html>
+{% endblock %}

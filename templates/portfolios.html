@@ -1,14 +1,10 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Stored Portfolios</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+{% extends "base.html" %}
+
+{% block title %}Stored Portfolios - Portfolio Analysis{% endblock %}
+
+{% block nav_portfolios_active %}active{% endblock %}
+
+{% block extra_styles %}
         .portfolio-table {
             width: 100%;
             border-collapse: collapse;
@@ -57,14 +53,10 @@
         .view-data-link:hover {
             text-decoration: underline;
         }
-    </style>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <h1>Stored Portfolios</h1>
-    
-    <div>
-        <a href="/" class="nav-link">Upload New Portfolio</a>
-    </div>
     
     {% if error %}
     <div class="error">{{ error }}</div>
@@ -116,5 +108,4 @@
         <p>Total data rows: {{ portfolios|sum(attribute='row_count') or 0 | int | string | replace(',', ',') }}</p>
         {% endif %}
     </div>
-</body>
-</html>
+{% endblock %}

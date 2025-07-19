@@ -5,13 +5,16 @@ This document describes the new API endpoints for retrieving existing strategies
 ## Endpoints
 
 ### 1. GET /api/strategies
+
 Get all existing strategies with detailed information and optional analysis summary.
 
 **Parameters:**
+
 - `limit` (int, optional): Maximum number of strategies to return (default: 100)
 - `include_summary` (bool, optional): Whether to include latest analysis summary (default: true)
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -51,9 +54,11 @@ Get all existing strategies with detailed information and optional analysis summ
 ```
 
 ### 2. GET /api/strategies/list
+
 Get a lightweight list of strategy names and IDs for quick reference.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -71,13 +76,16 @@ Get a lightweight list of strategy names and IDs for quick reference.
 ```
 
 ### 3. GET /api/strategies/{strategy_id}/analysis
+
 Get detailed analysis history for a specific strategy.
 
 **Parameters:**
+
 - `strategy_id` (int): ID of the strategy/portfolio
 - `limit` (int, optional): Maximum number of analysis results to return (default: 10)
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -126,31 +134,37 @@ Get detailed analysis history for a specific strategy.
 ## Usage Examples
 
 ### Get all strategies with summary
+
 ```bash
 curl "http://localhost:8000/api/strategies"
 ```
 
 ### Get strategies without analysis summary
+
 ```bash
 curl "http://localhost:8000/api/strategies?include_summary=false"
 ```
 
 ### Get limited number of strategies
+
 ```bash
 curl "http://localhost:8000/api/strategies?limit=10"
 ```
 
 ### Get lightweight strategies list
+
 ```bash
 curl "http://localhost:8000/api/strategies/list"
 ```
 
 ### Get analysis history for strategy ID 1
+
 ```bash
 curl "http://localhost:8000/api/strategies/1/analysis"
 ```
 
 ### Get last 5 analysis results for strategy ID 1
+
 ```bash
 curl "http://localhost:8000/api/strategies/1/analysis?limit=5"
 ```
@@ -169,6 +183,7 @@ All endpoints return consistent error responses:
 ```
 
 For strategy-specific endpoints, if strategy not found:
+
 ```json
 {
   "success": false,
@@ -180,6 +195,7 @@ For strategy-specific endpoints, if strategy not found:
 ## Integration with Existing Endpoints
 
 These new endpoints complement the existing endpoints:
+
 - `/portfolios` - HTML page listing portfolios
 - `/portfolio/{portfolio_id}` - JSON data for specific portfolio
 - `/upload` - Upload and process new portfolios

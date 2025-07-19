@@ -1,14 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Analysis Results</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+{% extends "base.html" %}
+
+{% block title %}Analysis Results - Portfolio Analysis{% endblock %}
+
+{% block extra_styles %}
         .result-section {
             margin-bottom: 30px;
             padding: 20px;
@@ -190,7 +184,9 @@
         .weighting-method label {
             margin-right: 15px;
         }
-    </style>
+{% endblock %}
+
+{% block extra_scripts %}
     <script>
         function toggleCharts(button) {
             const triangle = button.querySelector('.triangle');
@@ -338,9 +334,9 @@
                 fileNote.insertAdjacentElement('afterend', fileInputDiv);
             }
         });
-    </script>
-</head>
-<body>
+{% endblock %}
+
+{% block content %}
     <h1>Portfolio Analysis Results</h1>
     
     {% if not results %}
@@ -696,5 +692,4 @@ Processed File: {{ result.processed_file|default('None') }}
         </pre>
         {% endfor %}
     </div>
-</body>
-</html>
+{% endblock %}
