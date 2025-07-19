@@ -13,10 +13,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Database URL - can be configured via environment variables
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://postgres:password@localhost:5432/portfolio_analysis"
-)
+# For Render PostgreSQL: dpg-d1u03gbipnbc73cqnl2g-a
+# Priority: DATABASE_URL env var > Render components > localhost fallback
+if os.getenv("DATABASE_URL"):
+    DATABASE_URL = os.getenv("DATABASE_URL")
+elif os.getenv("RENDER"):
+    # Running on Render - construct URL from Render environment variables
+    DB_HOST = os.getenv("DB_HOST", "dpg-d1u03gbipnbc73cqnl2g-a.render.com")
+    DB_PORT = os.getenv("DB_PORT", "5432")
+    DB_NAME = os.getenv("DB_NAME", "portfolio_analysis")
+    DB_USER = os.getenv("DB_USER", "postgres")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+    DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+else:
+    # Local development fallback
+    DATABASE_URL = "postgresql://postgres:password@localhost:5432/portfolio_analysis"
+
+logger.info(f"Database URL configured: {DATABASE_URL.replace(DATABASE_URL.split('@')[0].split('://')[-1], '***')}")  # Hide credentials in logs
 
 # Create SQLAlchemy engine
 try:
