@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Portfolio Analysis</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="file"],
+        input[type="number"],
+        input[type="checkbox"] {
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Portfolio Analysis</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label>Select CSV files:</label>
+            <input type="file" name="files" accept=".csv" multiple required>
+        </div>
+        
+        <div class="form-group">
+            <label>Starting Capital:</label>
+            <input type="number" name="starting_capital" value="100000" step="1000" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Risk-free Rate:</label>
+            <input type="number" name="rf_rate" value="0.043" step="0.001" required>
+        </div>
+        
+        <div class="form-group">
+            <label>SMA Window (days):</label>
+            <input type="number" name="sma_window" value="20" required>
+        </div>
+        
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="use_trading_filter" value="true" checked>
+                Use Trading Filter (SMA Strategy)
+            </label>
+        </div>
+        
+        <button type="submit">Analyze Portfolio</button>
+    </form>
+</body>
+</html>

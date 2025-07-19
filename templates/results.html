@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analysis Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metric {
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .plots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+        }
+        .plot img {
+            max-width: 100%;
+            height: auto;
+        }
+        .download-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .download-link:hover {
+            background-color: #45a049;
+        }
+        h2 {
+            color: #333;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 4px;
+        }
+        .correlation-plot {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .correlation-note {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            margin-top: 15px;
+        }
+        .chart-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #4CAF50;
+            margin-top: 10px;
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .chart-toggle:hover {
+            color: #45a049;
+        }
+        .triangle {
+            transition: transform 0.3s ease;
+            font-size: 12px;
+        }
+        .triangle.open {
+            transform: rotate(90deg);
+        }
+        .charts-container {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .charts-container.open {
+            max-height: 2000px; /* Adjust based on your chart sizes */
+        }
+    </style>
+    <script>
+        function toggleCharts(button) {
+            const triangle = button.querySelector('.triangle');
+            const text = button.querySelector('span:last-child');
+            const container = button.nextElementSibling;
+            
+            if (container.classList.contains('open')) {
+                // Close the charts
+                container.classList.remove('open');
+                triangle.classList.remove('open');
+                text.textContent = 'Show Charts';
+            } else {
+                // Open the charts
+                container.classList.add('open');
+                triangle.classList.add('open');
+                text.textContent = 'Hide Charts';
+            }
+        }
+        
+        function formatPortfolioName(filename) {
+            // Remove .csv extension and replace hyphens with spaces
+            // But replace hyphens between numbers with colons (for ratios like 2-33 -> 2:33)
+            return filename.replace('.csv', '')
+                          .replace(/(\d)-(\d)/g, '$1:$2')  // Replace number-number with number:number
+                          .replace(/-/g, ' ');             // Replace remaining hyphens with spaces
+        }
+    </script>
+</head>
+<body>
+    <h1>Portfolio Analysis Results</h1>
+    
+    {% if not results %}
+    <div class="error">
+        No results were generated. Please check if your CSV files contain the required columns (Date and P/L).
+    </div>
+    {% endif %}
+    
+    {% for result in results %}
+    {% set formatted_name = result.filename.replace('.csv', '') %}
+    {% set formatted_name = formatted_name.replace('0-0', '0:0').replace('0-1', '0:1').replace('0-2', '0:2').replace('0-3', '0:3').replace('0-4', '0:4').replace('0-5', '0:5').replace('0-6', '0:6').replace('0-7', '0:7').replace('0-8', '0:8').replace('0-9', '0:9') %}
+    {% set formatted_name = formatted_name.replace('1-0', '1:0').replace('1-1', '1:1').replace('1-2', '1:2').replace('1-3', '1:3').replace('1-4', '1:4').replace('1-5', '1:5').replace('1-6', '1:6').replace('1-7', '1:7').replace('1-8', '1:8').replace('1-9', '1:9') %}
+    {% set formatted_name = formatted_name.replace('2-0', '2:0').replace('2-1', '2:1').replace('2-2', '2:2').replace('2-3', '2:3').replace('2-4', '2:4').replace('2-5', '2:5').replace('2-6', '2:6').replace('2-7', '2:7').replace('2-8', '2:8').replace('2-9', '2:9') %}
+    {% set formatted_name = formatted_name.replace('3-0', '3:0').replace('3-1', '3:1').replace('3-2', '3:2').replace('3-3', '3:3').replace('3-4', '3:4').replace('3-5', '3:5').replace('3-6', '3:6').replace('3-7', '3:7').replace('3-8', '3:8').replace('3-9', '3:9') %}
+    {% set formatted_name = formatted_name.replace('4-0', '4:0').replace('4-1', '4:1').replace('4-2', '4:2').replace('4-3', '4:3').replace('4-4', '4:4').replace('4-5', '4:5').replace('4-6', '4:6').replace('4-7', '4:7').replace('4-8', '4:8').replace('4-9', '4:9') %}
+    {% set formatted_name = formatted_name.replace('5-0', '5:0').replace('5-1', '5:1').replace('5-2', '5:2').replace('5-3', '5:3').replace('5-4', '5:4').replace('5-5', '5:5').replace('5-6', '5:6').replace('5-7', '5:7').replace('5-8', '5:8').replace('5-9', '5:9') %}
+    {% set formatted_name = formatted_name.replace('6-0', '6:0').replace('6-1', '6:1').replace('6-2', '6:2').replace('6-3', '6:3').replace('6-4', '6:4').replace('6-5', '6:5').replace('6-6', '6:6').replace('6-7', '6:7').replace('6-8', '6:8').replace('6-9', '6:9') %}
+    {% set formatted_name = formatted_name.replace('7-0', '7:0').replace('7-1', '7:1').replace('7-2', '7:2').replace('7-3', '7:3').replace('7-4', '7:4').replace('7-5', '7:5').replace('7-6', '7:6').replace('7-7', '7:7').replace('7-8', '7:8').replace('7-9', '7:9') %}
+    {% set formatted_name = formatted_name.replace('8-0', '8:0').replace('8-1', '8:1').replace('8-2', '8:2').replace('8-3', '8:3').replace('8-4', '8:4').replace('8-5', '8:5').replace('8-6', '8:6').replace('8-7', '8:7').replace('8-8', '8:8').replace('8-9', '8:9') %}
+    {% set formatted_name = formatted_name.replace('9-0', '9:0').replace('9-1', '9:1').replace('9-2', '9:2').replace('9-3', '9:3').replace('9-4', '9:4').replace('9-5', '9:5').replace('9-6', '9:6').replace('9-7', '9:7').replace('9-8', '9:8').replace('9-9', '9:9') %}
+    {% set formatted_name = formatted_name.replace('-', ' ') %}
+    <div class="result-section">
+        <h2>{% if result.filename == 'Blended Portfolio' %}{{ result.filename }}{% else %}{{ formatted_name }}{% endif %}</h2>
+        
+        {% if result.metrics %}
+        <div class="metrics">
+            {# Define the order of metrics - drawdown metrics at the end #}
+            {% set metric_order = [
+                'Sharpe Ratio', 'MAR Ratio', 'CAGR', 'Annual Volatility', 
+                'Total Return', 'Total P/L', 'Final Account Value', 'Peak Value',
+                'Number of Trading Days', 'Time Period (Years)', 'Recovery Days', 'Has Recovered'
+            ] %}
+            {% set drawdown_metrics = [
+                'Max Drawdown', 'Max Drawdown %', 'Drawdown Start Date', 'Max Drawdown Date',
+                'Account Value at Drawdown Start', 'Account Value at Max Drawdown'
+            ] %}
+            
+            {# Display regular metrics first #}
+            {% for name in metric_order %}
+                {% if name in result.metrics %}
+            <div class="metric">
+                <strong>{{ name }}:</strong>
+                <br>
+                {% if name == 'Has Recovered' %}
+                    {{ "Yes" if result.metrics[name] else "No" }}
+                {% elif name == 'Recovery Days' %}
+                    {{ "%.0f"|format(result.metrics[name]) if result.metrics[name] > 0 else "Not Yet Recovered" }}
+                {% elif name == 'Number of Trading Days' %}
+                    {{ "{:,}".format(result.metrics[name]|int) }}
+                {% elif name in ['Peak Value', 'Total P/L', 'Final Account Value'] %}
+                    {{ "${:,.2f}".format(result.metrics[name]) }}
+                {% elif name in ['CAGR', 'Total Return', 'Annual Volatility'] %}
+                    {{ "{:.2f}%".format(result.metrics[name]) }}
+                {% elif name in ['Sharpe Ratio', 'MAR Ratio'] %}
+                    {{ "{:.2f}".format(result.metrics[name]) }}
+                {% elif name == 'Time Period (Years)' %}
+                    {{ "{:.1f}".format(result.metrics[name]) }}
+                {% else %}
+                    {{ "%.4f"|format(result.metrics[name]) }}
+                {% endif %}
+            </div>
+                {% endif %}
+            {% endfor %}
+            
+            {# Add visual separation before drawdown metrics #}
+            <div style="grid-column: 1 / -1; height: 20px;"></div>
+            
+            {# Display drawdown metrics #}
+            {% for name in drawdown_metrics %}
+                {% if name in result.metrics %}
+            <div class="metric">
+                <strong>{{ name }}:</strong>
+                <br>
+                {% if name in ['Max Drawdown', 'Account Value at Drawdown Start', 'Account Value at Max Drawdown'] %}
+                    {{ "${:,.2f}".format(result.metrics[name]) }}
+                {% elif name == 'Max Drawdown %' %}
+                    {{ "{:.2f}%".format(result.metrics[name]) }}
+                {% elif name in ['Max Drawdown Date', 'Drawdown Start Date'] %}
+                    {{ result.metrics[name] }}
+                {% else %}
+                    {{ "%.4f"|format(result.metrics[name]) }}
+                {% endif %}
+            </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="error">No metrics were calculated for this file.</div>
+        {% endif %}
+        
+        {% if result.plots %}
+        <button class="chart-toggle" onclick="toggleCharts(this)">
+            <span class="triangle">▶</span>
+            <span>Show Charts</span>
+        </button>
+        <div class="charts-container">
+            <div class="plots">
+                {% for plot in result.plots %}
+                <div class="plot">
+                    <img src="{{ plot.url }}" alt="Analysis Plot">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="error">No plots were generated for this file.</div>
+        {% endif %}
+        
+        {% if result.processed_file %}
+        <a href="{{ result.processed_file }}" class="download-link">Download Processed Data</a>
+        {% endif %}
+    </div>    {% endfor %}
+    
+    {% if results|length > 1 %}
+        {% if heatmap_url %}
+        <div class="result-section">
+            <h2>Portfolio Correlation Analysis</h2>
+            <div class="plot correlation-plot">
+                <img src="{{ heatmap_url }}" alt="Portfolio Correlation Heatmap">
+            </div>
+            <p class="correlation-note">
+                Correlation values range from -1 (perfect negative correlation) to 1 (perfect positive correlation).
+                Values close to 0 indicate little to no correlation between portfolios.
+            </p>
+        </div>
+        {% else %}
+        <div class="result-section">
+            <div class="error">
+                Unable to generate correlation analysis. Please ensure all portfolios contain valid daily return data.
+            </div>
+        </div>
+        {% endif %}
+    {% endif %}
+    
+    {% if monte_carlo_url %}
+    <div class="result-section">
+        <h2>Monte Carlo Simulation - Blended Portfolio</h2>
+        <div class="plot correlation-plot">
+            <img src="{{ monte_carlo_url }}" alt="Monte Carlo Simulation">
+        </div>
+        <p class="correlation-note">
+            Monte Carlo simulation shows potential future portfolio paths based on historical return patterns.
+            The simulation projects 1,000 possible scenarios over the next trading year (252 days).
+        </p>
+    </div>
+    {% endif %}
+    
+    <p>
+        <a href="/" class="download-link">Analyze Another Portfolio</a>
+    </p>
+    
+    <!-- Debug Information -->
+    <div class="debug-info">
+        <h3>Debug Information:</h3>
+        <pre>Number of results: {{ results|length }}</pre>
+        {% for result in results %}
+        <pre>
+File: {{ result.filename }}
+Metrics: {{ result.metrics|default('None') }}
+Plots: {{ result.plots|default('None') }}
+Processed File: {{ result.processed_file|default('None') }}
+        </pre>
+        {% endfor %}
+    </div>
+</body>
+</html>
