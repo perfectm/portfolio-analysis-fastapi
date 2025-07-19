@@ -32,17 +32,20 @@ A comprehensive portfolio analysis tool built with FastAPI that provides advance
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/yourusername/portfolio-analysis-fastapi.git
 cd portfolio-analysis-fastapi
 ```
 
 2. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 3. Run the application:
+
 ```bash
 uvicorn app:app --reload
 ```
@@ -52,11 +55,13 @@ uvicorn app:app --reload
 ## Usage
 
 ### Single Portfolio Analysis
+
 1. Upload a CSV file containing your trading data
 2. Ensure your CSV has columns for dates and P/L values
 3. View comprehensive analytics including charts and risk metrics
 
 ### Multiple Portfolio Analysis
+
 1. Upload multiple CSV files representing different strategies
 2. Get individual analysis for each strategy
 3. View correlation analysis between strategies
@@ -65,10 +70,12 @@ uvicorn app:app --reload
 ### Required CSV Format
 
 Your CSV files should contain at minimum:
+
 - **Date column**: Date Opened, Date, Trade Date, etc.
 - **P/L column**: P/L, PnL, Profit/Loss, etc.
 
 Optional columns:
+
 - Premium, No. of Contracts, Strategy names
 
 ## API Endpoints
@@ -88,6 +95,7 @@ Optional columns:
 ## Configuration
 
 Default settings can be modified in the `process_portfolio_data` function:
+
 - `rf_rate`: Risk-free rate (default: 4.3%)
 - `starting_capital`: Initial capital (default: $100,000)
 - `sma_window`: Simple moving average window (default: 20 days)
