@@ -160,6 +160,20 @@
     <div class="result-section">
         <h2>{% if result.filename == 'Blended Portfolio' %}{{ result.filename }}{% else %}{{ formatted_name }}{% endif %}</h2>
         
+        {% if result.filename == 'Blended Portfolio' and result.metrics and 'Portfolio_Weights' in result.metrics %}
+        <div class="metric" style="background-color: #e7f3ff; border: 1px solid #90caf9; margin-bottom: 15px;">
+            <strong>Portfolio Composition:</strong><br>
+            <div style="margin-top: 5px;">
+                <strong>Weighting Method:</strong> {{ result.metrics['Weighting_Method'] }}<br>
+                {% for portfolio, weight in result.metrics['Portfolio_Weights'].items() %}
+                    <div style="margin-top: 3px;">
+                        <strong>{{ portfolio }}:</strong> {{ "{:.1f}%".format(weight * 100) }} ({{ "{:.3f}".format(weight) }})
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
         {% if result.metrics %}
         <div class="metrics">
             {# Define the order of metrics - drawdown metrics at the end #}

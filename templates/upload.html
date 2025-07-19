@@ -32,6 +32,45 @@
         button:hover {
             background-color: #45a049;
         }
+        .weights-container {
+            display: none;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            margin-top: 10px;
+        }
+        .weight-input {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .weight-input label {
+            margin-bottom: 0;
+            margin-right: 10px;
+            min-width: 150px;
+        }
+        .weight-input input {
+            margin-bottom: 0;
+            width: 80px;
+            margin-right: 10px;
+        }
+        .weight-total {
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 5px;
+            background-color: #e7f3ff;
+            border-radius: 3px;
+        }
+        .error {
+            color: red;
+            font-size: 0.9em;
+        }
+        .info {
+            color: #666;
+            font-size: 0.9em;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -39,7 +78,29 @@
     <form action="/upload" method="post" enctype="multipart/form-data">
         <div class="form-group">
             <label>Select CSV files:</label>
-            <input type="file" name="files" accept=".csv" multiple required>
+            <input type="file" id="fileInput" name="files" accept=".csv" multiple required>
+            <div class="info">Select multiple CSV files to create a blended portfolio</div>
+        </div>
+        
+        <!-- Portfolio Weighting Section -->
+        <div id="weightsContainer" class="weights-container">
+            <h3>Portfolio Weighting Configuration</h3>
+            <div class="info">Configure how much each portfolio contributes to the blended portfolio. Weights must sum to 1.0 (100%).</div>
+            
+            <div style="margin: 10px 0;">
+                <label>
+                    <input type="radio" name="weighting_method" value="equal" checked> Equal Weighting
+                </label>
+                <label>
+                    <input type="radio" name="weighting_method" value="custom"> Custom Weighting
+                </label>
+            </div>
+            
+            <div id="customWeights" style="display: none;">
+                <div id="weightInputs"></div>
+                <div class="weight-total" id="weightTotal">Total: 0.00 (100%)</div>
+                <button type="button" onclick="normalizeWeights()">Normalize to 100%</button>
+            </div>
         </div>
         
         <div class="form-group">
@@ -66,5 +127,142 @@
         
         <button type="submit">Analyze Portfolio</button>
     </form>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const files = e.target.files;
+            const weightsContainer = document.getElementById('weightsContainer');
+            const weightInputs = document.getElementById('weightInputs');
+            
+            if (files.length > 1) {
+                // Show weights container for multiple files
+                weightsContainer.style.display = 'block';
+                
+                // Create weight inputs
+                weightInputs.innerHTML = '';
+                const equalWeight = 1.0 / files.length;
+                
+                for (let i = 0; i < files.length; i++) {
+                    const filename = files[i].name;
+                    const div = document.createElement('div');
+                    div.className = 'weight-input';
+                    div.innerHTML = `
+                        <label>${filename}:</label>
+                        <input type="number" 
+                               name="weights" 
+                               value="${equalWeight.toFixed(3)}" 
+                               min="0" 
+                               max="1" 
+                               step="0.001" 
+                               onchange="updateWeightTotal()">
+                        <span>(${(equalWeight * 100).toFixed(1)}%)</span>
+                    `;
+                    weightInputs.appendChild(div);
+                }
+                
+                updateWeightTotal();
+            } else {
+                // Hide weights container for single file
+                weightsContainer.style.display = 'none';
+            }
+        });
+        
+        document.querySelector('input[name="weighting_method"][value="equal"]').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('customWeights').style.display = 'none';
+                setEqualWeights();
+            }
+        });
+        
+        document.querySelector('input[name="weighting_method"][value="custom"]').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('customWeights').style.display = 'block';
+            }
+        });
+        
+        function setEqualWeights() {
+            const inputs = document.querySelectorAll('input[name="weights"]');
+            const equalWeight = 1.0 / inputs.length;
+            
+            inputs.forEach((input, index) => {
+                input.value = equalWeight.toFixed(3);
+                const span = input.nextElementSibling;
+                span.textContent = `(${(equalWeight * 100).toFixed(1)}%)`;
+            });
+            
+            updateWeightTotal();
+        }
+        
+        function updateWeightTotal() {
+            const inputs = document.querySelectorAll('input[name="weights"]');
+            let total = 0;
+            
+            inputs.forEach((input, index) => {
+                const value = parseFloat(input.value) || 0;
+                total += value;
+                
+                // Update percentage display
+                const span = input.nextElementSibling;
+                span.textContent = `(${(value * 100).toFixed(1)}%)`;
+            });
+            
+            const totalElement = document.getElementById('weightTotal');
+            totalElement.innerHTML = `Total: ${total.toFixed(3)} (${(total * 100).toFixed(1)}%)`;
+            
+            // Color code the total
+            if (Math.abs(total - 1.0) < 0.001) {
+                totalElement.style.color = 'green';
+                totalElement.innerHTML += ' ✓';
+            } else {
+                totalElement.style.color = 'red';
+                totalElement.innerHTML += ' (must equal 1.0)';
+            }
+        }
+        
+        function normalizeWeights() {
+            const inputs = document.querySelectorAll('input[name="weights"]');
+            let total = 0;
+            
+            // Calculate current total
+            inputs.forEach(input => {
+                total += parseFloat(input.value) || 0;
+            });
+            
+            // Normalize if total > 0
+            if (total > 0) {
+                inputs.forEach(input => {
+                    const currentValue = parseFloat(input.value) || 0;
+                    const normalizedValue = currentValue / total;
+                    input.value = normalizedValue.toFixed(3);
+                });
+                
+                updateWeightTotal();
+            }
+        }
+        
+        // Validate form before submission
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const files = document.getElementById('fileInput').files;
+            
+            if (files.length > 1) {
+                const weightingMethod = document.querySelector('input[name="weighting_method"]:checked').value;
+                
+                if (weightingMethod === 'custom') {
+                    const inputs = document.querySelectorAll('input[name="weights"]');
+                    let total = 0;
+                    
+                    inputs.forEach(input => {
+                        total += parseFloat(input.value) || 0;
+                    });
+                    
+                    if (Math.abs(total - 1.0) > 0.001) {
+                        e.preventDefault();
+                        alert('Portfolio weights must sum to 1.0 (100%). Current total: ' + total.toFixed(3));
+                        return false;
+                    }
+                }
+            }
+        });
+    </script>
 </body>
 </html>
