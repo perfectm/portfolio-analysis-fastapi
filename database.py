@@ -21,8 +21,8 @@ elif os.getenv("RENDER"):
     # Running on Render - construct URL from Render environment variables
     DB_HOST = os.getenv("DB_HOST", "dpg-d1u03gbipnbc73cqnl2g-a.render.com")
     DB_PORT = os.getenv("DB_PORT", "5432")
-    DB_NAME = os.getenv("DB_NAME", "portfolio_analysis")
-    DB_USER = os.getenv("DB_USER", "postgres")
+    DB_NAME = os.getenv("DB_NAME", "portanal")
+    DB_USER = os.getenv("DB_USER", "portanal_user")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 else:
