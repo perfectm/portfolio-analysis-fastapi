@@ -23,14 +23,17 @@ Set the following environment variables in Render dashboard:
 #### Required Database Variables
 
 ```
-DB_HOST=dpg-d1u03gbipnbc73cqnl2g-a.render.com
+DB_HOST=dpg-d1u03gbipnbc73cqnl2g-a
 DB_PORT=5432
 DB_NAME=portanal
 DB_USER=portanal_user
 DB_PASSWORD=iAthbnJVh3kqOBfeTWiG8sG6mr7DQ44G
 ```
 
-**Important**: The database password should be set directly in Render's environment variables dashboard and never committed to Git.
+**Important**: 
+- Use the internal hostname (without .render.com) for better connectivity within Render
+- The database password should be set directly in Render's environment variables dashboard and never committed to Git
+- The application will automatically try both internal and external hostnames if connection fails
 
 #### Optional Variables
 
