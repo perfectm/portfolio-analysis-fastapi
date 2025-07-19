@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stored Portfolios</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .portfolio-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .portfolio-table th,
+        .portfolio-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .portfolio-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .portfolio-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .portfolio-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 4px;
+        }
+        .nav-link {
+            display: inline-block;
+            margin: 10px 10px 10px 0;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .nav-link:hover {
+            background-color: #45a049;
+        }
+        .view-data-link {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .view-data-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Stored Portfolios</h1>
+    
+    <div>
+        <a href="/" class="nav-link">Upload New Portfolio</a>
+    </div>
+    
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+    
+    {% if portfolios %}
+    <table class="portfolio-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Filename</th>
+                <th>Upload Date</th>
+                <th>Rows</th>
+                <th>Date Range</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for portfolio in portfolios %}
+            <tr>
+                <td>{{ portfolio.id }}</td>
+                <td>{{ portfolio.name }}</td>
+                <td>{{ portfolio.filename }}</td>
+                <td>{{ portfolio.upload_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ "{:,}".format(portfolio.row_count) if portfolio.row_count else "N/A" }}</td>
+                <td>
+                    {% if portfolio.date_range_start and portfolio.date_range_end %}
+                        {{ portfolio.date_range_start.strftime('%Y-%m-%d') }} to {{ portfolio.date_range_end.strftime('%Y-%m-%d') }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/portfolio/{{ portfolio.id }}" class="view-data-link" target="_blank">View Data</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No portfolios found in the database.</p>
+    {% endif %}
+    
+    <div style="margin-top: 30px;">
+        <h3>Database Statistics</h3>
+        <p>Total portfolios: {{ portfolios|length if portfolios else 0 }}</p>
+        {% if portfolios %}
+        <p>Total data rows: {{ portfolios|sum(attribute='row_count') or 0 | int | string | replace(',', ',') }}</p>
+        {% endif %}
+    </div>
+</body>
+</html>

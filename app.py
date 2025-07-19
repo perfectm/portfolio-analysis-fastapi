@@ -1,10 +1,11 @@
 import os
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, Request, Form
+from fastapi import FastAPI, UploadFile, File, Request, Form, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from sqlalchemy.orm import Session
 from typing import List
 import logging
 import warnings
@@ -21,6 +22,10 @@ from config import (
 from portfolio_blender import create_blended_portfolio, process_individual_portfolios
 from plotting import create_plots, create_correlation_heatmap, create_monte_carlo_simulation
 
+# Import database components
+from database import get_db, create_tables
+from portfolio_service import PortfolioService
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -32,11 +37,73 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="uploads")
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
+# Initialize database tables on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database tables on application startup"""
+    try:
+        create_tables()
+        logger.info("Database tables initialized successfully")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        # Continue running even if database fails (graceful degradation)
 
 @app.get("/", response_class=HTMLResponse)
 async def main(request: Request):
     """Main page endpoint"""
     return templates.TemplateResponse("upload.html", {"request": request})
+
+
+@app.get("/portfolios", response_class=HTMLResponse)
+async def list_portfolios(request: Request, db: Session = Depends(get_db)):
+    """List all stored portfolios"""
+    try:
+        portfolios = PortfolioService.get_portfolios(db)
+        return templates.TemplateResponse(
+            "portfolios.html", 
+            {"request": request, "portfolios": portfolios}
+        )
+    except Exception as e:
+        logger.error(f"Error fetching portfolios: {e}")
+        return templates.TemplateResponse(
+            "portfolios.html", 
+            {"request": request, "portfolios": [], "error": str(e)}
+        )
+
+
+@app.get("/portfolio/{portfolio_id}")
+async def get_portfolio_data(portfolio_id: int, db: Session = Depends(get_db)):
+    """Get portfolio data as JSON"""
+    try:
+        portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+        if not portfolio:
+            return {"error": "Portfolio not found"}
+        
+        data = PortfolioService.get_portfolio_data(db, portfolio_id, limit=1000)
+        return {
+            "portfolio": {
+                "id": portfolio.id,
+                "name": portfolio.name,
+                "filename": portfolio.filename,
+                "upload_date": portfolio.upload_date.isoformat(),
+                "row_count": portfolio.row_count,
+                "date_range_start": portfolio.date_range_start.isoformat() if portfolio.date_range_start else None,
+                "date_range_end": portfolio.date_range_end.isoformat() if portfolio.date_range_end else None,
+            },
+            "data": [
+                {
+                    "date": item.date.isoformat(),
+                    "pl": item.pl,
+                    "cumulative_pl": item.cumulative_pl,
+                    "account_value": item.account_value,
+                    "daily_return": item.daily_return
+                }
+                for item in data
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching portfolio data: {e}")
+        return {"error": str(e)}
 
 
 @app.post("/upload")
@@ -50,7 +117,8 @@ async def upload_files(
     starting_capital: float = Form(DEFAULT_STARTING_CAPITAL),
     weighting_method: str = Form("equal"),
     rebalance_weighting_method: str = Form(None),
-    weights: List[float] = Form(None)
+    weights: List[float] = Form(None),
+    db: Session = Depends(get_db)
 ):
     """
     Upload and process portfolio files
@@ -119,13 +187,38 @@ async def upload_files(
             portfolio_weights = [1.0 / len(files)] * len(files)
             logger.info(f"Using equal weights: {portfolio_weights}")
     
-    # Read all files into memory
+    # Read all files into memory and store in database
     files_data = []
+    portfolio_ids = []
+    
     for file in files:
         try:
             contents = await file.read()
             df = pd.read_csv(pd.io.common.BytesIO(contents))
-            files_data.append((file.filename, df))
+            
+            # Store portfolio and data in database
+            try:
+                # Create portfolio record
+                portfolio_name = file.filename.replace('.csv', '').replace('_', ' ').title()
+                portfolio = PortfolioService.create_portfolio(
+                    db, portfolio_name, file.filename, contents, df
+                )
+                
+                # Store raw data
+                PortfolioService.store_portfolio_data(db, portfolio.id, df)
+                
+                # Add to processing list
+                files_data.append((file.filename, df))
+                portfolio_ids.append(portfolio.id)
+                
+                logger.info(f"Stored portfolio {portfolio.name} with ID {portfolio.id}")
+                
+            except Exception as db_error:
+                logger.error(f"Database error for file {file.filename}: {str(db_error)}")
+                # Continue processing even if database storage fails
+                files_data.append((file.filename, df))
+                portfolio_ids.append(None)
+                
         except Exception as e:
             logger.error(f"Error reading file {file.filename}: {str(e)}")
             continue
@@ -150,7 +243,16 @@ async def upload_files(
         files_data, rf_rate, sma_window, use_trading_filter, starting_capital
     )
     
-    # Create plots for individual portfolios
+    # Store analysis results in database
+    analysis_params = {
+        'rf_rate': rf_rate,
+        'daily_rf_rate': daily_rf_rate,
+        'sma_window': sma_window,
+        'use_trading_filter': use_trading_filter,
+        'starting_capital': starting_capital
+    }
+    
+    # Create plots for individual portfolios and store analysis results
     for i, result in enumerate(individual_results):
         if 'clean_df' in result:
             plot_paths = create_plots(
@@ -168,6 +270,24 @@ async def upload_files(
                     'filename': filename,
                     'url': plot_url
                 })
+            
+            # Store analysis result in database if we have a portfolio ID
+            if i < len(portfolio_ids) and portfolio_ids[i] is not None:
+                try:
+                    analysis_result = PortfolioService.store_analysis_result(
+                        db, portfolio_ids[i], "individual", result['metrics'], analysis_params
+                    )
+                    
+                    # Store plot information
+                    for plot_info in result['plots']:
+                        PortfolioService.store_analysis_plot(
+                            db, analysis_result.id, "combined_analysis",
+                            plot_info['url'], plot_info['url']
+                        )
+                    
+                    logger.info(f"Stored analysis result for portfolio {portfolio_ids[i]}")
+                except Exception as db_error:
+                    logger.error(f"Error storing analysis result: {str(db_error)}")
             
             # Remove clean_df from result as it's no longer needed
             del result['clean_df']
@@ -232,15 +352,6 @@ async def upload_files(
                 logger.info(f"Monte Carlo simulation created: {monte_carlo_url}")
         except Exception as e:
             logger.error(f"Error creating Monte Carlo simulation: {str(e)}")
-    
-    # Store parameters for rebalancing
-    analysis_params = {
-        'rf_rate': rf_rate,
-        'daily_rf_rate': daily_rf_rate,
-        'sma_window': sma_window,
-        'use_trading_filter': use_trading_filter,
-        'starting_capital': starting_capital
-    }
     
     # Return the results
     return templates.TemplateResponse(
