@@ -50,6 +50,10 @@ export default function Portfolios() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] =
     useState<AnalysisResults | null>(null);
+  const [editingPortfolioId, setEditingPortfolioId] = useState<number | null>(
+    null
+  );
+  const [editingName, setEditingName] = useState<string>("");
 
   // Force a fresh deployment with checkboxes
 
@@ -89,6 +93,45 @@ export default function Portfolios() {
     } catch (err) {
       alert("Failed to delete portfolio");
       console.error("Error deleting portfolio:", err);
+    }
+  };
+
+  const startRenaming = (portfolio: Portfolio) => {
+    setEditingPortfolioId(portfolio.id);
+    setEditingName(portfolio.name);
+  };
+
+  const cancelRenaming = () => {
+    setEditingPortfolioId(null);
+    setEditingName("");
+  };
+
+  const saveRename = async (portfolioId: number) => {
+    if (!editingName.trim()) {
+      alert("Portfolio name cannot be empty");
+      return;
+    }
+
+    try {
+      const response = await portfolioAPI.updatePortfolioName(
+        portfolioId,
+        editingName.trim()
+      );
+      if (response.message) {
+        // Update the local state
+        setPortfolios(
+          portfolios.map((p) =>
+            p.id === portfolioId ? { ...p, name: editingName.trim() } : p
+          )
+        );
+        setEditingPortfolioId(null);
+        setEditingName("");
+      } else {
+        alert("Failed to rename portfolio");
+      }
+    } catch (err) {
+      alert("Failed to rename portfolio");
+      console.error("Error renaming portfolio:", err);
     }
   };
 
@@ -232,7 +275,14 @@ export default function Portfolios() {
                 border: "1px solid #e9ecef",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "1rem",
+                }}
+              >
                 <h2 style={{ margin: 0 }}>📊 Analysis Results</h2>
                 <button
                   onClick={() => setAnalysisResults(null)}
@@ -403,10 +453,14 @@ export default function Portfolios() {
                                         : "#dc3545",
                                   }}
                                 >
-                                  ${result.metrics.total_pl?.toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                  })}
+                                  $
+                                  {result.metrics.total_pl?.toLocaleString(
+                                    undefined,
+                                    {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    }
+                                  )}
                                 </div>
                               </div>
 
@@ -427,10 +481,14 @@ export default function Portfolios() {
                                     color: "#007bff",
                                   }}
                                 >
-                                  ${result.metrics.final_account_value?.toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                  })}
+                                  $
+                                  {result.metrics.final_account_value?.toLocaleString(
+                                    undefined,
+                                    {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    }
+                                  )}
                                 </div>
                               </div>
 
@@ -451,9 +509,12 @@ export default function Portfolios() {
                                     color: "#dc3545",
                                   }}
                                 >
-                                  ${Math.abs(result.metrics.max_drawdown || 0).toLocaleString(undefined, {
+                                  $
+                                  {Math.abs(
+                                    result.metrics.max_drawdown || 0
+                                  ).toLocaleString(undefined, {
                                     minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
+                                    maximumFractionDigits: 2,
                                   })}
                                 </div>
                               </div>
@@ -473,14 +534,17 @@ export default function Portfolios() {
                                     fontSize: "1.1rem",
                                     fontWeight: "bold",
                                     color:
-                                      (result.metrics.annual_volatility || 0) <= 15
+                                      (result.metrics.annual_volatility || 0) <=
+                                      15
                                         ? "#28a745"
-                                        : (result.metrics.annual_volatility || 0) <= 25
+                                        : (result.metrics.annual_volatility ||
+                                            0) <= 25
                                         ? "#ffc107"
                                         : "#dc3545",
                                   }}
                                 >
-                                  {result.metrics.annual_volatility?.toFixed(2)}%
+                                  {result.metrics.annual_volatility?.toFixed(2)}
+                                  %
                                 </div>
                               </div>
                             </div>
@@ -511,7 +575,8 @@ export default function Portfolios() {
                                           border: "1px solid #e9ecef",
                                         }}
                                         onError={(e) => {
-                                          e.currentTarget.style.display = "none";
+                                          e.currentTarget.style.display =
+                                            "none";
                                         }}
                                       />
                                     </div>
@@ -550,7 +615,8 @@ export default function Portfolios() {
                       className="blended-metrics"
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(200px, 1fr))",
                         gap: "1rem",
                         marginBottom: "1.5rem",
                       }}
@@ -719,15 +785,20 @@ export default function Portfolios() {
                             fontSize: "1.4rem",
                             fontWeight: "bold",
                             color:
-                              analysisResults.blended_result.metrics.total_pl >= 0
+                              analysisResults.blended_result.metrics.total_pl >=
+                              0
                                 ? "#28a745"
                                 : "#dc3545",
                           }}
                         >
-                          ${analysisResults.blended_result.metrics.total_pl?.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
+                          $
+                          {analysisResults.blended_result.metrics.total_pl?.toLocaleString(
+                            undefined,
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
                         </div>
                       </div>
 
@@ -756,10 +827,14 @@ export default function Portfolios() {
                             color: "#007bff",
                           }}
                         >
-                          ${analysisResults.blended_result.metrics.final_account_value?.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
+                          $
+                          {analysisResults.blended_result.metrics.final_account_value?.toLocaleString(
+                            undefined,
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
                         </div>
                       </div>
 
@@ -788,9 +863,13 @@ export default function Portfolios() {
                             color: "#dc3545",
                           }}
                         >
-                          ${Math.abs(analysisResults.blended_result.metrics.max_drawdown || 0).toLocaleString(undefined, {
+                          $
+                          {Math.abs(
+                            analysisResults.blended_result.metrics
+                              .max_drawdown || 0
+                          ).toLocaleString(undefined, {
                             minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
+                            maximumFractionDigits: 2,
                           })}
                         </div>
                       </div>
@@ -818,14 +897,19 @@ export default function Portfolios() {
                             fontSize: "1.4rem",
                             fontWeight: "bold",
                             color:
-                              (analysisResults.blended_result.metrics.annual_volatility || 0) <= 15
+                              (analysisResults.blended_result.metrics
+                                .annual_volatility || 0) <= 15
                                 ? "#28a745"
-                                : (analysisResults.blended_result.metrics.annual_volatility || 0) <= 25
+                                : (analysisResults.blended_result.metrics
+                                    .annual_volatility || 0) <= 25
                                 ? "#ffc107"
                                 : "#dc3545",
                           }}
                         >
-                          {analysisResults.blended_result.metrics.annual_volatility?.toFixed(2)}%
+                          {analysisResults.blended_result.metrics.annual_volatility?.toFixed(
+                            2
+                          )}
+                          %
                         </div>
                       </div>
                     </div>
@@ -848,10 +932,7 @@ export default function Portfolios() {
                           >
                             {analysisResults.blended_result.plots.map(
                               (plot, plotIndex) => (
-                                <div
-                                  key={plotIndex}
-                                  className="plot-container"
-                                >
+                                <div key={plotIndex} className="plot-container">
                                   <img
                                     src={plot.url}
                                     alt={plot.filename}
@@ -892,7 +973,14 @@ export default function Portfolios() {
                       Advanced statistical analysis for multiple portfolio
                       comparison and risk assessment.
                     </p>
-                    <div className="plots-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                    <div
+                      className="plots-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "2rem",
+                      }}
+                    >
                       {analysisResults.advanced_plots.correlation_heatmap && (
                         <div className="advanced-plot-card">
                           <h4 style={{ marginBottom: "0.5rem" }}>
@@ -912,7 +1000,10 @@ export default function Portfolios() {
                           </p>
                           <div className="plot-container">
                             <img
-                              src={analysisResults.advanced_plots.correlation_heatmap}
+                              src={
+                                analysisResults.advanced_plots
+                                  .correlation_heatmap
+                              }
                               alt="Correlation Heatmap"
                               style={{
                                 width: "100%",
@@ -928,7 +1019,8 @@ export default function Portfolios() {
                         </div>
                       )}
 
-                      {analysisResults.advanced_plots.monte_carlo_simulation && (
+                      {analysisResults.advanced_plots
+                        .monte_carlo_simulation && (
                         <div className="advanced-plot-card">
                           <h4 style={{ marginBottom: "0.5rem" }}>
                             🎲 Monte Carlo Simulation
@@ -1001,7 +1093,95 @@ export default function Portfolios() {
                       cursor: "pointer",
                     }}
                   />
-                  <h3 style={{ margin: 0, flex: 1 }}>{portfolio.name}</h3>
+                  {editingPortfolioId === portfolio.id ? (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            saveRename(portfolio.id);
+                          } else if (e.key === "Escape") {
+                            cancelRenaming();
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "0.25rem 0.5rem",
+                          border: "1px solid #ccc",
+                          borderRadius: "4px",
+                          fontSize: "1.1rem",
+                          fontWeight: "bold",
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => saveRename(portfolio.id)}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#28a745",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                        }}
+                        title="Save (Enter)"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={cancelRenaming}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#dc3545",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                        }}
+                        title="Cancel (Escape)"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <h3 style={{ margin: 0 }}>{portfolio.name}</h3>
+                      <button
+                        onClick={() => startRenaming(portfolio)}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#007bff",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          marginLeft: "0.5rem",
+                        }}
+                        title="Rename portfolio"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <p>
                   <strong>File:</strong> {portfolio.filename}
