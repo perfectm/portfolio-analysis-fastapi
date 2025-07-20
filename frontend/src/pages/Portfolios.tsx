@@ -36,6 +36,10 @@ interface AnalysisResults {
   individual_results?: AnalysisResult[];
   blended_result?: AnalysisResult | null;
   multiple_portfolios?: boolean;
+  advanced_plots?: {
+    correlation_heatmap?: string | null;
+    monte_carlo_simulation?: string | null;
+  };
 }
 
 export default function Portfolios() {
@@ -564,6 +568,117 @@ export default function Portfolios() {
                   </div>
                 </div>
               )}
+
+              {/* Advanced Plots Section */}
+              {analysisResults.advanced_plots &&
+                analysisResults.multiple_portfolios &&
+                (analysisResults.advanced_plots.correlation_heatmap ||
+                  analysisResults.advanced_plots.monte_carlo_simulation) && (
+                  <div className="advanced-plots">
+                    <h3>📈 Advanced Analysis</h3>
+                    <div
+                      className="advanced-plots-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(400px, 1fr))",
+                        gap: "1.5rem",
+                        marginBottom: "2rem",
+                      }}
+                    >
+                      {/* Correlation Heatmap */}
+                      {analysisResults.advanced_plots.correlation_heatmap && (
+                        <div
+                          className="advanced-plot-card"
+                          style={{
+                            background: "#fff",
+                            padding: "1.5rem",
+                            borderRadius: "8px",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                            border: "1px solid #17a2b8",
+                          }}
+                        >
+                          <h4>🔗 Portfolio Correlation Matrix</h4>
+                          <p
+                            style={{
+                              color: "#666",
+                              fontSize: "0.9rem",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            Shows correlation between daily returns of selected
+                            portfolios. Values closer to 1 indicate strong
+                            positive correlation.
+                          </p>
+                          <div className="plot-container">
+                            <img
+                              src={
+                                analysisResults.advanced_plots
+                                  .correlation_heatmap
+                              }
+                              alt="Portfolio Correlation Heatmap"
+                              style={{
+                                width: "100%",
+                                height: "auto",
+                                borderRadius: "4px",
+                                border: "1px solid #e9ecef",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Monte Carlo Simulation */}
+                      {analysisResults.advanced_plots
+                        .monte_carlo_simulation && (
+                        <div
+                          className="advanced-plot-card"
+                          style={{
+                            background: "#fff",
+                            padding: "1.5rem",
+                            borderRadius: "8px",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                            border: "1px solid #ffc107",
+                          }}
+                        >
+                          <h4>🎲 Monte Carlo Simulation</h4>
+                          <p
+                            style={{
+                              color: "#666",
+                              fontSize: "0.9rem",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            1-year forecast based on 1,000 simulations using
+                            historical return patterns. Shows expected portfolio
+                            value range and confidence intervals.
+                          </p>
+                          <div className="plot-container">
+                            <img
+                              src={
+                                analysisResults.advanced_plots
+                                  .monte_carlo_simulation
+                              }
+                              alt="Monte Carlo Simulation"
+                              style={{
+                                width: "100%",
+                                height: "auto",
+                                borderRadius: "4px",
+                                border: "1px solid #e9ecef",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
               {/* Clear Results Button */}
               <div className="results-actions" style={{ marginTop: "1.5rem" }}>

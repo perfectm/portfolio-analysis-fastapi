@@ -47,6 +47,11 @@ export interface AnalysisResponse {
 }
 
 // New interfaces for enhanced upload responses
+export interface AdvancedPlots {
+  correlation_heatmap?: string;
+  monte_carlo_simulation?: string;
+}
+
 export interface UploadAnalysisResult {
   filename: string;
   metrics: {
@@ -74,6 +79,7 @@ export interface UploadResponse {
   individual_results?: UploadAnalysisResult[];
   blended_result?: UploadAnalysisResult | null;
   multiple_portfolios?: boolean;
+  advanced_plots?: AdvancedPlots;
 }
 
 // Fetch wrapper with error handling
@@ -355,5 +361,13 @@ export const portfolioAPI = {
   // Health check
   healthCheck: async (): Promise<{ status: string }> => {
     return apiCall('/');
+  },
+
+  // Analyze multiple portfolios with advanced plots
+  analyzePortfolios: async (portfolioIds: number[]): Promise<UploadResponse> => {
+    return apiCall('/api/analyze-portfolios', {
+      method: 'POST',
+      body: JSON.stringify({ portfolio_ids: portfolioIds }),
+    });
   },
 };

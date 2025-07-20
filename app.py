@@ -2,7 +2,6 @@ import os
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, Request, Form, Depends
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -32,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app setup
 app = FastAPI(title="Cotton's Portfolio Analyzer", version="1.0.0")
-templates = Jinja2Templates(directory="templates")
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="uploads")
@@ -743,19 +741,13 @@ async def upload_files_api(
 
 
 @app.post("/upload")
-async def upload_files(
-    request: Request,
-    files: List[UploadFile] = File(...),
-    rf_rate: float = Form(DEFAULT_RF_RATE),
-    daily_rf_rate: float = Form(DEFAULT_DAILY_RF_RATE),
-    sma_window: int = Form(DEFAULT_SMA_WINDOW),
-    use_trading_filter: bool = Form(True),
-    starting_capital: float = Form(DEFAULT_STARTING_CAPITAL),
-    weighting_method: str = Form("equal"),
-    rebalance_weighting_method: str = Form(None),
-    weights: List[float] = Form(None),
-    db: Session = Depends(get_db)
-):
+async def upload_files_deprecated():
+    """
+    Legacy upload endpoint - deprecated in favor of /api/upload
+    This endpoint has been removed as we now use the React frontend exclusively.
+    Please use /api/upload instead.
+    """
+    return {"error": "This endpoint has been deprecated. Please use /api/upload instead.", "success": False}
     """
     Upload and process portfolio files
     
