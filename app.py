@@ -134,31 +134,6 @@ async def serve_vite_svg():
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Vite SVG not found")
 
-# Catch-all route for React Router (must be at the end)
-@app.get("/{path:path}", response_class=HTMLResponse)
-async def catch_all(path: str):
-    """Serve React app for any route not handled by API"""
-    # Only serve React app for non-API routes
-    if not path.startswith("api/") and not path.startswith("uploads/"):
-        frontend_index_path = 'frontend/dist/index.html'
-        if os.path.exists(frontend_index_path):
-            return FileResponse(frontend_index_path)
-        else:
-            # Fallback for missing React build
-            return HTMLResponse("""
-            <html>
-                <head><title>Portfolio Analysis API</title></head>
-                <body>
-                    <h1>Portfolio Analysis API</h1>
-                    <p>The React frontend is not available.</p>
-                    <p>API documentation is available at <a href="/docs">/docs</a></p>
-                </body>
-            </html>
-            """)
-    # For API routes that don't exist, return 404
-    from fastapi import HTTPException
-    raise HTTPException(status_code=404, detail="Not Found")
-
 
 @app.get("/portfolios", response_class=HTMLResponse)
 async def list_portfolios(request: Request, db: Session = Depends(get_db)):
@@ -829,6 +804,32 @@ async def upload_files(
             "analysis_params": analysis_params
         }
     )
+
+
+# Catch-all route for React Router (must be at the end)
+@app.get("/{path:path}", response_class=HTMLResponse)
+async def catch_all(path: str):
+    """Serve React app for any route not handled by API"""
+    # Only serve React app for non-API routes
+    if not path.startswith("api/") and not path.startswith("uploads/"):
+        frontend_index_path = 'frontend/dist/index.html'
+        if os.path.exists(frontend_index_path):
+            return FileResponse(frontend_index_path)
+        else:
+            # Fallback for missing React build
+            return HTMLResponse("""
+            <html>
+                <head><title>Portfolio Analysis API</title></head>
+                <body>
+                    <h1>Portfolio Analysis API</h1>
+                    <p>The React frontend is not available.</p>
+                    <p>API documentation is available at <a href="/docs">/docs</a></p>
+                </body>
+            </html>
+            """)
+    # For API routes that don't exist, return 404
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 if __name__ == "__main__":
