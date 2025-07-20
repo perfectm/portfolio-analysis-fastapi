@@ -91,17 +91,17 @@ export const portfolioAPI = {
   // Upload multiple portfolio CSV files
   uploadMultiplePortfolios: async (files: File[]): Promise<{ message: string; portfolio_ids: number[] }> => {
     const formData = new FormData();
-    files.forEach((file, index) => {
+    files.forEach((file) => {
       formData.append('files', file);
     });
     
-    return fetch(`${API_BASE_URL}/upload`, {
+    return fetch(`${API_BASE_URL}/api/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (response) => {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(`${response.status}: ${errorData.detail || 'Upload failed'}`);
+        throw new Error(`${response.status}: ${errorData.detail || errorData.error || 'Upload failed'}`);
       }
       return response.json();
     });

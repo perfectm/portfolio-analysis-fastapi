@@ -544,6 +544,187 @@ async def debug_database_connection(db: Session = Depends(get_db)):
         }
 
 
+@app.post("/api/upload")
+async def upload_files_api(
+    files: List[UploadFile] = File(...),
+    rf_rate: float = Form(DEFAULT_RF_RATE),
+    daily_rf_rate: float = Form(DEFAULT_DAILY_RF_RATE),
+    sma_window: int = Form(DEFAULT_SMA_WINDOW),
+    use_trading_filter: bool = Form(True),
+    starting_capital: float = Form(DEFAULT_STARTING_CAPITAL),
+    weighting_method: str = Form("equal"),
+    weights: str = Form(None),  # JSON string of weights array
+    db: Session = Depends(get_db)
+):
+    """
+    API endpoint for uploading and processing portfolio files (returns JSON)
+    
+    Args:
+        files: List of uploaded CSV files
+        rf_rate: Annual risk-free rate
+        daily_rf_rate: Daily risk-free rate
+        sma_window: SMA window for trading filter
+        use_trading_filter: Whether to apply SMA trading filter
+        starting_capital: Starting capital amount
+        weighting_method: 'equal' or 'custom' weighting method
+        weights: JSON string of custom weights array
+        
+    Returns:
+        JSON response with analysis results
+    """
+    import json
+    
+    try:
+        logger.info(f"API: Received {len(files)} files for processing")
+        logger.info(f"API Parameters: rf_rate={rf_rate}, sma_window={sma_window}, "
+                    f"use_trading_filter={use_trading_filter}, starting_capital={starting_capital}")
+        
+        # Parse weights if provided
+        portfolio_weights = None
+        if len(files) > 1:
+            if weighting_method == "custom" and weights:
+                try:
+                    weight_list = json.loads(weights)
+                    if len(weight_list) != len(files):
+                        return {
+                            "success": False,
+                            "error": f"Number of weights ({len(weight_list)}) must match number of files ({len(files)})"
+                        }
+                    
+                    weight_sum = sum(weight_list)
+                    if abs(weight_sum - 1.0) > 0.001:
+                        return {
+                            "success": False,
+                            "error": f"Weights must sum to 1.0. Current sum: {weight_sum:.3f}"
+                        }
+                    
+                    portfolio_weights = weight_list
+                except json.JSONDecodeError:
+                    return {"success": False, "error": "Invalid weights format"}
+            else:
+                # Equal weighting
+                portfolio_weights = [1.0 / len(files)] * len(files)
+        
+        # Read all files and store in database
+        files_data = []
+        portfolio_ids = []
+        
+        for file in files:
+            try:
+                contents = await file.read()
+                df = pd.read_csv(pd.io.common.BytesIO(contents))
+                
+                # Store portfolio and data in database
+                portfolio_name = file.filename.replace('.csv', '').replace('_', ' ').title()
+                portfolio = PortfolioService.create_portfolio(
+                    db, portfolio_name, file.filename, contents, df
+                )
+                
+                # Store raw data
+                PortfolioService.store_portfolio_data(db, portfolio.id, df)
+                
+                files_data.append((file.filename, df))
+                portfolio_ids.append(portfolio.id)
+                
+                logger.info(f"API: Stored portfolio {portfolio.name} with ID {portfolio.id}")
+                
+            except Exception as e:
+                logger.error(f"API: Error processing file {file.filename}: {str(e)}")
+                return {"success": False, "error": f"Error processing file {file.filename}: {str(e)}"}
+        
+        if not files_data:
+            return {"success": False, "error": "No valid files were processed"}
+        
+        # Process individual portfolios
+        individual_results = process_individual_portfolios(
+            files_data, rf_rate, sma_window, use_trading_filter, starting_capital
+        )
+        
+        # Store analysis results
+        analysis_params = {
+            'rf_rate': rf_rate,
+            'daily_rf_rate': daily_rf_rate,
+            'sma_window': sma_window,
+            'use_trading_filter': use_trading_filter,
+            'starting_capital': starting_capital
+        }
+        
+        # Process plots and store analysis results
+        for i, result in enumerate(individual_results):
+            if 'clean_df' in result:
+                plot_paths = create_plots(
+                    result['clean_df'], 
+                    result['metrics'], 
+                    filename_prefix=f"portfolio_{i}", 
+                    sma_window=sma_window
+                )
+                
+                for plot_path in plot_paths:
+                    filename = os.path.basename(plot_path)
+                    plot_url = f"/uploads/plots/{filename}"
+                    result['plots'].append({
+                        'filename': filename,
+                        'url': plot_url
+                    })
+                
+                # Store analysis result in database
+                if i < len(portfolio_ids) and portfolio_ids[i] is not None:
+                    try:
+                        analysis_result = PortfolioService.store_analysis_result(
+                            db, portfolio_ids[i], "individual", result['metrics'], analysis_params
+                        )
+                        logger.info(f"API: Stored analysis result for portfolio {portfolio_ids[i]}")
+                    except Exception as db_error:
+                        logger.error(f"API: Error storing analysis result: {str(db_error)}")
+                
+                # Remove clean_df from result
+                del result['clean_df']
+        
+        # Create blended portfolio if multiple files
+        blended_result = None
+        if len(files_data) > 1:
+            blended_df, blended_metrics, correlation_data = create_blended_portfolio(
+                files_data, rf_rate, sma_window, use_trading_filter, starting_capital, portfolio_weights
+            )
+            
+            if blended_df is not None and blended_metrics is not None:
+                blended_result = {
+                    'filename': 'Blended Portfolio',
+                    'metrics': blended_metrics,
+                    'type': 'file',
+                    'plots': []
+                }
+                
+                # Create plots for blended portfolio
+                plot_paths = create_plots(
+                    blended_df, 
+                    blended_metrics, 
+                    filename_prefix="blended_portfolio", 
+                    sma_window=sma_window
+                )
+                
+                for plot_path in plot_paths:
+                    filename = os.path.basename(plot_path)
+                    plot_url = f"/uploads/plots/{filename}"
+                    blended_result['plots'].append({
+                        'filename': filename,
+                        'url': plot_url
+                    })
+        
+        return {
+            "success": True,
+            "message": f"Successfully processed {len(files)} files",
+            "portfolio_ids": portfolio_ids,
+            "individual_results": individual_results,
+            "blended_result": blended_result,
+            "multiple_portfolios": len(files_data) > 1
+        }
+        
+    except Exception as e:
+        logger.error(f"API: Error in upload_files_api: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/upload")
 async def upload_files(
     request: Request,
