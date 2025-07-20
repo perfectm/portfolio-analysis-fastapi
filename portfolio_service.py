@@ -286,6 +286,28 @@ class PortfolioService:
             raise
     
     @staticmethod
+    def update_portfolio_name(db: Session, portfolio_id: int, new_name: str) -> bool:
+        """
+        Update portfolio name
+        """
+        try:
+            portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+            if not portfolio:
+                return False
+            
+            old_name = portfolio.name
+            portfolio.name = new_name
+            db.commit()
+            
+            logger.info(f"Updated portfolio {portfolio_id} name from '{old_name}' to '{new_name}'")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating portfolio name: {e}")
+            db.rollback()
+            raise
+    
+    @staticmethod
     def get_recent_analysis_results(
         db: Session,
         portfolio_id: Optional[int] = None,

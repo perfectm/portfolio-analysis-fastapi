@@ -135,6 +135,49 @@ async def delete_portfolio(portfolio_id: int, db: Session = Depends(get_db)):
         return {"success": False, "error": str(e)}
 
 
+@app.put("/api/portfolio/{portfolio_id}/name")
+async def update_portfolio_name(portfolio_id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    Update portfolio name
+    """
+    try:
+        # Get the new name from the request body
+        body = await request.json()
+        new_name = body.get("name", "").strip()
+        
+        if not new_name:
+            return {"success": False, "error": "Portfolio name cannot be empty"}
+        
+        if len(new_name) > 255:
+            return {"success": False, "error": "Portfolio name too long (max 255 characters)"}
+        
+        # Check if portfolio exists
+        portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+        if not portfolio:
+            return {"success": False, "error": f"Portfolio with ID {portfolio_id} not found"}
+        
+        old_name = portfolio.name
+        
+        # Update the portfolio name
+        success = PortfolioService.update_portfolio_name(db, portfolio_id, new_name)
+        
+        if success:
+            logger.info(f"Portfolio {portfolio_id} name updated from '{old_name}' to '{new_name}'")
+            return {
+                "success": True, 
+                "message": f"Portfolio name updated from '{old_name}' to '{new_name}'",
+                "portfolio_id": portfolio_id,
+                "old_name": old_name,
+                "new_name": new_name
+            }
+        else:
+            return {"success": False, "error": "Failed to update portfolio name"}
+            
+    except Exception as e:
+        logger.error(f"Error updating portfolio {portfolio_id} name: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/strategies")
 async def get_strategies(
     limit: int = 100,

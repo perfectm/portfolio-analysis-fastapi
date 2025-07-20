@@ -62,12 +62,41 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
+            margin-left: 5px;
         }
         .delete-btn:hover {
             background-color: #c82333;
         }
+        .edit-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        .edit-btn:hover {
+            background-color: #0056b3;
+        }
         .actions-cell {
             white-space: nowrap;
+        }
+        .portfolio-name {
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .portfolio-name:hover {
+            background-color: #f0f0f0;
+        }
+        .name-input {
+            width: 100%;
+            padding: 4px 8px;
+            border: 2px solid #007bff;
+            border-radius: 4px;
+            font-size: 14px;
         }
 {% endblock %}
 
@@ -95,7 +124,12 @@
             {% for portfolio in portfolios %}
             <tr>
                 <td>{{ portfolio.id }}</td>
-                <td>{{ portfolio.name }}</td>
+                <td>
+                    <span class="portfolio-name" 
+                          data-portfolio-id="{{ portfolio.id }}" 
+                          data-original-name="{{ portfolio.name }}"
+                          onclick="editPortfolioName(this)">{{ portfolio.name }}</span>
+                </td>
                 <td>{{ portfolio.filename }}</td>
                 <td>{{ portfolio.upload_date.strftime('%Y-%m-%d %H:%M') }}</td>
                 <td>{{ "{:,}".format(portfolio.row_count) if portfolio.row_count else "N/A" }}</td>
@@ -108,6 +142,7 @@
                 </td>
                 <td class="actions-cell">
                     <a href="/portfolio/{{ portfolio.id }}" class="view-data-link" target="_blank">View Data</a>
+                    <button class="edit-btn" data-portfolio-id="{{ portfolio.id }}" data-portfolio-name="{{ portfolio.name }}" onclick="editPortfolioName(document.querySelector('[data-portfolio-id=&quot;{{ portfolio.id }}&quot;].portfolio-name'))">Edit</button>
                     <button class="delete-btn" data-portfolio-id="{{ portfolio.id }}" data-portfolio-name="{{ portfolio.name }}" onclick="deletePortfolio(this)">Delete</button>
                 </td>
             </tr>
@@ -127,6 +162,109 @@
     </div>
 
     <script>
+    function editPortfolioName(nameElement) {
+        const portfolioId = nameElement.getAttribute('data-portfolio-id');
+        const originalName = nameElement.getAttribute('data-original-name');
+        const currentName = nameElement.textContent;
+        
+        // Create input field
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'name-input';
+        input.value = currentName;
+        input.maxLength = 255;
+        
+        // Replace the name with input
+        nameElement.style.display = 'none';
+        nameElement.parentNode.insertBefore(input, nameElement);
+        input.focus();
+        input.select();
+        
+        function saveChanges() {
+            const newName = input.value.trim();
+            
+            if (!newName) {
+                alert('Portfolio name cannot be empty');
+                input.focus();
+                return;
+            }
+            
+            if (newName === currentName) {
+                // No changes, just restore
+                restoreOriginal();
+                return;
+            }
+            
+            // Show loading state
+            input.disabled = true;
+            input.value = 'Updating...';
+            
+            fetch(`/api/portfolio/${portfolioId}/name`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name: newName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the name element
+                    nameElement.textContent = newName;
+                    nameElement.setAttribute('data-original-name', newName);
+                    
+                    // Update the edit button's data attribute
+                    const editBtn = document.querySelector(`button[data-portfolio-id="${portfolioId}"].edit-btn`);
+                    if (editBtn) {
+                        editBtn.setAttribute('data-portfolio-name', newName);
+                    }
+                    
+                    // Update the delete button's data attribute
+                    const deleteBtn = document.querySelector(`button[data-portfolio-id="${portfolioId}"].delete-btn`);
+                    if (deleteBtn) {
+                        deleteBtn.setAttribute('data-portfolio-name', newName);
+                    }
+                    
+                    restoreOriginal();
+                } else {
+                    alert('Error updating portfolio name: ' + data.error);
+                    input.disabled = false;
+                    input.value = newName;
+                    input.focus();
+                }
+            })
+            .catch(error => {
+                alert('Error updating portfolio name: ' + error.message);
+                input.disabled = false;
+                input.value = newName;
+                input.focus();
+            });
+        }
+        
+        function restoreOriginal() {
+            nameElement.style.display = '';
+            if (input.parentNode) {
+                input.parentNode.removeChild(input);
+            }
+        }
+        
+        // Handle enter key
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveChanges();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                restoreOriginal();
+            }
+        });
+        
+        // Handle blur (click outside)
+        input.addEventListener('blur', function() {
+            setTimeout(saveChanges, 100); // Small delay to allow other events
+        });
+    }
+    
     function deletePortfolio(button) {
         const portfolioId = button.getAttribute('data-portfolio-id');
         const portfolioName = button.getAttribute('data-portfolio-name');
