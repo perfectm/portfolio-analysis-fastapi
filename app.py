@@ -1192,10 +1192,14 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     blended_plots_list = []
                     try:
                         logger.info("[Weighted Analysis] Creating plots for weighted blended portfolio")
+                        # Create unique prefix based on portfolio IDs
+                        portfolio_ids_str = "_".join(str(pid) for pid in portfolio_ids)
+                        unique_prefix = f"weighted_blended_{len(portfolio_ids)}portfolios_{portfolio_ids_str}"
+                        
                         blended_plot_paths = create_plots(
                             blended_df, 
                             blended_metrics, 
-                            filename_prefix="weighted_analysis_blended_portfolio", 
+                            filename_prefix=unique_prefix, 
                             sma_window=20
                         )
                         
@@ -1441,10 +1445,14 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     blended_plots_list = []
                     try:
                         logger.info("[Analyze Portfolios] Creating plots for blended portfolio")
+                        # Create unique prefix based on portfolio IDs
+                        portfolio_ids_str = "_".join(str(pid) for pid in portfolio_ids)
+                        unique_prefix = f"analysis_blended_{len(portfolio_ids)}portfolios_{portfolio_ids_str}"
+                        
                         blended_plot_paths = create_plots(
                             blended_df, 
                             blended_metrics, 
-                            filename_prefix="analysis_blended_portfolio", 
+                            filename_prefix=unique_prefix, 
                             sma_window=20
                         )
                         
