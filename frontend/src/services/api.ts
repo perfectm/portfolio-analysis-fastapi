@@ -382,7 +382,6 @@ export const portfolioAPI = {
 
   // Update portfolio name
   updatePortfolioName: async (portfolioId: number, newName: string): Promise<{ success: boolean; message?: string; error?: string; portfolio_id?: number; old_name?: string; new_name?: string }> => {
-    console.log("🐛 DEBUG updatePortfolioName called with:", { portfolioId, newName, requestBody: { name: newName } });
     return apiCall(`/api/portfolio/${portfolioId}/name`, {
       method: 'PUT',
       body: JSON.stringify({ name: newName }),

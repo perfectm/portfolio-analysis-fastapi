@@ -107,27 +107,16 @@ export default function Portfolios() {
   };
 
   const saveRename = async (portfolioId: number) => {
-    console.log("🐛 DEBUG saveRename called with:", {
-      portfolioId,
-      editingName,
-      trimmed: editingName.trim(),
-    });
-
     if (!editingName.trim()) {
       alert("Portfolio name cannot be empty");
       return;
     }
 
     try {
-      console.log("🐛 DEBUG making API call with:", {
-        portfolioId,
-        name: editingName.trim(),
-      });
       const response = await portfolioAPI.updatePortfolioName(
         portfolioId,
         editingName.trim()
       );
-      console.log("🐛 DEBUG API response:", response);
 
       if (response.success) {
         // Update the local state
