@@ -1060,23 +1060,14 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 logger.warning(f"Portfolio {portfolio_id} not found")
                 continue
                 
-            # Get the portfolio data
-            trades = PortfolioService.get_portfolio_trades(db, portfolio_id)
-            if not trades:
-                logger.warning(f"No trades found for portfolio {portfolio_id}")
+            # Get the portfolio data using the correct method
+            df = PortfolioService.get_portfolio_dataframe(db, portfolio_id)
+            if df.empty:
+                logger.warning(f"No data found for portfolio {portfolio_id}")
                 continue
                 
-            # Convert to DataFrame
-            df_data = []
-            for trade in trades:
-                df_data.append({
-                    'Date': trade.date,
-                    'P/L': trade.pnl
-                })
-            
-            if df_data:
-                df = pd.DataFrame(df_data)
-                portfolios_data.append((portfolio.name, df))
+            logger.info(f"[Analyze Portfolios] Retrieved {len(df)} rows for portfolio {portfolio_id} ({portfolio.name})")
+            portfolios_data.append((portfolio.name, df))
         
         if not portfolios_data:
             return {"success": False, "error": "No valid portfolio data found"}
