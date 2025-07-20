@@ -1,10 +1,10 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Navigation from './components/Navigation';
-import Home from './pages/Home';
-import Upload from './pages/Upload';
-import Portfolios from './pages/Portfolios';
-import Analysis from './pages/Analysis';
-import './App.css';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Navigation from "./components/Navigation";
+import Home from "./pages/Home";
+import Upload from "./pages/Upload";
+import Portfolios from "./pages/Portfolios";
+import Analysis from "./pages/Analysis";
+import "./App.css";
 
 function App() {
   return (

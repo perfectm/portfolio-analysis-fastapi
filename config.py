@@ -7,8 +7,8 @@ import logging
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Directory settings
-UPLOAD_FOLDER = "uploads"
+# Directory settings - use environment variable for production
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
 PLOTS_FOLDER = os.path.join(UPLOAD_FOLDER, 'plots')
 
 # Ensure directories exist

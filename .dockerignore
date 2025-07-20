@@ -1,0 +1,41 @@
+# Node modules and build artifacts
+frontend/node_modules
+frontend/dist
+
+# Python cache and virtual environments
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv/
+
+# Development and testing files
+.git
+.gitignore
+*.md
+.env
+.env.local
+test_*.py
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Documentation that's not needed in production
+REACT_*.md
+API_*.md
+*.md
