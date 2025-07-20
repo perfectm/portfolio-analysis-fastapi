@@ -49,9 +49,25 @@
         .view-data-link {
             color: #007bff;
             text-decoration: none;
+            margin-right: 10px;
         }
         .view-data-link:hover {
             text-decoration: underline;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+        .actions-cell {
+            white-space: nowrap;
         }
 {% endblock %}
 
@@ -90,8 +106,9 @@
                         N/A
                     {% endif %}
                 </td>
-                <td>
+                <td class="actions-cell">
                     <a href="/portfolio/{{ portfolio.id }}" class="view-data-link" target="_blank">View Data</a>
+                    <button class="delete-btn" data-portfolio-id="{{ portfolio.id }}" data-portfolio-name="{{ portfolio.name }}" onclick="deletePortfolio(this)">Delete</button>
                 </td>
             </tr>
             {% endfor %}
@@ -108,4 +125,37 @@
         <p>Total data rows: {{ portfolios|sum(attribute='row_count') or 0 | int | string | replace(',', ',') }}</p>
         {% endif %}
     </div>
+
+    <script>
+    function deletePortfolio(button) {
+        const portfolioId = button.getAttribute('data-portfolio-id');
+        const portfolioName = button.getAttribute('data-portfolio-name');
+        
+        if (confirm(`Are you sure you want to delete "${portfolioName}"?\n\nThis action cannot be undone and will permanently remove:\n• Portfolio metadata\n• All CSV data rows\n• Analysis results\n• Generated plots`)) {
+            // Disable button and show loading state
+            button.disabled = true;
+            button.textContent = 'Deleting...';
+            
+            fetch(`/api/portfolio/${portfolioId}`, {
+                method: 'DELETE',
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Reload the page to refresh the portfolio list
+                    window.location.reload();
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Failed to delete portfolio');
+                    });
+                }
+            })
+            .catch(error => {
+                alert('Error deleting portfolio: ' + error.message);
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = 'Delete';
+            });
+        }
+    }
+    </script>
 {% endblock %}

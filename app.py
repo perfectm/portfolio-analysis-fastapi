@@ -106,6 +106,35 @@ async def get_portfolio_data(portfolio_id: int, db: Session = Depends(get_db)):
         return {"error": str(e)}
 
 
+@app.delete("/api/portfolio/{portfolio_id}")
+async def delete_portfolio(portfolio_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a portfolio and all associated data
+    """
+    try:
+        # Check if portfolio exists
+        portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+        if not portfolio:
+            return {"success": False, "error": f"Portfolio with ID {portfolio_id} not found"}
+        
+        # Delete the portfolio (cascade will handle related data)
+        success = PortfolioService.delete_portfolio(db, portfolio_id)
+        
+        if success:
+            logger.info(f"Portfolio {portfolio_id} ({portfolio.name}) deleted successfully")
+            return {
+                "success": True, 
+                "message": f"Portfolio '{portfolio.name}' deleted successfully",
+                "portfolio_id": portfolio_id
+            }
+        else:
+            return {"success": False, "error": "Failed to delete portfolio"}
+            
+    except Exception as e:
+        logger.error(f"Error deleting portfolio {portfolio_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/strategies")
 async def get_strategies(
     limit: int = 100,
