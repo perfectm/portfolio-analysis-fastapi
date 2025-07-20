@@ -382,6 +382,107 @@ export default function Portfolios() {
                                   {result.metrics.cagr?.toFixed(2)}%
                                 </div>
                               </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Total P/L
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.total_pl >= 0
+                                        ? "#28a745"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  ${result.metrics.total_pl?.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Final Account Value
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: "#007bff",
+                                  }}
+                                >
+                                  ${result.metrics.final_account_value?.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Max Drawdown ($)
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: "#dc3545",
+                                  }}
+                                >
+                                  ${Math.abs(result.metrics.max_drawdown || 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Annual Volatility
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      (result.metrics.annual_volatility || 0) <= 15
+                                        ? "#28a745"
+                                        : (result.metrics.annual_volatility || 0) <= 25
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.annual_volatility?.toFixed(2)}%
+                                </div>
+                              </div>
                             </div>
 
                             {/* Portfolio Plots */}
@@ -592,6 +693,139 @@ export default function Portfolios() {
                             2
                           )}
                           %
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Total P/L
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics.total_pl >= 0
+                                ? "#28a745"
+                                : "#dc3545",
+                          }}
+                        >
+                          ${analysisResults.blended_result.metrics.total_pl?.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Final Account Value
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: "#007bff",
+                          }}
+                        >
+                          ${analysisResults.blended_result.metrics.final_account_value?.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Max Drawdown ($)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: "#dc3545",
+                          }}
+                        >
+                          ${Math.abs(analysisResults.blended_result.metrics.max_drawdown || 0).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Annual Volatility
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              (analysisResults.blended_result.metrics.annual_volatility || 0) <= 15
+                                ? "#28a745"
+                                : (analysisResults.blended_result.metrics.annual_volatility || 0) <= 25
+                                ? "#ffc107"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.annual_volatility?.toFixed(2)}%
                         </div>
                       </div>
                     </div>
