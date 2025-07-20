@@ -117,7 +117,7 @@ export default function Portfolios() {
         portfolioId,
         editingName.trim()
       );
-      if (response.message) {
+      if (response.success) {
         // Update the local state
         setPortfolios(
           portfolios.map((p) =>
@@ -127,7 +127,7 @@ export default function Portfolios() {
         setEditingPortfolioId(null);
         setEditingName("");
       } else {
-        alert("Failed to rename portfolio");
+        alert(response.error || "Failed to rename portfolio");
       }
     } catch (err) {
       alert("Failed to rename portfolio");
