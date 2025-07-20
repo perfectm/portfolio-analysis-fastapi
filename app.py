@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import gc  # Add garbage collection for memory management
 from fastapi import FastAPI, UploadFile, File, Request, Form, Depends
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1034,8 +1035,12 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
     """
     Analyze selected portfolios by their IDs with optional weighting support
     Fixed: Portfolio composition variable scope bug - v2.1
+    Memory optimized for cloud deployment
     """
     try:
+        # Force garbage collection at start to free any existing memory
+        gc.collect()
+        
         # Get the request data
         body = await request.json()
         portfolio_ids = body.get("portfolio_ids", [])
@@ -1044,6 +1049,10 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
+        
+        # Limit number of portfolios to prevent memory issues
+        if len(portfolio_ids) > 8:
+            return {"success": False, "error": "Maximum 8 portfolios allowed for analysis to prevent memory issues"}
         
         logger.info(f"[Weighted Analysis] Analyzing portfolios: {portfolio_ids}")
         logger.info(f"[Weighted Analysis] Weighting method: {weighting_method}")
@@ -1116,6 +1125,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             filename_prefix=f"weighted_analysis_portfolio_{i}_{portfolio_ids[i] if i < len(portfolio_ids) else 'unknown'}", 
                             sma_window=20
                         )
+                        
+                        # Clean up DataFrame to free memory after plotting
+                        if 'clean_df' in result:
+                            del result['clean_df']
+                        gc.collect()  # Force garbage collection to free memory
                         
                         logger.info(f"[Weighted Analysis] create_plots returned: {plot_paths}")
                         
@@ -1192,6 +1206,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                                 'url': plot_url
                             })
                         logger.info(f"[Weighted Analysis] Created {len(blended_plot_paths)} plots for weighted blended portfolio")
+                        
+                        # Clean up blended DataFrame to free memory after plotting
+                        del blended_df
+                        gc.collect()
+                        
                     except Exception as plot_error:
                         logger.error(f"[Weighted Analysis] Error creating plots for weighted blended portfolio: {str(plot_error)}")
                     
@@ -1264,6 +1283,10 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 simplified_blended_result = None
         
         logger.info(f"[Weighted Analysis] Analysis completed successfully for {len(portfolio_ids)} portfolios")
+        
+        # Final memory cleanup
+        gc.collect()
+        
         return {
             "success": True,
             "message": f"Successfully analyzed {len(portfolio_ids)} portfolios with {weighting_method} weighting",
@@ -1280,6 +1303,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         
     except Exception as e:
         logger.error(f"[Weighted Analysis] Error analyzing portfolios: {str(e)}", exc_info=True)
+        # Clean up memory on error
+        gc.collect()
         return {"success": False, "error": f"Weighted analysis failed: {str(e)}"}
 
 

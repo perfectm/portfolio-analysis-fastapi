@@ -59,8 +59,8 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
     
     try:
         logger.info(f"[create_plots] Creating matplotlib figure")
-        # Create a 2x2 subplot grid
-        fig = plt.figure(figsize=(20, 16))
+        # Create a 2x2 subplot grid with reduced figure size to save memory
+        fig = plt.figure(figsize=(16, 12), dpi=100)  # Reduced from 20x16 and set lower DPI
         
         # Plot 1: Cumulative P/L (top left)
         logger.info(f"[create_plots] Creating cumulative P/L plot")
@@ -128,11 +128,11 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         logger.info(f"[create_plots] Finalizing plot layout")
         plt.tight_layout()
         
-        # Save the combined plot
+        # Save the combined plot with reduced DPI to save memory and disk space
         plot_path = os.path.join(plots_dir, f'{filename_prefix}_combined_analysis.png')
         logger.info(f"[create_plots] Saving plot to: {plot_path}")
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')  # Reduced from 300 DPI
+        plt.close(fig)  # Explicitly close the figure to free memory
         
         # Verify file was created
         if os.path.exists(plot_path):
@@ -172,8 +172,8 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         # Calculate correlation matrix
         correlation_matrix = correlation_data_filled.corr()
         
-        # Create the heatmap
-        plt.figure(figsize=(10, 8))
+        # Create the heatmap with reduced figure size
+        plt.figure(figsize=(8, 6), dpi=100)  # Reduced from 10x8
         
         # Create a mask for the upper triangle to show only lower triangle + diagonal
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
@@ -208,10 +208,10 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         # Adjust layout
         plt.tight_layout()
         
-        # Save the heatmap
+        # Save the heatmap with reduced DPI
         heatmap_path = os.path.join(plots_dir, 'portfolio_correlation_heatmap.png')
-        plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.savefig(heatmap_path, dpi=150, bbox_inches='tight')  # Reduced from 300 DPI
+        plt.close()  # Explicitly close figure to free memory
         
         return heatmap_path
         
@@ -223,7 +223,7 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
 def create_monte_carlo_simulation(
     blended_df: pd.DataFrame, 
     metrics: Dict[str, Any], 
-    num_simulations: int = 1000, 
+    num_simulations: int = 500,  # Reduced from 1000 to save memory
     forecast_days: int = 252
 ) -> Optional[str]:
     """
@@ -268,8 +268,8 @@ def create_monte_carlo_simulation(
         for i in range(forecast_days):
             portfolio_paths[:, i + 1] = portfolio_paths[:, i] * (1 + random_returns[:, i])
         
-        # Create the Monte Carlo plot
-        plt.figure(figsize=(12, 8))
+        # Create the Monte Carlo plot with reduced figure size
+        plt.figure(figsize=(10, 6), dpi=100)  # Reduced from 12x8
         
         # Plot all simulation paths (with transparency)
         time_axis = np.arange(forecast_days + 1)
@@ -311,10 +311,10 @@ Probability of Loss: {(final_values < current_value).mean() * 100:.1f}%"""
         
         plt.tight_layout()
         
-        # Save the Monte Carlo plot
+        # Save the Monte Carlo plot with reduced DPI
         mc_path = os.path.join(plots_dir, 'monte_carlo_simulation.png')
-        plt.savefig(mc_path, dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.savefig(mc_path, dpi=150, bbox_inches='tight')  # Reduced from 300 DPI
+        plt.close()  # Explicitly close figure to free memory
         
         return mc_path
         
