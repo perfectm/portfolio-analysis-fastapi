@@ -18,29 +18,6 @@ logger = logging.getLogger(__name__)
 if os.getenv("DATABASE_URL"):
     DATABASE_URL = os.getenv("DATABASE_URL")
     logger.info("Using DATABASE_URL environment variable")
-elif os.getenv("RENDER") or os.getenv("DB_HOST"):
-    # Running on Render or with explicit database configuration
-    # Try the internal hostname first (without .render.com), then external
-    DB_HOST = os.getenv("DB_HOST", "dpg-d1u03gbipnbc73cqnl2g-a")
-    if not DB_HOST.endswith('.render.com') and not DB_HOST.startswith('localhost'):
-        # If it's just the database identifier, try both internal and external formats
-        DB_HOST = "dpg-d1u03gbipnbc73cqnl2g-a"  # Internal hostname for Render
-    
-    DB_PORT = os.getenv("DB_PORT", "5432")
-    DB_NAME = os.getenv("DB_NAME", "portanal")
-    DB_USER = os.getenv("DB_USER", "portanal_user")
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-    
-    # Check if password is provided
-    if not DB_PASSWORD:
-        logger.error("DB_PASSWORD environment variable is not set or is empty!")
-        logger.error("Please set DB_PASSWORD in your Render environment variables.")
-        logger.error("Check your deployment platform's environment configuration.")
-    
-    DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    logger.info(f"Using Render database configuration with host: {DB_HOST}")
-    logger.info(f"Database user: {DB_USER}, Database name: {DB_NAME}")
-    logger.info(f"Password provided: {'Yes' if DB_PASSWORD else 'NO - THIS WILL CAUSE CONNECTION FAILURE'}")
 else:
     # Local development fallback
     DATABASE_URL = "postgresql://postgres:password@localhost:5432/portfolio_analysis"
@@ -54,66 +31,52 @@ def create_database_engine():
     
     try:
         # First, try the configured DATABASE_URL
-        engine = create_engine(
-            DATABASE_URL,
-            pool_pre_ping=True,
-            echo=False,  # Set to True for SQL query logging
-            connect_args={"connect_timeout": 10}  # 10 second timeout
-        )
-        
-        # Test the connection
-        with engine.connect() as conn:
-            conn.execute("SELECT 1")
-        
-        logger.info("Database engine created successfully with PostgreSQL")
-        return True
+        if DATABASE_URL.startswith("postgresql://"):
+            engine = create_engine(
+                DATABASE_URL,
+                pool_pre_ping=True,
+                echo=False,  # Set to True for SQL query logging
+                connect_args={"connect_timeout": 30}  # 30 second timeout for first connection
+            )
+            
+            # Test the connection
+            with engine.connect() as conn:
+                conn.execute("SELECT 1")
+            
+            logger.info("✅ Database engine created successfully with PostgreSQL")
+            return True
+        else:
+            # SQLite case
+            engine = create_engine(
+                DATABASE_URL,
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+                echo=False
+            )
+            logger.info("✅ Database engine created successfully with SQLite")
+            return False
         
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"Failed to create PostgreSQL engine: {e}")
+        logger.error(f"❌ Failed to create PostgreSQL engine: {e}")
         
         # Check for specific error types and provide helpful messages
         if "no password supplied" in error_msg or "password authentication failed" in error_msg:
             logger.error("🔑 AUTHENTICATION ERROR:")
-            logger.error("  - Make sure DB_PASSWORD is set in your Render environment variables")
-            logger.error("  - Check your deployment platform's environment configuration")
-            logger.error("  - Check Render dashboard > Environment tab")
+            logger.error("  - Make sure DATABASE_URL contains correct password")
+            logger.error("  - Check your Render environment variables")
         elif "could not translate host name" in error_msg:
             logger.error("🌐 HOSTNAME ERROR:")
-            logger.error("  - Check DB_HOST environment variable")
-            logger.error("  - Try internal hostname: dpg-d1u03gbipnbc73cqnl2g-a")
-        elif "timeout" in error_msg.lower():
-            logger.error("⏱️ CONNECTION TIMEOUT:")
+            logger.error("  - Check DATABASE_URL hostname in environment variables")
+            logger.error("  - Database server may not be accessible from this network")
+        elif "timeout" in error_msg.lower() or "connection refused" in error_msg.lower():
+            logger.error("⏱️ CONNECTION ERROR:")
             logger.error("  - Database server may be starting up")
+            logger.error("  - Network connectivity issue")
             logger.error("  - Wait a few minutes and retry")
         
-        # If on Render and the external hostname failed, try internal hostname
-        if os.getenv("RENDER") and "render.com" in DATABASE_URL:
-            try:
-                # Try with internal hostname (without .render.com)
-                internal_host = DATABASE_URL.replace(".render.com", "")
-                logger.info(f"Trying internal hostname: {internal_host}")
-                
-                engine = create_engine(
-                    internal_host,
-                    pool_pre_ping=True,
-                    echo=False,
-                    connect_args={"connect_timeout": 10}
-                )
-                
-                # Test the connection
-                with engine.connect() as conn:
-                    conn.execute("SELECT 1")
-                
-                DATABASE_URL = internal_host
-                logger.info("Database engine created successfully with internal hostname")
-                return True
-                
-            except Exception as e2:
-                logger.error(f"Internal hostname also failed: {e2}")
-        
-        # Final fallback to SQLite
-        logger.warning("Falling back to SQLite database for local development")
+        # Final fallback to SQLite for development
+        logger.warning("⚠️ Falling back to SQLite database for local development")
         DATABASE_URL = "sqlite:///./portfolio_analysis.db"
         engine = create_engine(
             DATABASE_URL,
@@ -121,7 +84,7 @@ def create_database_engine():
             poolclass=StaticPool,
             echo=False
         )
-        logger.info("Fallback to SQLite database successful")
+        logger.info("✅ Fallback to SQLite database successful")
         return False
 
 # Initialize the database engine
