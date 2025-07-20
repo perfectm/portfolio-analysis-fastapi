@@ -1085,14 +1085,45 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         
         logger.info(f"[Analyze Portfolios] Individual analysis completed for {len(individual_results)} portfolios")
         
-        # Simplify individual results for JSON serialization
+        # Create plots and simplify individual results for JSON serialization
         simplified_individual_results = []
-        for result in individual_results:
+        for i, result in enumerate(individual_results):
             if 'metrics' in result:
+                plots_list = []
+                
+                logger.info(f"[Analyze Portfolios] Processing result {i+1}, keys: {list(result.keys())}")
+                
+                # Create plots if we have the clean_df
+                if 'clean_df' in result:
+                    try:
+                        logger.info(f"[Analyze Portfolios] Creating plots for portfolio {i+1}")
+                        plot_paths = create_plots(
+                            result['clean_df'], 
+                            result['metrics'], 
+                            filename_prefix=f"analysis_portfolio_{i}_{portfolio_ids[i] if i < len(portfolio_ids) else 'unknown'}", 
+                            sma_window=20
+                        )
+                        
+                        logger.info(f"[Analyze Portfolios] create_plots returned: {plot_paths}")
+                        
+                        for plot_path in plot_paths:
+                            filename = os.path.basename(plot_path)
+                            # Ensure URL uses forward slashes for web compatibility
+                            plot_url = f"/uploads/plots/{filename}".replace("\\", "/")
+                            plots_list.append({
+                                'filename': filename,
+                                'url': plot_url
+                            })
+                        logger.info(f"[Analyze Portfolios] Created {len(plot_paths)} plots for portfolio {i+1}")
+                    except Exception as plot_error:
+                        logger.error(f"[Analyze Portfolios] Error creating plots for portfolio {i+1}: {str(plot_error)}")
+                else:
+                    logger.warning(f"[Analyze Portfolios] No 'clean_df' key found in result {i+1}")
+                
                 simplified_result = {
                     'filename': result.get('filename', 'Unknown'),
                     'type': result.get('type', 'file'),
-                    'plots': result.get('plots', []),
+                    'plots': plots_list,
                     'metrics': {
                         'sharpe_ratio': float(result['metrics'].get('sharpe_ratio', 0)),
                         'total_return': float(result['metrics'].get('total_return', 0)),
@@ -1123,10 +1154,33 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 )
                 
                 if blended_df is not None and blended_metrics is not None:
+                    # Create plots for blended portfolio
+                    blended_plots_list = []
+                    try:
+                        logger.info("[Analyze Portfolios] Creating plots for blended portfolio")
+                        blended_plot_paths = create_plots(
+                            blended_df, 
+                            blended_metrics, 
+                            filename_prefix="analysis_blended_portfolio", 
+                            sma_window=20
+                        )
+                        
+                        for plot_path in blended_plot_paths:
+                            filename = os.path.basename(plot_path)
+                            # Ensure URL uses forward slashes for web compatibility
+                            plot_url = f"/uploads/plots/{filename}".replace("\\", "/")
+                            blended_plots_list.append({
+                                'filename': filename,
+                                'url': plot_url
+                            })
+                        logger.info(f"[Analyze Portfolios] Created {len(blended_plot_paths)} plots for blended portfolio")
+                    except Exception as plot_error:
+                        logger.error(f"[Analyze Portfolios] Error creating plots for blended portfolio: {str(plot_error)}")
+                    
                     simplified_blended_result = {
                         'filename': f'Blended Portfolio ({len(portfolios_data)} strategies)',
                         'type': 'blended',
-                        'plots': [],
+                        'plots': blended_plots_list,
                         'metrics': {
                             'sharpe_ratio': float(blended_metrics.get('sharpe_ratio', 0)),
                             'total_return': float(blended_metrics.get('total_return', 0)),

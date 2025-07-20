@@ -37,80 +37,117 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
     Returns:
         List of plot file paths
     """
-    # Create plots directory if it doesn't exist
-    plots_dir = os.path.join(UPLOAD_FOLDER, 'plots')
-    os.makedirs(plots_dir, exist_ok=True)
+    try:
+        logger.info(f"[create_plots] Starting plot creation for {filename_prefix}")
+        logger.info(f"[create_plots] DataFrame shape: {df.shape}")
+        logger.info(f"[create_plots] DataFrame columns: {list(df.columns)}")
+        
+        # Create plots directory if it doesn't exist
+        plots_dir = os.path.join(UPLOAD_FOLDER, 'plots')
+        logger.info(f"[create_plots] Creating plots directory: {plots_dir}")
+        os.makedirs(plots_dir, exist_ok=True)
+        
+        # Verify directory was created
+        if not os.path.exists(plots_dir):
+            logger.error(f"[create_plots] Failed to create plots directory: {plots_dir}")
+            return []
+        logger.info(f"[create_plots] Plots directory verified: {plots_dir}")
+        
+    except Exception as setup_error:
+        logger.error(f"[create_plots] Setup error: {str(setup_error)}")
+        return []
     
-    # Create a 2x2 subplot grid
-    fig = plt.figure(figsize=(20, 16))
-    
-    # Plot 1: Cumulative P/L (top left)
-    ax1 = plt.subplot(2, 2, 1)
-    ax1.plot(df['Date'], df['Cumulative P/L'])
-    ax1.set_title('Cumulative P/L Over Time')
-    ax1.set_xlabel('Date')
-    ax1.set_ylabel('Cumulative P/L')
-    ax1.grid(True)
-    ax1.tick_params(axis='x', rotation=45)
-    # Format y-axis as currency
-    ax1.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
-
-    # Plot 2: Drawdown (top right)
-    ax2 = plt.subplot(2, 2, 2)
-    ax2.plot(df['Date'], df['Drawdown Pct'] * 100)
-    ax2.set_title('Drawdown Over Time')
-    ax2.set_xlabel('Date')
-    ax2.set_ylabel('Drawdown (%)')
-    ax2.grid(True)
-    ax2.tick_params(axis='x', rotation=45)
-
-    # Plot 3: Daily Returns Distribution (bottom left)
-    ax3 = plt.subplot(2, 2, 3)
-    dollar_returns = df['Daily Return'].dropna() * df['Account Value'].shift(1)
-    # Clean data for seaborn - remove infinite values and NaNs
-    dollar_returns_clean = dollar_returns.replace([np.inf, -np.inf], np.nan).dropna()
-    if len(dollar_returns_clean) > 0:
-        sns.histplot(data=dollar_returns_clean, bins=20, kde=True, ax=ax3)
-    else:
-        # Fallback if no valid data
-        ax3.text(0.5, 0.5, 'No valid return data', ha='center', va='center', transform=ax3.transAxes)
-    ax3.set_title('Distribution of Daily Returns')
-    ax3.set_xlabel('Daily Return ($)')
-    ax3.set_ylabel('Frequency')
-    # Format x-axis as currency
-    current_values = ax3.get_xticks()
-    ax3.set_xticks(current_values)  # Set the tick positions first
-    ax3.set_xticklabels(['${:,.0f}'.format(x) for x in current_values])
-    ax3.grid(True)
-
-    # Plot 4: Account Value vs SMA (bottom right)
-    ax4 = plt.subplot(2, 2, 4)
-    if 'SMA' in df.columns:
-        ax4.plot(df['Date'], df['Account Value'], label='Account Value', alpha=0.7)
-        ax4.plot(df['Date'], df['SMA'], label=f'{sma_window}-day SMA', linewidth=2)
-        ax4.set_title('Account Value vs SMA')
-        ax4.set_xlabel('Date')
-        ax4.set_ylabel('Value ($)')
-        ax4.legend()
-        ax4.grid(True)
-        ax4.tick_params(axis='x', rotation=45)
+    try:
+        logger.info(f"[create_plots] Creating matplotlib figure")
+        # Create a 2x2 subplot grid
+        fig = plt.figure(figsize=(20, 16))
+        
+        # Plot 1: Cumulative P/L (top left)
+        logger.info(f"[create_plots] Creating cumulative P/L plot")
+        ax1 = plt.subplot(2, 2, 1)
+        ax1.plot(df['Date'], df['Cumulative P/L'])
+        ax1.set_title('Cumulative P/L Over Time')
+        ax1.set_xlabel('Date')
+        ax1.set_ylabel('Cumulative P/L')
+        ax1.grid(True)
+        ax1.tick_params(axis='x', rotation=45)
         # Format y-axis as currency
-        ax4.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
-    else:
-        ax4.set_title('SMA Analysis Not Available')
-        ax4.text(0.5, 0.5, 'Trading Filter Disabled', 
-                horizontalalignment='center', verticalalignment='center',
-                transform=ax4.transAxes)
+        ax1.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
 
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
-    
-    # Save the combined plot
-    plot_path = os.path.join(plots_dir, f'{filename_prefix}_combined_analysis.png')
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-    plt.close()
+        # Plot 2: Drawdown (top right)
+        logger.info(f"[create_plots] Creating drawdown plot")
+        ax2 = plt.subplot(2, 2, 2)
+        ax2.plot(df['Date'], df['Drawdown Pct'] * 100)
+        ax2.set_title('Drawdown Over Time')
+        ax2.set_xlabel('Date')
+        ax2.set_ylabel('Drawdown (%)')
+        ax2.grid(True)
+        ax2.tick_params(axis='x', rotation=45)
 
-    return [plot_path]
+        # Plot 3: Daily Returns Distribution (bottom left)
+        logger.info(f"[create_plots] Creating returns distribution plot")
+        ax3 = plt.subplot(2, 2, 3)
+        dollar_returns = df['Daily Return'].dropna() * df['Account Value'].shift(1)
+        # Clean data for seaborn - remove infinite values and NaNs
+        dollar_returns_clean = dollar_returns.replace([np.inf, -np.inf], np.nan).dropna()
+        if len(dollar_returns_clean) > 0:
+            sns.histplot(data=dollar_returns_clean, bins=20, kde=True, ax=ax3)
+        else:
+            # Fallback if no valid data
+            ax3.text(0.5, 0.5, 'No valid return data', ha='center', va='center', transform=ax3.transAxes)
+        ax3.set_title('Distribution of Daily Returns')
+        ax3.set_xlabel('Daily Return ($)')
+        ax3.set_ylabel('Frequency')
+        # Format x-axis as currency
+        current_values = ax3.get_xticks()
+        ax3.set_xticks(current_values)  # Set the tick positions first
+        ax3.set_xticklabels(['${:,.0f}'.format(x) for x in current_values])
+        ax3.grid(True)
+
+        # Plot 4: Account Value vs SMA (bottom right)
+        logger.info(f"[create_plots] Creating SMA plot")
+        ax4 = plt.subplot(2, 2, 4)
+        if 'SMA' in df.columns:
+            ax4.plot(df['Date'], df['Account Value'], label='Account Value', alpha=0.7)
+            ax4.plot(df['Date'], df['SMA'], label=f'{sma_window}-day SMA', linewidth=2)
+            ax4.set_title('Account Value vs SMA')
+            ax4.set_xlabel('Date')
+            ax4.set_ylabel('Value ($)')
+            ax4.legend()
+            ax4.grid(True)
+            ax4.tick_params(axis='x', rotation=45)
+            # Format y-axis as currency
+            ax4.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
+        else:
+            ax4.set_title('SMA Analysis Not Available')
+            ax4.text(0.5, 0.5, 'Trading Filter Disabled', 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=ax4.transAxes)
+
+        # Adjust layout to prevent overlap
+        logger.info(f"[create_plots] Finalizing plot layout")
+        plt.tight_layout()
+        
+        # Save the combined plot
+        plot_path = os.path.join(plots_dir, f'{filename_prefix}_combined_analysis.png')
+        logger.info(f"[create_plots] Saving plot to: {plot_path}")
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Verify file was created
+        if os.path.exists(plot_path):
+            file_size = os.path.getsize(plot_path)
+            logger.info(f"[create_plots] Plot saved successfully: {plot_path} (size: {file_size} bytes)")
+            return [plot_path]
+        else:
+            logger.error(f"[create_plots] Plot file was not created: {plot_path}")
+            return []
+            
+    except Exception as plot_error:
+        logger.error(f"[create_plots] Error creating plots: {str(plot_error)}")
+        # Close any open figures to prevent memory leaks
+        plt.close('all')
+        return []
 
 
 def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: List[str]) -> Optional[str]:
