@@ -2,14 +2,9 @@ import React from "react";
 import { Link } from "react-router-dom";
 import "./Home.css";
 
-const Home: React.FC = () => {
-  // Get the current API URL for debugging
-  const API_BASE_URL =
-    import.meta.env.VITE_API_URL ||
-    (window.location.hostname === "localhost"
-      ? "http://localhost:8000"
-      : window.location.origin);
+import { API_BASE_URL } from "../services/api";
 
+const Home: React.FC = () => {
   return (
     <div className="home">
       {/* Debug info - remove this in production */}

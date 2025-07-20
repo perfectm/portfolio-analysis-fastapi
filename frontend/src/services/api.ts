@@ -2,13 +2,43 @@
 // Note: axios will be installed when npm issues are resolved
 // For now, we'll use fetch API as fallback
 
-// API base URL - will be configured for both development and production
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin);
+// API Configuration - handles both development and production environments
+const getApiBaseUrl = () => {
+  // 1. Environment variable override (highest priority)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // 2. Development mode
+  if (import.meta.env.DEV) {
+    return 'http://localhost:8000';
+  }
+  
+  // 3. Production mode - check common deployment patterns
+  const { protocol, hostname, port } = window.location;
+  
+  // If running on a specific port, try common API ports
+  if (port && port !== '80' && port !== '443') {
+    // Try the same host with common API ports
+    const commonApiPorts = ['8000', '8001', '3001', '5000'];
+    // For now, return the same origin - this can be customized per deployment
+    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
+  }
+  
+  // Default: same origin (works for most production deployments)
+  return window.location.origin;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 console.log('[API Config] Using API_BASE_URL:', API_BASE_URL);
 console.log('[API Config] Current hostname:', window.location.hostname);
 console.log('[API Config] Current origin:', window.location.origin);
+console.log('[API Config] Dev mode:', import.meta.env.DEV);
+console.log('[API Config] VITE_API_URL:', import.meta.env.VITE_API_URL);
+
+// Export the API base URL for use in other components
+export { API_BASE_URL };
 
 // Types for API responses
 export interface Portfolio {
@@ -352,6 +382,7 @@ export const portfolioAPI = {
 
   // Update portfolio name
   updatePortfolioName: async (portfolioId: number, newName: string): Promise<{ success: boolean; message?: string; error?: string; portfolio_id?: number; old_name?: string; new_name?: string }> => {
+    console.log("🐛 DEBUG updatePortfolioName called with:", { portfolioId, newName, requestBody: { name: newName } });
     return apiCall(`/api/portfolio/${portfolioId}/name`, {
       method: 'PUT',
       body: JSON.stringify({ name: newName }),

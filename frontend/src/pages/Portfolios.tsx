@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { portfolioAPI } from "../services/api";
+import { portfolioAPI, API_BASE_URL } from "../services/api";
 
 interface Portfolio {
   id: number;
@@ -107,16 +107,28 @@ export default function Portfolios() {
   };
 
   const saveRename = async (portfolioId: number) => {
+    console.log("🐛 DEBUG saveRename called with:", {
+      portfolioId,
+      editingName,
+      trimmed: editingName.trim(),
+    });
+
     if (!editingName.trim()) {
       alert("Portfolio name cannot be empty");
       return;
     }
 
     try {
+      console.log("🐛 DEBUG making API call with:", {
+        portfolioId,
+        name: editingName.trim(),
+      });
       const response = await portfolioAPI.updatePortfolioName(
         portfolioId,
         editingName.trim()
       );
+      console.log("🐛 DEBUG API response:", response);
+
       if (response.success) {
         // Update the local state
         setPortfolios(
@@ -160,20 +172,15 @@ export default function Portfolios() {
 
     try {
       // Call the backend API to analyze selected portfolios
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL || window.location.origin
-        }/api/analyze-portfolios`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            portfolio_ids: selectedPortfolios,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/analyze-portfolios`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          portfolio_ids: selectedPortfolios,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(
