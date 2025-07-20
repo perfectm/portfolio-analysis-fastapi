@@ -2,7 +2,7 @@
 Database configuration and session management for PostgreSQL
 """
 import os
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import create_engine, MetaData, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -41,7 +41,7 @@ def create_database_engine():
             
             # Test the connection
             with engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             
             logger.info("✅ Database engine created successfully with PostgreSQL")
             return True

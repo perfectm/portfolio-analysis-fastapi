@@ -341,10 +341,10 @@ async def debug_database_connection(db: Session = Depends(get_db)):
         
         if database_url != 'NOT SET' and database_url.startswith('postgresql://'):
             try:
-                from sqlalchemy import create_engine as test_engine
+                from sqlalchemy import create_engine as test_engine, text
                 test_conn = test_engine(database_url, connect_args={"connect_timeout": 10})
                 with test_conn.connect() as conn:
-                    conn.execute("SELECT 1")
+                    conn.execute(text("SELECT 1"))
                 connection_test_result = "SUCCESS"
             except Exception as e:
                 connection_test_result = "FAILED"
