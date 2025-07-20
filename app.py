@@ -37,8 +37,11 @@ templates = Jinja2Templates(directory="templates")
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="uploads")
 
-# Mount React frontend static files
-app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="react-assets")
+# Mount React frontend static files (only if directory exists)
+import os
+frontend_dist_path = "frontend/dist"
+if os.path.exists(frontend_dist_path) and os.path.exists(f"{frontend_dist_path}/assets"):
+    app.mount("/assets", StaticFiles(directory=f"{frontend_dist_path}/assets"), name="react-assets")
 
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
@@ -77,7 +80,21 @@ async def startup_event():
 @app.get("/", response_class=HTMLResponse)
 async def main(request: Request):
     """Serve React frontend"""
-    return FileResponse('frontend/dist/index.html')
+    frontend_index_path = 'frontend/dist/index.html'
+    if os.path.exists(frontend_index_path):
+        return FileResponse(frontend_index_path)
+    else:
+        # Fallback to a simple HTML page if React build doesn't exist
+        return HTMLResponse("""
+        <html>
+            <head><title>Portfolio Analysis API</title></head>
+            <body>
+                <h1>Portfolio Analysis API</h1>
+                <p>The React frontend is not available. Please build the frontend first.</p>
+                <p>API documentation is available at <a href="/docs">/docs</a></p>
+            </body>
+        </html>
+        """)
 
 # Catch-all route for React Router (must be at the end)
 @app.get("/{path:path}", response_class=HTMLResponse)
@@ -85,7 +102,21 @@ async def catch_all(path: str):
     """Serve React app for any route not handled by API"""
     # Only serve React app for non-API routes
     if not path.startswith("api/") and not path.startswith("uploads/"):
-        return FileResponse('frontend/dist/index.html')
+        frontend_index_path = 'frontend/dist/index.html'
+        if os.path.exists(frontend_index_path):
+            return FileResponse(frontend_index_path)
+        else:
+            # Fallback for missing React build
+            return HTMLResponse("""
+            <html>
+                <head><title>Portfolio Analysis API</title></head>
+                <body>
+                    <h1>Portfolio Analysis API</h1>
+                    <p>The React frontend is not available.</p>
+                    <p>API documentation is available at <a href="/docs">/docs</a></p>
+                </body>
+            </html>
+            """)
     # For API routes that don't exist, return 404
     from fastapi import HTTPException
     raise HTTPException(status_code=404, detail="Not Found")
@@ -764,4 +795,6 @@ async def upload_files(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

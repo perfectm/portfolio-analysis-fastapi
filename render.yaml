@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: portfolio-analysis-api
+    env: python
+    buildCommand: ./build.sh
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: RENDER
+        value: true
+      - key: SESSION_SECRET_KEY
+        generateValue: true
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: NODE_ENV
+        value: production
