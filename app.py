@@ -581,9 +581,11 @@ async def upload_files_api(
     import json
     
     try:
-        logger.info(f"API: Received {len(files)} files for processing")
-        logger.info(f"API Parameters: rf_rate={rf_rate}, sma_window={sma_window}, "
-                    f"use_trading_filter={use_trading_filter}, starting_capital={starting_capital}")
+        logger.info(f"[API Upload] Received request with {len(files)} files")
+        logger.info(f"[API Upload] File details: {[{'name': f.filename, 'size': f.size, 'content_type': f.content_type} for f in files]}")
+        logger.info(f"[API Upload] Parameters: rf_rate={rf_rate}, sma_window={sma_window}, "
+                    f"use_trading_filter={use_trading_filter}, starting_capital={starting_capital}, "
+                    f"weighting_method={weighting_method}")
         
         # Parse weights if provided
         portfolio_weights = None
@@ -591,60 +593,73 @@ async def upload_files_api(
             if weighting_method == "custom" and weights:
                 try:
                     weight_list = json.loads(weights)
+                    logger.info(f"[API Upload] Parsed custom weights: {weight_list}")
                     if len(weight_list) != len(files):
-                        return {
-                            "success": False,
-                            "error": f"Number of weights ({len(weight_list)}) must match number of files ({len(files)})"
-                        }
+                        error_msg = f"Number of weights ({len(weight_list)}) must match number of files ({len(files)})"
+                        logger.error(f"[API Upload] Weight validation failed: {error_msg}")
+                        return {"success": False, "error": error_msg}
                     
                     weight_sum = sum(weight_list)
                     if abs(weight_sum - 1.0) > 0.001:
-                        return {
-                            "success": False,
-                            "error": f"Weights must sum to 1.0. Current sum: {weight_sum:.3f}"
-                        }
+                        error_msg = f"Weights must sum to 1.0. Current sum: {weight_sum:.3f}"
+                        logger.error(f"[API Upload] Weight sum validation failed: {error_msg}")
+                        return {"success": False, "error": error_msg}
                     
                     portfolio_weights = weight_list
-                except json.JSONDecodeError:
-                    return {"success": False, "error": "Invalid weights format"}
+                except json.JSONDecodeError as e:
+                    error_msg = f"Invalid weights format: {str(e)}"
+                    logger.error(f"[API Upload] JSON decode error: {error_msg}")
+                    return {"success": False, "error": error_msg}
             else:
                 # Equal weighting
                 portfolio_weights = [1.0 / len(files)] * len(files)
+                logger.info(f"[API Upload] Using equal weights: {portfolio_weights}")
         
         # Read all files and store in database
         files_data = []
         portfolio_ids = []
         
-        for file in files:
+        for i, file in enumerate(files):
             try:
+                logger.info(f"[API Upload] Processing file {i+1}/{len(files)}: {file.filename}")
                 contents = await file.read()
+                logger.info(f"[API Upload] Read {len(contents)} bytes from {file.filename}")
+                
                 df = pd.read_csv(pd.io.common.BytesIO(contents))
+                logger.info(f"[API Upload] Parsed CSV with shape {df.shape} for {file.filename}")
                 
                 # Store portfolio and data in database
                 portfolio_name = file.filename.replace('.csv', '').replace('_', ' ').title()
+                logger.info(f"[API Upload] Creating portfolio record: {portfolio_name}")
+                
                 portfolio = PortfolioService.create_portfolio(
                     db, portfolio_name, file.filename, contents, df
                 )
+                logger.info(f"[API Upload] Created portfolio with ID {portfolio.id}")
                 
                 # Store raw data
                 PortfolioService.store_portfolio_data(db, portfolio.id, df)
+                logger.info(f"[API Upload] Stored {len(df)} data rows for portfolio {portfolio.id}")
                 
                 files_data.append((file.filename, df))
                 portfolio_ids.append(portfolio.id)
                 
-                logger.info(f"API: Stored portfolio {portfolio.name} with ID {portfolio.id}")
-                
             except Exception as e:
-                logger.error(f"API: Error processing file {file.filename}: {str(e)}")
-                return {"success": False, "error": f"Error processing file {file.filename}: {str(e)}"}
+                error_msg = f"Error processing file {file.filename}: {str(e)}"
+                logger.error(f"[API Upload] {error_msg}", exc_info=True)
+                return {"success": False, "error": error_msg}
         
         if not files_data:
+            logger.error("[API Upload] No valid files were processed")
             return {"success": False, "error": "No valid files were processed"}
+        
+        logger.info(f"[API Upload] Successfully processed {len(files_data)} files, starting analysis")
         
         # Process individual portfolios
         individual_results = process_individual_portfolios(
             files_data, rf_rate, sma_window, use_trading_filter, starting_capital
         )
+        logger.info(f"[API Upload] Individual analysis completed for {len(individual_results)} portfolios")
         
         # Store analysis results
         analysis_params = {
@@ -658,6 +673,7 @@ async def upload_files_api(
         # Process plots and store analysis results
         for i, result in enumerate(individual_results):
             if 'clean_df' in result:
+                logger.info(f"[API Upload] Creating plots for portfolio {i+1}")
                 plot_paths = create_plots(
                     result['clean_df'], 
                     result['metrics'], 
@@ -672,6 +688,7 @@ async def upload_files_api(
                         'filename': filename,
                         'url': plot_url
                     })
+                logger.info(f"[API Upload] Created {len(plot_paths)} plots for portfolio {i+1}")
                 
                 # Store analysis result in database
                 if i < len(portfolio_ids) and portfolio_ids[i] is not None:
@@ -679,9 +696,9 @@ async def upload_files_api(
                         analysis_result = PortfolioService.store_analysis_result(
                             db, portfolio_ids[i], "individual", result['metrics'], analysis_params
                         )
-                        logger.info(f"API: Stored analysis result for portfolio {portfolio_ids[i]}")
+                        logger.info(f"[API Upload] Stored analysis result ID {analysis_result.id} for portfolio {portfolio_ids[i]}")
                     except Exception as db_error:
-                        logger.error(f"API: Error storing analysis result: {str(db_error)}")
+                        logger.error(f"[API Upload] Error storing analysis result: {str(db_error)}", exc_info=True)
                 
                 # Remove clean_df from result
                 del result['clean_df']
@@ -689,11 +706,13 @@ async def upload_files_api(
         # Create blended portfolio if multiple files
         blended_result = None
         if len(files_data) > 1:
+            logger.info(f"[API Upload] Creating blended portfolio from {len(files_data)} files")
             blended_df, blended_metrics, correlation_data = create_blended_portfolio(
                 files_data, rf_rate, sma_window, use_trading_filter, starting_capital, portfolio_weights
             )
             
             if blended_df is not None and blended_metrics is not None:
+                logger.info("[API Upload] Blended portfolio created successfully")
                 blended_result = {
                     'filename': 'Blended Portfolio',
                     'metrics': blended_metrics,
@@ -716,7 +735,11 @@ async def upload_files_api(
                         'filename': filename,
                         'url': plot_url
                     })
+                logger.info(f"[API Upload] Created {len(plot_paths)} plots for blended portfolio")
+            else:
+                logger.warning("[API Upload] Blended portfolio creation failed")
         
+        logger.info(f"[API Upload] Upload and analysis completed successfully for {len(files)} files")
         return {
             "success": True,
             "message": f"Successfully processed {len(files)} files",
@@ -727,8 +750,9 @@ async def upload_files_api(
         }
         
     except Exception as e:
-        logger.error(f"API: Error in upload_files_api: {str(e)}")
-        return {"success": False, "error": str(e)}
+        error_msg = f"Unexpected error in upload_files_api: {str(e)}"
+        logger.error(f"[API Upload] {error_msg}", exc_info=True)
+        return {"success": False, "error": error_msg}
 
 
 @app.post("/upload")
@@ -762,13 +786,14 @@ async def upload_files(
     Returns:
         Rendered results template
     """
-    logger.info(f"Received {len(files)} files for processing")
-    logger.info(f"Parameters: rf_rate={rf_rate}, sma_window={sma_window}, "
+    logger.info(f"[Main Upload] Received {len(files)} files for processing")
+    logger.info(f"[Main Upload] File details: {[{'name': f.filename, 'size': f.size, 'content_type': f.content_type} for f in files]}")
+    logger.info(f"[Main Upload] Parameters: rf_rate={rf_rate}, sma_window={sma_window}, "
                 f"use_trading_filter={use_trading_filter}, starting_capital={starting_capital}")
     
     # Handle both initial and rebalance weighting method
     effective_weighting_method = rebalance_weighting_method if rebalance_weighting_method else weighting_method
-    logger.info(f"Weighting method: {effective_weighting_method}, weights: {weights}")
+    logger.info(f"[Main Upload] Weighting method: {effective_weighting_method}, weights: {weights}")
     
     # Process weighting
     portfolio_weights = None
