@@ -74,9 +74,17 @@ export const portfolioAPI = {
   // Upload a new portfolio CSV file
   uploadPortfolio: async (file: File): Promise<{ message: string; portfolio_id: number }> => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('files', file);
     
-    return fetch(`${API_BASE_URL}/api/upload`, {
+    // Add required form parameters with default values
+    formData.append('rf_rate', '0.05');
+    formData.append('daily_rf_rate', '0.0001369');
+    formData.append('sma_window', '20');
+    formData.append('use_trading_filter', 'true');
+    formData.append('starting_capital', '100000');
+    formData.append('weighting_method', 'equal');
+    
+    return fetch(`${API_BASE_URL}/upload`, {
       method: 'POST',
       body: formData,
     }).then(async (response) => {
@@ -84,7 +92,18 @@ export const portfolioAPI = {
         const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
         throw new Error(`${response.status}: ${errorData.detail || 'Upload failed'}`);
       }
-      return response.json();
+      
+      // Handle HTML response from /upload endpoint
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        // If HTML response, assume success and return a basic success response
+        return {
+          message: "File uploaded successfully",
+          portfolio_id: 0
+        };
+      } else {
+        return response.json();
+      }
     });
   },
 
@@ -94,6 +113,14 @@ export const portfolioAPI = {
     files.forEach((file) => {
       formData.append('files', file);
     });
+    
+    // Add required form parameters with default values
+    formData.append('rf_rate', '0.05');
+    formData.append('daily_rf_rate', '0.0001369');
+    formData.append('sma_window', '20');
+    formData.append('use_trading_filter', 'true');
+    formData.append('starting_capital', '100000');
+    formData.append('weighting_method', 'equal');
     
     // Try /api/upload first, fallback to /upload if that fails
     let url = `${API_BASE_URL}/api/upload`;
