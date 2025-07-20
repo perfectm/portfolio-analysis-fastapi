@@ -180,15 +180,15 @@ def _calculate_portfolio_metrics(
         return _get_default_metrics(starting_capital, clean_df)
     
     return {
-        'Sharpe Ratio': float(sharpe_ratio),
-        'CAGR': float(strategy_mean_return * 100),  # Convert to percentage
-        'Annual Volatility': float(strategy_std * 100),  # Convert to percentage
-        'Total Return': float(total_return * 100),  # Convert to percentage
-        'Total P/L': float(clean_df['Cumulative P/L'].iloc[-1]),
-        'Final Account Value': float(clean_df['Account Value'].iloc[-1]),
-        'Peak Value': float(clean_df['Account Value'].max()),
-        'Number of Trading Days': len(clean_df[clean_df['Has_Trade']]),
-        'Time Period (Years)': float(num_years),
+        'sharpe_ratio': float(sharpe_ratio),
+        'cagr': float(strategy_mean_return),  # Already as decimal
+        'annual_volatility': float(strategy_std),  # Already as decimal
+        'total_return': float(total_return),  # Already as decimal
+        'total_pl': float(clean_df['Cumulative P/L'].iloc[-1]),
+        'final_account_value': float(clean_df['Account Value'].iloc[-1]),
+        'peak_value': float(clean_df['Account Value'].max()),
+        'number_of_trading_days': len(clean_df[clean_df['Has_Trade']]),
+        'time_period_years': float(num_years),
     }
 
 
@@ -295,15 +295,15 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     mar_ratio = abs(cagr / abs(max_drawdown_pct)) if max_drawdown_pct != 0 else 0
 
     return {
-        'MAR Ratio': float(mar_ratio),
-        'Max Drawdown': float(max_drawdown),
-        'Max Drawdown %': float(abs(max_drawdown_pct) * 100),
-        'Max Drawdown Date': max_drawdown_date.strftime('%Y-%m-%d'),
-        'Drawdown Start Date': drawdown_start_date.strftime('%Y-%m-%d'),
-        'Account Value at Drawdown Start': float(drawdown_peak_value),
-        'Account Value at Max Drawdown': float(max_drawdown_account_value),
-        'Recovery Days': float(recovery_days) if recovery_days is not None else 0.0,
-        'Has Recovered': recovery_days is not None
+        'mar_ratio': float(mar_ratio),
+        'max_drawdown': float(max_drawdown),
+        'max_drawdown_percent': float(abs(max_drawdown_pct)),  # Already as decimal
+        'max_drawdown_date': max_drawdown_date.strftime('%Y-%m-%d'),
+        'drawdown_start_date': drawdown_start_date.strftime('%Y-%m-%d'),
+        'account_value_at_drawdown_start': float(drawdown_peak_value),
+        'account_value_at_max_drawdown': float(max_drawdown_account_value),
+        'recovery_days': float(recovery_days) if recovery_days is not None else 0.0,
+        'has_recovered': recovery_days is not None
     }
 
 
@@ -319,28 +319,28 @@ def _calculate_cagr_from_df(clean_df: pd.DataFrame) -> float:
 def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None) -> Dict[str, Any]:
     """Get default metrics when calculation fails"""
     base_metrics = {
-        'Sharpe Ratio': 0,
-        'MAR Ratio': 0,
-        'CAGR': 0,
-        'Annual Volatility': 0,
-        'Total Return': 0,
-        'Total P/L': 0,
-        'Final Account Value': starting_capital,
-        'Peak Value': starting_capital,
-        'Max Drawdown': 0,
-        'Max Drawdown %': 0,
-        'Number of Trading Days': 0,
-        'Time Period (Years)': 0,
-        'Recovery Days': 0,
-        'Has Recovered': False
+        'sharpe_ratio': 0,
+        'mar_ratio': 0,
+        'cagr': 0,
+        'annual_volatility': 0,
+        'total_return': 0,
+        'total_pl': 0,
+        'final_account_value': starting_capital,
+        'peak_value': starting_capital,
+        'max_drawdown': 0,
+        'max_drawdown_percent': 0,
+        'number_of_trading_days': 0,
+        'time_period_years': 0,
+        'recovery_days': 0,
+        'has_recovered': False
     }
     
     if clean_df is not None:
         base_metrics.update({
-            'Total P/L': float(clean_df['Cumulative P/L'].iloc[-1]) if 'Cumulative P/L' in clean_df.columns else 0,
-            'Final Account Value': float(clean_df['Account Value'].iloc[-1]) if 'Account Value' in clean_df.columns else starting_capital,
-            'Peak Value': float(clean_df['Account Value'].max()) if 'Account Value' in clean_df.columns else starting_capital,
-            'Number of Trading Days': len(clean_df[clean_df['P/L'] != 0]) if 'P/L' in clean_df.columns else len(clean_df),
+            'total_pl': float(clean_df['Cumulative P/L'].iloc[-1]) if 'Cumulative P/L' in clean_df.columns else 0,
+            'final_account_value': float(clean_df['Account Value'].iloc[-1]) if 'Account Value' in clean_df.columns else starting_capital,
+            'peak_value': float(clean_df['Account Value'].max()) if 'Account Value' in clean_df.columns else starting_capital,
+            'number_of_trading_days': len(clean_df[clean_df['P/L'] != 0]) if 'P/L' in clean_df.columns else len(clean_df),
         })
     
     return base_metrics
