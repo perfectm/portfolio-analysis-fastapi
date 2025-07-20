@@ -13,6 +13,8 @@ interface Portfolio {
 
 interface AnalysisResult {
   filename: string;
+  weighting_method?: string;
+  portfolio_composition?: Record<string, number>;
   metrics: {
     sharpe_ratio: number;
     total_return: number;
@@ -36,6 +38,8 @@ interface AnalysisResults {
   individual_results?: AnalysisResult[];
   blended_result?: AnalysisResult | null;
   multiple_portfolios?: boolean;
+  weighting_method?: string;
+  portfolio_weights?: Record<string, number>;
   advanced_plots?: {
     correlation_heatmap?: string | null;
     monte_carlo_simulation?: string | null;
@@ -55,11 +59,26 @@ export default function Portfolios() {
   );
   const [editingName, setEditingName] = useState<string>("");
 
+  // Weighting state
+  const [weightingMethod, setWeightingMethod] = useState<"equal" | "custom">(
+    "equal"
+  );
+  const [portfolioWeights, setPortfolioWeights] = useState<
+    Record<number, number>
+  >({});
+
   // Force a fresh deployment with checkboxes
 
   useEffect(() => {
     fetchPortfolios();
   }, []);
+
+  // Initialize weights when selected portfolios change
+  useEffect(() => {
+    if (selectedPortfolios.length > 0) {
+      initializeWeights(selectedPortfolios);
+    }
+  }, [selectedPortfolios.length, weightingMethod]);
 
   const fetchPortfolios = async () => {
     try {
@@ -137,17 +156,97 @@ export default function Portfolios() {
   };
 
   const togglePortfolioSelection = (id: number) => {
-    setSelectedPortfolios((prev) =>
-      prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]
-    );
+    setSelectedPortfolios((prev) => {
+      const newSelection = prev.includes(id)
+        ? prev.filter((pid) => pid !== id)
+        : [...prev, id];
+
+      // Reset weights when selection changes
+      initializeWeights(newSelection);
+      return newSelection;
+    });
   };
 
   const selectAllPortfolios = () => {
-    setSelectedPortfolios(portfolios.map((p) => p.id));
+    const allIds = portfolios.map((p) => p.id);
+    setSelectedPortfolios(allIds);
+    initializeWeights(allIds);
   };
 
   const clearSelection = () => {
     setSelectedPortfolios([]);
+    setPortfolioWeights({});
+  };
+
+  // Initialize weights for selected portfolios
+  const initializeWeights = (portfolioIds: number[]) => {
+    if (weightingMethod === "equal") {
+      const equalWeight =
+        portfolioIds.length > 0 ? 1.0 / portfolioIds.length : 0;
+      const newWeights: Record<number, number> = {};
+      portfolioIds.forEach((id) => {
+        newWeights[id] = equalWeight;
+      });
+      setPortfolioWeights(newWeights);
+    } else {
+      // For custom weights, initialize with equal weights if not already set
+      setPortfolioWeights((prev) => {
+        const newWeights = { ...prev };
+        const equalWeight =
+          portfolioIds.length > 0 ? 1.0 / portfolioIds.length : 0;
+        portfolioIds.forEach((id) => {
+          if (!(id in newWeights)) {
+            newWeights[id] = equalWeight;
+          }
+        });
+        // Remove weights for unselected portfolios
+        Object.keys(newWeights).forEach((key) => {
+          const id = parseInt(key);
+          if (!portfolioIds.includes(id)) {
+            delete newWeights[id];
+          }
+        });
+        return newWeights;
+      });
+    }
+  };
+
+  // Handle weighting method change
+  const handleWeightingMethodChange = (method: "equal" | "custom") => {
+    setWeightingMethod(method);
+    if (method === "equal") {
+      initializeWeights(selectedPortfolios);
+    }
+  };
+
+  // Handle individual weight change
+  const handleWeightChange = (portfolioId: number, weight: number) => {
+    setPortfolioWeights((prev) => ({
+      ...prev,
+      [portfolioId]: weight,
+    }));
+  };
+
+  // Normalize weights to sum to 1.0
+  const normalizeWeights = () => {
+    const weightValues = Object.values(portfolioWeights);
+    const totalWeight = weightValues.reduce((sum, weight) => sum + weight, 0);
+
+    if (totalWeight > 0) {
+      const normalizedWeights: Record<number, number> = {};
+      Object.entries(portfolioWeights).forEach(([id, weight]) => {
+        normalizedWeights[parseInt(id)] = weight / totalWeight;
+      });
+      setPortfolioWeights(normalizedWeights);
+    }
+  };
+
+  // Get weight sum for validation
+  const getWeightSum = () => {
+    return Object.values(portfolioWeights).reduce(
+      (sum, weight) => sum + weight,
+      0
+    );
   };
 
   const analyzeSelectedPortfolios = async () => {
@@ -156,20 +255,50 @@ export default function Portfolios() {
       return;
     }
 
+    // Validate weights if using custom weighting
+    if (weightingMethod === "custom" && selectedPortfolios.length > 1) {
+      const weightSum = getWeightSum();
+      if (Math.abs(weightSum - 1.0) > 0.001) {
+        alert(
+          `Portfolio weights must sum to 1.0 (100%). Current sum: ${(
+            weightSum * 100
+          ).toFixed(1)}%`
+        );
+        return;
+      }
+    }
+
     setAnalyzing(true);
     setAnalysisResults(null);
 
     try {
+      // Prepare the request body
+      const requestBody: any = {
+        portfolio_ids: selectedPortfolios,
+      };
+
+      // Add weighting parameters for multiple portfolios
+      if (selectedPortfolios.length > 1) {
+        requestBody.weighting_method = weightingMethod;
+        if (weightingMethod === "custom") {
+          // Convert weights to array in the same order as portfolio_ids
+          requestBody.weights = selectedPortfolios.map(
+            (id) => portfolioWeights[id] || 0
+          );
+        }
+      }
+
       // Call the backend API to analyze selected portfolios
-      const response = await fetch(`${API_BASE_URL}/api/analyze-portfolios`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          portfolio_ids: selectedPortfolios,
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/analyze-portfolios-weighted`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(
@@ -258,6 +387,161 @@ export default function Portfolios() {
             </button>
           </div>
 
+          {/* Weighting Controls */}
+          {selectedPortfolios.length > 1 && (
+            <div
+              className="weighting-controls"
+              style={{
+                marginBottom: "1.5rem",
+                padding: "1.5rem",
+                background: "#f8f9fa",
+                borderRadius: "8px",
+                border: "1px solid #e9ecef",
+              }}
+            >
+              <h3 style={{ marginBottom: "1rem", color: "#495057" }}>
+                ⚖️ Portfolio Weighting
+              </h3>
+
+              {/* Weighting Method Selection */}
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ marginRight: "1rem" }}>
+                  <input
+                    type="radio"
+                    name="weightingMethod"
+                    value="equal"
+                    checked={weightingMethod === "equal"}
+                    onChange={() => handleWeightingMethodChange("equal")}
+                    style={{ marginRight: "0.5rem" }}
+                  />
+                  Equal Weighting (Default)
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="weightingMethod"
+                    value="custom"
+                    checked={weightingMethod === "custom"}
+                    onChange={() => handleWeightingMethodChange("custom")}
+                    style={{ marginRight: "0.5rem" }}
+                  />
+                  Custom Weighting
+                </label>
+              </div>
+
+              {/* Weight Display */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                  gap: "1rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                {selectedPortfolios.map((portfolioId) => {
+                  const portfolio = portfolios.find(
+                    (p) => p.id === portfolioId
+                  );
+                  const weight = portfolioWeights[portfolioId] || 0;
+                  return (
+                    <div
+                      key={portfolioId}
+                      style={{
+                        padding: "1rem",
+                        background: "#fff",
+                        borderRadius: "6px",
+                        border: "1px solid #dee2e6",
+                      }}
+                    >
+                      <div
+                        style={{ fontWeight: "bold", marginBottom: "0.5rem" }}
+                      >
+                        {portfolio?.name || `Portfolio ${portfolioId}`}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <span style={{ minWidth: "60px" }}>Weight:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.001"
+                          value={weight.toFixed(3)}
+                          disabled={weightingMethod === "equal"}
+                          onChange={(e) =>
+                            handleWeightChange(
+                              portfolioId,
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          style={{
+                            width: "80px",
+                            padding: "0.25rem",
+                            border: "1px solid #ced4da",
+                            borderRadius: "4px",
+                            backgroundColor:
+                              weightingMethod === "equal" ? "#e9ecef" : "#fff",
+                          }}
+                        />
+                        <span style={{ color: "#6c757d" }}>
+                          ({(weight * 100).toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Weight Summary and Controls */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "0.75rem",
+                  background: "#fff",
+                  borderRadius: "6px",
+                  border: "1px solid #dee2e6",
+                }}
+              >
+                <div>
+                  <span style={{ fontWeight: "bold" }}>Total Weight: </span>
+                  <span
+                    style={{
+                      color:
+                        Math.abs(getWeightSum() - 1.0) < 0.001
+                          ? "#28a745"
+                          : "#dc3545",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {getWeightSum().toFixed(3)} (
+                    {(getWeightSum() * 100).toFixed(1)}%)
+                  </span>
+                  {Math.abs(getWeightSum() - 1.0) > 0.001 && (
+                    <span style={{ color: "#dc3545", marginLeft: "0.5rem" }}>
+                      ⚠️ Must equal 1.0 (100%)
+                    </span>
+                  )}
+                </div>
+                {weightingMethod === "custom" && (
+                  <button
+                    onClick={normalizeWeights}
+                    className="btn btn-secondary"
+                    style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
+                  >
+                    Normalize to 100%
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Analysis Results */}
           {analysisResults && (
             <div
@@ -307,6 +591,59 @@ export default function Portfolios() {
                     <h4 style={{ marginBottom: "1rem", color: "#007bff" }}>
                       Combined Portfolio Performance
                     </h4>
+
+                    {/* Portfolio Composition Display */}
+                    {analysisResults.blended_result.weighting_method && (
+                      <div
+                        style={{
+                          marginBottom: "1.5rem",
+                          padding: "1rem",
+                          background: "#e3f2fd",
+                          borderRadius: "6px",
+                          border: "1px solid #bbdefb",
+                        }}
+                      >
+                        <h5
+                          style={{ margin: "0 0 0.5rem 0", color: "#1976d2" }}
+                        >
+                          📊 Portfolio Composition
+                        </h5>
+                        <div
+                          style={{ fontSize: "0.9rem", marginBottom: "0.5rem" }}
+                        >
+                          <strong>Weighting Method:</strong>{" "}
+                          {analysisResults.blended_result.weighting_method ===
+                          "equal"
+                            ? "Equal Weighting"
+                            : "Custom Weighting"}
+                        </div>
+                        {analysisResults.blended_result
+                          .portfolio_composition && (
+                          <div style={{ fontSize: "0.9rem" }}>
+                            {Object.entries(
+                              analysisResults.blended_result
+                                .portfolio_composition
+                            ).map(([name, weight]) => (
+                              <div
+                                key={name}
+                                style={{ marginBottom: "0.25rem" }}
+                              >
+                                <strong>{name}:</strong>{" "}
+                                {((weight as number) * 100).toFixed(1)}%
+                                <span
+                                  style={{
+                                    color: "#666",
+                                    marginLeft: "0.5rem",
+                                  }}
+                                >
+                                  (weight: {(weight as number).toFixed(3)})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Blended Metrics */}
                     <div
