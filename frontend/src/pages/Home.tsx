@@ -2,33 +2,9 @@ import React from "react";
 import { Link } from "react-router-dom";
 import "./Home.css";
 
-import { API_BASE_URL } from "../services/api";
-
 const Home: React.FC = () => {
   return (
     <div className="home">
-      {/* Debug info - remove this in production */}
-      <div
-        style={{
-          background: "#f0f0f0",
-          padding: "10px",
-          margin: "10px",
-          border: "1px solid #ccc",
-          fontSize: "12px",
-          fontFamily: "monospace",
-        }}
-      >
-        <strong>Debug Info:</strong>
-        <br />
-        API URL: {API_BASE_URL}
-        <br />
-        Hostname: {window.location.hostname}
-        <br />
-        Origin: {window.location.origin}
-        <br />
-        Env Var: {import.meta.env.VITE_API_URL || "NOT SET"}
-      </div>
-
       <div className="hero-section">
         <h1>Portfolio Analysis Dashboard</h1>
         <p className="hero-description">
