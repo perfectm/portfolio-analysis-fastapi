@@ -272,13 +272,19 @@ export default function Portfolios() {
     setAnalysisResults(null);
 
     try {
-      // Prepare the request body
-      const requestBody: any = {
+      // Determine which endpoint to use based on whether weighting is needed
+      const useWeightedEndpoint =
+        selectedPortfolios.length > 1 &&
+        (weightingMethod === "custom" || weightingMethod === "equal");
+
+      let endpoint = `${API_BASE_URL}/api/analyze-portfolios`;
+      let requestBody: any = {
         portfolio_ids: selectedPortfolios,
       };
 
-      // Add weighting parameters for multiple portfolios
-      if (selectedPortfolios.length > 1) {
+      // Add weighting parameters for multiple portfolios if using weighted endpoint
+      if (useWeightedEndpoint) {
+        endpoint = `${API_BASE_URL}/api/analyze-portfolios-weighted`;
         requestBody.weighting_method = weightingMethod;
         if (weightingMethod === "custom") {
           // Convert weights to array in the same order as portfolio_ids
@@ -288,25 +294,62 @@ export default function Portfolios() {
         }
       }
 
+      console.log("Calling endpoint:", endpoint);
+      console.log("Request body:", requestBody);
+
       // Call the backend API to analyze selected portfolios
-      const response = await fetch(
-        `${API_BASE_URL}/api/analyze-portfolios-weighted`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("Response status:", response.status);
+      console.log("Response headers:", response.headers);
 
       if (!response.ok) {
+        // If the weighted endpoint fails with 502/500, try the original endpoint as fallback
+        if (
+          useWeightedEndpoint &&
+          (response.status === 502 || response.status === 500)
+        ) {
+          console.log(
+            "Weighted endpoint failed, falling back to original endpoint"
+          );
+
+          const fallbackResponse = await fetch(
+            `${API_BASE_URL}/api/analyze-portfolios`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                portfolio_ids: selectedPortfolios,
+              }),
+            }
+          );
+
+          if (!fallbackResponse.ok) {
+            throw new Error(
+              `Analysis failed on both endpoints: ${fallbackResponse.status} ${fallbackResponse.statusText}`
+            );
+          }
+
+          const fallbackResults = await fallbackResponse.json();
+          setAnalysisResults(fallbackResults);
+          return;
+        }
+
         throw new Error(
           `Analysis failed: ${response.status} ${response.statusText}`
         );
       }
 
       const results = await response.json();
+      console.log("Analysis results:", results);
       setAnalysisResults(results);
     } catch (error) {
       console.error("Analysis failed:", error);

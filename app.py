@@ -1156,6 +1156,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         simplified_blended_result = None
         heatmap_url = None
         monte_carlo_url = None
+        portfolio_composition = {}  # Initialize here so it's always available
         
         if len(portfolios_data) > 1:
             try:
@@ -1269,7 +1270,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             "blended_result": simplified_blended_result,
             "multiple_portfolios": len(portfolios_data) > 1,
             "weighting_method": weighting_method,
-            "portfolio_weights": portfolio_composition if 'portfolio_composition' in locals() else {},
+            "portfolio_weights": portfolio_composition,
             "advanced_plots": {
                 "correlation_heatmap": heatmap_url,
                 "monte_carlo_simulation": monte_carlo_url
