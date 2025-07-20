@@ -46,6 +46,36 @@ export interface AnalysisResponse {
   }>;
 }
 
+// New interfaces for enhanced upload responses
+export interface UploadAnalysisResult {
+  filename: string;
+  metrics: {
+    sharpe_ratio: number;
+    total_return: number;
+    total_pl: number;
+    final_account_value: number;
+    max_drawdown: number;
+    max_drawdown_percent: number;
+    cagr: number;
+    annual_volatility: number;
+    [key: string]: any;
+  };
+  plots: Array<{
+    filename: string;
+    url: string;
+  }>;
+}
+
+export interface UploadResponse {
+  success: boolean;
+  message: string;
+  portfolio_id?: number;
+  portfolio_ids?: number[];
+  individual_results?: UploadAnalysisResult[];
+  blended_result?: UploadAnalysisResult | null;
+  multiple_portfolios?: boolean;
+}
+
 // Fetch wrapper with error handling
 const apiCall = async (url: string, options: RequestInit = {}): Promise<any> => {
   console.log(`[API] Making request to: ${API_BASE_URL}${url}`, {
@@ -107,7 +137,7 @@ export const portfolioAPI = {
   },
 
   // Upload a new portfolio CSV file
-  uploadPortfolio: async (file: File): Promise<{ message: string; portfolio_id: number }> => {
+  uploadPortfolio: async (file: File): Promise<UploadResponse> => {
     console.log('[API] Starting single file upload:', {
       fileName: file.name,
       fileSize: file.size,
@@ -166,6 +196,7 @@ export const portfolioAPI = {
         console.log('[API] Single upload received HTML response, treating as success');
         // If HTML response, assume success and return a basic success response
         return {
+          success: true,
           message: "File uploaded successfully",
           portfolio_id: 0
         };
@@ -181,7 +212,7 @@ export const portfolioAPI = {
   },
 
   // Upload multiple portfolio CSV files
-  uploadMultiplePortfolios: async (files: File[]): Promise<{ message: string; portfolio_ids: number[] }> => {
+  uploadMultiplePortfolios: async (files: File[]): Promise<UploadResponse> => {
     console.log('[API] Starting multiple file upload:', {
       fileCount: files.length,
       files: files.map(f => ({ name: f.name, size: f.size, type: f.type }))
@@ -287,6 +318,7 @@ export const portfolioAPI = {
           console.log('[API] Fallback upload received HTML response, treating as success');
           // If HTML response, assume success and return a basic success response
           return {
+            success: true,
             message: "Files uploaded successfully",
             portfolio_ids: []
           };
