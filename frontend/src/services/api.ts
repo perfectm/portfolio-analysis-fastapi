@@ -3,7 +3,12 @@
 // For now, we'll use fetch API as fallback
 
 // API base URL - will be configured for both development and production
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' ? 'http://localhost:8000' : window.location.origin);
+
+console.log('[API Config] Using API_BASE_URL:', API_BASE_URL);
+console.log('[API Config] Current hostname:', window.location.hostname);
+console.log('[API Config] Current origin:', window.location.origin);
 
 // Types for API responses
 export interface Portfolio {

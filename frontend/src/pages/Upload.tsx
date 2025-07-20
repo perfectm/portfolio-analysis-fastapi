@@ -39,9 +39,13 @@ const Upload: React.FC = () => {
       return;
     }
 
-    console.log('[Upload] Starting upload process:', {
+    console.log("[Upload] Starting upload process:", {
       fileCount: selectedFiles.length,
-      files: selectedFiles.map(f => ({ name: f.name, size: f.size, type: f.type }))
+      files: selectedFiles.map((f) => ({
+        name: f.name,
+        size: f.size,
+        type: f.type,
+      })),
     });
 
     setUploading(true);
@@ -50,18 +54,18 @@ const Upload: React.FC = () => {
     try {
       if (selectedFiles.length === 1) {
         // Single file upload
-        console.log('[Upload] Performing single file upload');
+        console.log("[Upload] Performing single file upload");
         const result = await portfolioAPI.uploadPortfolio(selectedFiles[0]);
-        console.log('[Upload] Single file upload result:', result);
+        console.log("[Upload] Single file upload result:", result);
         setMessage(`Upload successful! Portfolio ID: ${result.portfolio_id}`);
         setMessageType("success");
       } else {
         // Multiple file upload
-        console.log('[Upload] Performing multiple file upload');
+        console.log("[Upload] Performing multiple file upload");
         const result = await portfolioAPI.uploadMultiplePortfolios(
           selectedFiles
         );
-        console.log('[Upload] Multiple file upload result:', result);
+        console.log("[Upload] Multiple file upload result:", result);
         setMessage(
           `Upload successful! Uploaded ${selectedFiles.length} portfolios.`
         );
@@ -75,22 +79,22 @@ const Upload: React.FC = () => {
       ) as HTMLInputElement;
       if (fileInput) fileInput.value = "";
     } catch (error) {
-      console.error('[Upload] Upload failed with error:', error);
-      
+      console.error("[Upload] Upload failed with error:", error);
+
       // Extract more detailed error information
       let errorMessage = "Unknown error";
       if (error instanceof Error) {
         errorMessage = error.message;
-        console.error('[Upload] Error details:', {
+        console.error("[Upload] Error details:", {
           name: error.name,
           message: error.message,
-          stack: error.stack
+          stack: error.stack,
         });
       } else {
-        console.error('[Upload] Non-Error object thrown:', error);
+        console.error("[Upload] Non-Error object thrown:", error);
         errorMessage = String(error);
       }
-      
+
       setMessage(`Upload failed: ${errorMessage}`);
       setMessageType("error");
     } finally {
