@@ -153,12 +153,24 @@ def _calculate_portfolio_metrics(
         # Calculate strategy metrics with error handling - only use days with trades
         valid_returns = clean_df['Strategy Return'][clean_df['Has_Trade']]
         
+        logger.info(f"[Metrics] Debug info:")
+        logger.info(f"  - Clean DF shape: {clean_df.shape}")
+        logger.info(f"  - Starting capital: {starting_capital}")
+        logger.info(f"  - Has trades count: {clean_df['Has_Trade'].sum()}")
+        logger.info(f"  - Valid returns count: {len(valid_returns)}")
+        logger.info(f"  - Account value range: {clean_df['Account Value'].min():.2f} to {clean_df['Account Value'].max():.2f}")
+        logger.info(f"  - Cumulative P/L final: {clean_df['Cumulative P/L'].iloc[-1]:.2f}")
+        
         if len(valid_returns) > 0:
             # Calculate total return based on account value
             total_return = (clean_df['Account Value'].iloc[-1] / starting_capital) - 1
             
+            logger.info(f"  - Total return calculated: {total_return:.4f}")
+            
             # Calculate number of years using actual/actual basis
             num_years = _calculate_years_fraction(clean_df['Date'].min(), clean_df['Date'].max())
+            
+            logger.info(f"  - Time period years: {num_years:.4f}")
             
             # Calculate annualized return
             if num_years > 0:
@@ -166,10 +178,15 @@ def _calculate_portfolio_metrics(
             else:
                 strategy_mean_return = total_return
             
+            logger.info(f"  - CAGR calculated: {strategy_mean_return:.4f}")
+            
             # Calculate Sharpe ratio and volatility
             sharpe_ratio, strategy_std = _calculate_sharpe_ratio(
                 clean_df, rf_rate, starting_capital
             )
+            
+            logger.info(f"  - Sharpe ratio: {sharpe_ratio:.4f}")
+            logger.info(f"  - Annual volatility: {strategy_std:.4f}")
             
         else:
             logger.warning("No valid returns found for strategy metrics calculation")

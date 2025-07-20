@@ -1050,6 +1050,104 @@ async def catch_all(path: str):
         """)
 
 
+@app.post("/api/analyze-portfolios")
+async def analyze_selected_portfolios(request: Request, db: Session = Depends(get_db)):
+    """
+    Analyze selected portfolios by their IDs
+    """
+    try:
+        # Get the portfolio IDs from the request
+        body = await request.json()
+        portfolio_ids = body.get("portfolio_ids", [])
+        
+        if not portfolio_ids:
+            return {"success": False, "error": "No portfolio IDs provided"}
+        
+        logger.info(f"[Analyze Portfolios] Analyzing portfolios: {portfolio_ids}")
+        
+        # Get portfolio data from database
+        portfolios_data = []
+        for portfolio_id in portfolio_ids:
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+            if not portfolio:
+                logger.warning(f"Portfolio {portfolio_id} not found")
+                continue
+                
+            # Get the portfolio data
+            trades = PortfolioService.get_portfolio_trades(db, portfolio_id)
+            if not trades:
+                logger.warning(f"No trades found for portfolio {portfolio_id}")
+                continue
+                
+            # Convert to DataFrame
+            df_data = []
+            for trade in trades:
+                df_data.append({
+                    'Date': trade.date,
+                    'P/L': trade.pnl
+                })
+            
+            if df_data:
+                df = pd.DataFrame(df_data)
+                portfolios_data.append((portfolio.name, df))
+        
+        if not portfolios_data:
+            return {"success": False, "error": "No valid portfolio data found"}
+        
+        logger.info(f"[Analyze Portfolios] Processing {len(portfolios_data)} portfolios")
+        
+        # Process individual portfolios
+        individual_results = process_individual_portfolios(
+            portfolios_data,
+            rf_rate=0.05,
+            sma_window=20,
+            use_trading_filter=True,
+            starting_capital=100000.0
+        )
+        
+        logger.info(f"[Analyze Portfolios] Individual analysis completed for {len(individual_results)} portfolios")
+        
+        # Create blended portfolio if multiple portfolios
+        blended_result = None
+        if len(portfolios_data) > 1:
+            try:
+                logger.info("[Analyze Portfolios] Creating blended portfolio analysis")
+                blended_df, blended_metrics, _ = create_blended_portfolio(
+                    portfolios_data,
+                    rf_rate=0.05,
+                    sma_window=20,
+                    use_trading_filter=True,
+                    starting_capital=100000.0
+                )
+                
+                if blended_df is not None and blended_metrics is not None:
+                    blended_result = {
+                        'filename': f'Blended Portfolio ({len(portfolios_data)} strategies)',
+                        'metrics': blended_metrics,
+                        'plots': [],
+                        'type': 'blended'
+                    }
+                    logger.info("[Analyze Portfolios] Blended portfolio created successfully")
+                else:
+                    logger.warning("[Analyze Portfolios] Blended portfolio creation failed")
+            except Exception as e:
+                logger.error(f"[Analyze Portfolios] Blended portfolio creation error: {str(e)}")
+                blended_result = None
+        
+        logger.info(f"[Analyze Portfolios] Analysis completed successfully for {len(portfolio_ids)} portfolios")
+        return {
+            "success": True,
+            "message": f"Successfully analyzed {len(portfolio_ids)} portfolios",
+            "individual_results": individual_results,
+            "blended_result": blended_result,
+            "multiple_portfolios": len(portfolios_data) > 1
+        }
+        
+    except Exception as e:
+        logger.error(f"[Analyze Portfolios] Error analyzing portfolios: {str(e)}", exc_info=True)
+        return {"success": False, "error": f"Analysis failed: {str(e)}"}
+
+
 if __name__ == "__main__":
     import uvicorn
     import os
