@@ -6,7 +6,7 @@ import numpy as np
 import logging
 from typing import List, Dict, Any, Tuple
 
-from portfolio_processor import process_portfolio_data
+from portfolio_processor import process_portfolio_data, _convert_numpy_types
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +132,9 @@ def create_blended_portfolio(
             # Add weighting information to metrics
             blended_metrics['Portfolio_Weights'] = dict(zip(portfolio_names, weights))
             blended_metrics['Weighting_Method'] = 'Custom' if any(w != weights[0] for w in weights) else 'Equal'
+            
+            # Convert numpy types to Python native types for JSON serialization
+            blended_metrics = _convert_numpy_types(blended_metrics)
             
             return blended_df, blended_metrics, correlation_data
             

@@ -23,6 +23,16 @@ def _convert_numpy_types(metrics: Dict[str, Any]) -> Dict[str, Any]:
             converted[key] = bool(value)
         elif pd.isna(value):
             converted[key] = None
+        elif isinstance(value, dict):
+            # Recursively convert nested dictionaries
+            converted[key] = _convert_numpy_types(value)
+        elif isinstance(value, (list, tuple)):
+            # Convert lists and tuples
+            converted[key] = [_convert_numpy_types({0: item})[0] if isinstance(item, dict) 
+                             else float(item) if isinstance(item, (np.floating, np.float32, np.float64))
+                             else int(item) if isinstance(item, (np.integer, np.int32, np.int64))
+                             else bool(item) if isinstance(item, np.bool_)
+                             else item for item in value]
         else:
             converted[key] = value
     return converted
