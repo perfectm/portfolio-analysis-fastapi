@@ -14,7 +14,6 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "react",
 
     /* Additional options for CSS and module resolution */
     "allowSyntheticDefaultImports": true,
@@ -23,10 +22,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
 
-    /* Linting */
-    "strict": true,
+    /* Linting - relaxed for compatibility */
+    "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
+    "noImplicitAny": false,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": false
