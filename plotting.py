@@ -60,7 +60,8 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
     try:
         logger.info(f"[create_plots] Creating matplotlib figure")
         # Create a 2x2 subplot grid with reduced figure size to save memory
-        fig = plt.figure(figsize=(16, 12), dpi=100)  # Reduced from 20x16 and set lower DPI
+        # Use smaller size for better memory efficiency
+        fig = plt.figure(figsize=(12, 9), dpi=100)  # Further reduced from 16x12
         
         # Plot 1: Cumulative P/L (top left)
         logger.info(f"[create_plots] Creating cumulative P/L plot")
@@ -223,7 +224,7 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
 def create_monte_carlo_simulation(
     blended_df: pd.DataFrame, 
     metrics: Dict[str, Any], 
-    num_simulations: int = 500,  # Reduced from 1000 to save memory
+    num_simulations: int = 250,  # Reduced from 500 to 250 for better memory management
     forecast_days: int = 252
 ) -> Optional[str]:
     """
