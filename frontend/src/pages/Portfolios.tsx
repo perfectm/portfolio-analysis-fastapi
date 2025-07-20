@@ -47,6 +47,8 @@ export default function Portfolios() {
   const [analysisResults, setAnalysisResults] =
     useState<AnalysisResults | null>(null);
 
+  // Force a fresh deployment with checkboxes
+
   useEffect(() => {
     fetchPortfolios();
   }, []);

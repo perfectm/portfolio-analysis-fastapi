@@ -135,22 +135,9 @@ async def serve_vite_svg():
         raise HTTPException(status_code=404, detail="Vite SVG not found")
 
 
-@app.get("/portfolios", response_class=HTMLResponse)
-async def list_portfolios(request: Request, db: Session = Depends(get_db)):
-    """List all stored portfolios"""
-    try:
-        portfolios = PortfolioService.get_portfolios(db)
-        return templates.TemplateResponse(
-            "portfolios.html", 
-            {"request": request, "portfolios": portfolios}
-        )
-    except Exception as e:
-        logger.error(f"Error fetching portfolios: {e}")
-        return templates.TemplateResponse(
-            "portfolios.html", 
-            {"request": request, "portfolios": [], "error": str(e)}
-        )
-
+# Removed conflicting /portfolios route to allow React frontend to handle it
+# The portfolios page is now handled by the React frontend with checkboxes
+# Backend data is available via /api/strategies/list endpoint
 
 @app.get("/portfolio/{portfolio_id}")
 async def get_portfolio_data(portfolio_id: int, db: Session = Depends(get_db)):
@@ -1146,6 +1133,26 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
     except Exception as e:
         logger.error(f"[Analyze Portfolios] Error analyzing portfolios: {str(e)}", exc_info=True)
         return {"success": False, "error": f"Analysis failed: {str(e)}"}
+
+
+# Catch-all route for React frontend routing (must be last)
+@app.get("/{path:path}", response_class=HTMLResponse)
+async def serve_react_app(path: str = None):
+    """Catch-all route to serve React frontend for client-side routing"""
+    frontend_index_path = 'frontend/dist/index.html'
+    if os.path.exists(frontend_index_path):
+        return FileResponse(frontend_index_path)
+    else:
+        return HTMLResponse("""
+        <html>
+            <head><title>Cotton's Portfolio Analyzer</title></head>
+            <body>
+                <h1>Cotton's Portfolio Analyzer</h1>
+                <p>The React frontend is not available. Please build the frontend first.</p>
+                <p>API documentation is available at <a href="/docs">/docs</a></p>
+            </body>
+        </html>
+        """)
 
 
 if __name__ == "__main__":
