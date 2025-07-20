@@ -11,6 +11,23 @@ from config import DATE_COLUMNS, PL_COLUMNS
 logger = logging.getLogger(__name__)
 
 
+def _convert_numpy_types(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert numpy and pandas types to Python native types for JSON serialization"""
+    converted = {}
+    for key, value in metrics.items():
+        if isinstance(value, (np.integer, np.int32, np.int64)):
+            converted[key] = int(value)
+        elif isinstance(value, (np.floating, np.float32, np.float64)):
+            converted[key] = float(value)
+        elif isinstance(value, np.bool_):
+            converted[key] = bool(value)
+        elif pd.isna(value):
+            converted[key] = None
+        else:
+            converted[key] = value
+    return converted
+
+
 def process_portfolio_data(
     df: pd.DataFrame, 
     rf_rate: float = 0.043, 
@@ -91,6 +108,9 @@ def process_portfolio_data(
     metrics.update(drawdown_metrics)
     
     _log_portfolio_summary(clean_df, metrics, starting_capital)
+    
+    # Convert numpy types to Python native types for JSON serialization
+    metrics = _convert_numpy_types(metrics)
     
     return clean_df, metrics
 
@@ -372,14 +392,14 @@ def _log_portfolio_summary(clean_df: pd.DataFrame, metrics: Dict[str, Any], star
     logger.info(f"Processed {len(clean_df):,} trades")
     logger.info(f"Date range: {clean_df['Date'].min()} to {clean_df['Date'].max()} ({num_years:.1f} years)")
     logger.info(f"Starting Capital: ${starting_capital:,.2f}")
-    logger.info(f"Final Account Value: ${metrics['Final Account Value']:,.2f}")
-    logger.info(f"Total P/L: ${metrics['Total P/L']:,.2f}")
-    logger.info(f"Total Return: {metrics['Total Return']:.2f}%")
-    logger.info(f"CAGR: {metrics['CAGR']:.2f}%")
-    logger.info(f"Annual Volatility: {metrics['Annual Volatility']:.2f}%")
-    logger.info(f"Sharpe Ratio: {metrics['Sharpe Ratio']:.2f}")
-    logger.info(f"Maximum Drawdown: ${abs(max_drawdown):,.2f} ({metrics['Max Drawdown %']:.2f}%)")
-    logger.info(f"MAR Ratio: {metrics['MAR Ratio']:.2f}")
+    logger.info(f"Final Account Value: ${metrics['final_account_value']:,.2f}")
+    logger.info(f"Total P/L: ${metrics['total_pl']:,.2f}")
+    logger.info(f"Total Return: {metrics['total_return']:.2f}%")
+    logger.info(f"CAGR: {metrics['cagr']:.2f}%")
+    logger.info(f"Annual Volatility: {metrics['annual_volatility']:.2f}%")
+    logger.info(f"Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
+    logger.info(f"Maximum Drawdown: ${abs(max_drawdown):,.2f} ({metrics['max_drawdown_percent']:.2f}%)")
+    logger.info(f"MAR Ratio: {metrics['mar_ratio']:.2f}")
     
     if recovery_days is not None and recovery_days > 0:
         logger.info(f"Recovery Time: {recovery_days} days")
