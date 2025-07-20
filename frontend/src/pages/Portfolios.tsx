@@ -219,6 +219,523 @@ export default function Portfolios() {
             </button>
           </div>
 
+          {/* Analysis Results */}
+          {analysisResults && (
+            <div
+              className="analysis-results"
+              style={{
+                marginTop: "1.5rem",
+                marginBottom: "2rem",
+                padding: "1.5rem",
+                background: "#f8f9fa",
+                borderRadius: "8px",
+                border: "1px solid #e9ecef",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                <h2 style={{ margin: 0 }}>📊 Analysis Results</h2>
+                <button
+                  onClick={() => setAnalysisResults(null)}
+                  className="btn btn-secondary"
+                  style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
+                >
+                  Clear Results
+                </button>
+              </div>
+
+              {/* Individual Portfolio Results */}
+              {analysisResults.individual_results &&
+                analysisResults.individual_results.length > 0 && (
+                  <div className="individual-results">
+                    <h3>Individual Portfolio Analysis</h3>
+                    <div
+                      className="results-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(350px, 1fr))",
+                        gap: "1.5rem",
+                        marginBottom: "2rem",
+                      }}
+                    >
+                      {analysisResults.individual_results.map(
+                        (result, index) => (
+                          <div
+                            key={index}
+                            className="result-card"
+                            style={{
+                              background: "#fff",
+                              padding: "1.5rem",
+                              borderRadius: "8px",
+                              border: "1px solid #e9ecef",
+                              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                            }}
+                          >
+                            <h4 style={{ marginBottom: "1rem" }}>
+                              {result.filename}
+                            </h4>
+
+                            {/* Key Metrics */}
+                            <div
+                              className="metrics-grid"
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: "0.75rem",
+                                marginBottom: "1rem",
+                              }}
+                            >
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Total Return
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.total_return >= 0
+                                        ? "#28a745"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.total_return?.toFixed(2)}%
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Sharpe Ratio
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.sharpe_ratio >= 1
+                                        ? "#28a745"
+                                        : result.metrics.sharpe_ratio >= 0.5
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.sharpe_ratio?.toFixed(2)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Max Drawdown
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.max_drawdown_percent?.toFixed(
+                                    2
+                                  )}
+                                  %
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  CAGR
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.cagr >= 0
+                                        ? "#28a745"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.cagr?.toFixed(2)}%
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Portfolio Plots */}
+                            {result.plots && result.plots.length > 0 && (
+                              <div className="plots-section">
+                                <h5 style={{ marginBottom: "0.75rem" }}>
+                                  Visualizations
+                                </h5>
+                                <div
+                                  className="plots-grid"
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr 1fr",
+                                    gap: "0.5rem",
+                                  }}
+                                >
+                                  {result.plots.map((plot, plotIndex) => (
+                                    <div key={plotIndex} className="plot-item">
+                                      <img
+                                        src={plot.url}
+                                        alt={plot.filename}
+                                        style={{
+                                          width: "100%",
+                                          height: "auto",
+                                          borderRadius: "4px",
+                                          border: "1px solid #e9ecef",
+                                        }}
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = "none";
+                                        }}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              {/* Blended Portfolio Results */}
+              {analysisResults.blended_result && (
+                <div className="blended-results">
+                  <h3>🔗 Blended Portfolio Analysis</h3>
+                  <div
+                    className="blended-card"
+                    style={{
+                      background: "#fff",
+                      padding: "1.5rem",
+                      borderRadius: "8px",
+                      border: "2px solid #007bff",
+                      boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+                      marginBottom: "2rem",
+                    }}
+                  >
+                    <h4 style={{ marginBottom: "1rem", color: "#007bff" }}>
+                      Combined Portfolio Performance
+                    </h4>
+
+                    {/* Blended Metrics */}
+                    <div
+                      className="blended-metrics"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                        gap: "1rem",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Total Return
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics
+                                .total_return >= 0
+                                ? "#28a745"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.total_return?.toFixed(
+                            2
+                          )}
+                          %
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Sharpe Ratio
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics
+                                .sharpe_ratio >= 1
+                                ? "#28a745"
+                                : analysisResults.blended_result.metrics
+                                    .sharpe_ratio >= 0.5
+                                ? "#ffc107"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.sharpe_ratio?.toFixed(
+                            2
+                          )}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Max Drawdown
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.max_drawdown_percent?.toFixed(
+                            2
+                          )}
+                          %
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          CAGR
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics.cagr >= 0
+                                ? "#28a745"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.cagr?.toFixed(
+                            2
+                          )}
+                          %
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Blended Portfolio Plots */}
+                    {analysisResults.blended_result.plots &&
+                      analysisResults.blended_result.plots.length > 0 && (
+                        <div className="blended-plots">
+                          <h5 style={{ marginBottom: "1rem" }}>
+                            Combined Portfolio Visualizations
+                          </h5>
+                          <div
+                            className="plots-grid"
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns:
+                                "repeat(auto-fit, minmax(300px, 1fr))",
+                              gap: "1rem",
+                            }}
+                          >
+                            {analysisResults.blended_result.plots.map(
+                              (plot, plotIndex) => (
+                                <div
+                                  key={plotIndex}
+                                  className="plot-container"
+                                >
+                                  <img
+                                    src={plot.url}
+                                    alt={plot.filename}
+                                    style={{
+                                      width: "100%",
+                                      height: "auto",
+                                      borderRadius: "4px",
+                                      border: "1px solid #e9ecef",
+                                    }}
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                    }}
+                                  />
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {/* Advanced Plots Section */}
+              {analysisResults.advanced_plots &&
+                analysisResults.multiple_portfolios &&
+                (analysisResults.advanced_plots.correlation_heatmap ||
+                  analysisResults.advanced_plots.monte_carlo_simulation) && (
+                  <div className="advanced-plots-section">
+                    <h3>🔬 Advanced Portfolio Analysis</h3>
+                    <p
+                      style={{
+                        color: "#666",
+                        fontSize: "0.95rem",
+                        marginBottom: "1.5rem",
+                      }}
+                    >
+                      Advanced statistical analysis for multiple portfolio
+                      comparison and risk assessment.
+                    </p>
+                    <div className="plots-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+                      {analysisResults.advanced_plots.correlation_heatmap && (
+                        <div className="advanced-plot-card">
+                          <h4 style={{ marginBottom: "0.5rem" }}>
+                            📊 Portfolio Correlation Heatmap
+                          </h4>
+                          <p
+                            style={{
+                              color: "#666",
+                              fontSize: "0.9rem",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            Shows correlation coefficients between portfolio
+                            returns. Values closer to 1 indicate higher positive
+                            correlation, while values closer to -1 indicate
+                            negative correlation.
+                          </p>
+                          <div className="plot-container">
+                            <img
+                              src={analysisResults.advanced_plots.correlation_heatmap}
+                              alt="Correlation Heatmap"
+                              style={{
+                                width: "100%",
+                                height: "auto",
+                                borderRadius: "4px",
+                                border: "1px solid #e9ecef",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {analysisResults.advanced_plots.monte_carlo_simulation && (
+                        <div className="advanced-plot-card">
+                          <h4 style={{ marginBottom: "0.5rem" }}>
+                            🎲 Monte Carlo Simulation
+                          </h4>
+                          <p
+                            style={{
+                              color: "#666",
+                              fontSize: "0.9rem",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            1-year forecast based on 1,000 simulations using
+                            historical return patterns. Shows expected portfolio
+                            value range and confidence intervals.
+                          </p>
+                          <div className="plot-container">
+                            <img
+                              src={
+                                analysisResults.advanced_plots
+                                  .monte_carlo_simulation
+                              }
+                              alt="Monte Carlo Simulation"
+                              style={{
+                                width: "100%",
+                                height: "auto",
+                                borderRadius: "4px",
+                                border: "1px solid #e9ecef",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+            </div>
+          )}
+
           <div className="portfolios-grid">
             {portfolios.map((portfolio) => (
               <div
@@ -289,408 +806,6 @@ export default function Portfolios() {
               </div>
             ))}
           </div>
-
-          {/* Analysis Results */}
-          {analysisResults && (
-            <div
-              className="analysis-results"
-              style={{
-                marginTop: "2rem",
-                padding: "1.5rem",
-                background: "#f8f9fa",
-                borderRadius: "8px",
-                border: "1px solid #e9ecef",
-              }}
-            >
-              <h2>📊 Analysis Results</h2>
-
-              {/* Individual Portfolio Results */}
-              {analysisResults.individual_results &&
-                analysisResults.individual_results.length > 0 && (
-                  <div className="individual-results">
-                    <h3>Individual Portfolio Analysis</h3>
-                    <div
-                      className="results-grid"
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(350px, 1fr))",
-                        gap: "1.5rem",
-                        marginBottom: "2rem",
-                      }}
-                    >
-                      {analysisResults.individual_results.map(
-                        (result, index) => (
-                          <div
-                            key={index}
-                            className="result-card"
-                            style={{
-                              background: "#fff",
-                              padding: "1.5rem",
-                              borderRadius: "8px",
-                              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                              border: "1px solid #e9ecef",
-                            }}
-                          >
-                            <h4>{result.filename}</h4>
-                            <div
-                              className="metrics"
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns:
-                                  "repeat(auto-fit, minmax(150px, 1fr))",
-                                gap: "0.75rem",
-                                marginBottom: "1rem",
-                              }}
-                            >
-                              <div className="metric">
-                                <label>Total Return:</label>
-                                <span>
-                                  {(result.metrics.total_return * 100).toFixed(
-                                    2
-                                  )}
-                                  %
-                                </span>
-                              </div>
-                              <div className="metric">
-                                <label>Total P&L:</label>
-                                <span>
-                                  $
-                                  {result.metrics.total_pl?.toLocaleString() ||
-                                    "N/A"}
-                                </span>
-                              </div>
-                              <div className="metric">
-                                <label>Sharpe Ratio:</label>
-                                <span>
-                                  {result.metrics.sharpe_ratio?.toFixed(3) ||
-                                    "N/A"}
-                                </span>
-                              </div>
-                              <div className="metric">
-                                <label>Max Drawdown:</label>
-                                <span>
-                                  {(
-                                    result.metrics.max_drawdown_percent * 100
-                                  ).toFixed(2)}
-                                  %
-                                </span>
-                              </div>
-                              <div className="metric">
-                                <label>CAGR:</label>
-                                <span>
-                                  {(result.metrics.cagr * 100).toFixed(2)}%
-                                </span>
-                              </div>
-                              <div className="metric">
-                                <label>Final Account Value:</label>
-                                <span>
-                                  $
-                                  {result.metrics.final_account_value?.toLocaleString() ||
-                                    "N/A"}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Display plots if available */}
-                            {result.plots && result.plots.length > 0 && (
-                              <div className="plots">
-                                <h5>Charts:</h5>
-                                <div
-                                  className="plots-grid"
-                                  style={{
-                                    display: "grid",
-                                    gridTemplateColumns:
-                                      "repeat(auto-fit, minmax(200px, 1fr))",
-                                    gap: "1rem",
-                                  }}
-                                >
-                                  {result.plots.map((plot, plotIndex) => (
-                                    <div key={plotIndex} className="plot-item">
-                                      <img
-                                        src={plot.url}
-                                        alt={plot.filename}
-                                        style={{
-                                          width: "100%",
-                                          height: "auto",
-                                          borderRadius: "4px",
-                                        }}
-                                        onError={(e) => {
-                                          e.currentTarget.style.display =
-                                            "none";
-                                        }}
-                                      />
-                                      <p
-                                        style={{
-                                          margin: "0.5rem 0 0 0",
-                                          fontSize: "0.9rem",
-                                          color: "#666",
-                                        }}
-                                      >
-                                        {plot.filename}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                )}
-
-              {/* Blended Portfolio Results */}
-              {analysisResults.blended_result && (
-                <div className="blended-results">
-                  <h3>🔀 Blended Portfolio Analysis</h3>
-                  <div
-                    className="result-card blended"
-                    style={{
-                      background: "#fff",
-                      padding: "1.5rem",
-                      borderRadius: "8px",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                      border: "2px solid #28a745",
-                    }}
-                  >
-                    <h4>{analysisResults.blended_result.filename}</h4>
-                    <div
-                      className="metrics"
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(150px, 1fr))",
-                        gap: "0.75rem",
-                        marginBottom: "1rem",
-                      }}
-                    >
-                      <div className="metric">
-                        <label>Total Return:</label>
-                        <span>
-                          {(
-                            analysisResults.blended_result.metrics
-                              .total_return * 100
-                          ).toFixed(2)}
-                          %
-                        </span>
-                      </div>
-                      <div className="metric">
-                        <label>Total P&L:</label>
-                        <span>
-                          $
-                          {analysisResults.blended_result.metrics.total_pl?.toLocaleString() ||
-                            "N/A"}
-                        </span>
-                      </div>
-                      <div className="metric">
-                        <label>Sharpe Ratio:</label>
-                        <span>
-                          {analysisResults.blended_result.metrics.sharpe_ratio?.toFixed(
-                            3
-                          ) || "N/A"}
-                        </span>
-                      </div>
-                      <div className="metric">
-                        <label>Max Drawdown:</label>
-                        <span>
-                          {(
-                            analysisResults.blended_result.metrics
-                              .max_drawdown_percent * 100
-                          ).toFixed(2)}
-                          %
-                        </span>
-                      </div>
-                      <div className="metric">
-                        <label>CAGR:</label>
-                        <span>
-                          {(
-                            analysisResults.blended_result.metrics.cagr * 100
-                          ).toFixed(2)}
-                          %
-                        </span>
-                      </div>
-                      <div className="metric">
-                        <label>Final Account Value:</label>
-                        <span>
-                          $
-                          {analysisResults.blended_result.metrics.final_account_value?.toLocaleString() ||
-                            "N/A"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Display blended portfolio plots */}
-                    {analysisResults.blended_result.plots &&
-                      analysisResults.blended_result.plots.length > 0 && (
-                        <div className="plots">
-                          <h5>Charts:</h5>
-                          <div
-                            className="plots-grid"
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns:
-                                "repeat(auto-fit, minmax(200px, 1fr))",
-                              gap: "1rem",
-                            }}
-                          >
-                            {analysisResults.blended_result.plots.map(
-                              (plot, plotIndex) => (
-                                <div key={plotIndex} className="plot-item">
-                                  <img
-                                    src={plot.url}
-                                    alt={plot.filename}
-                                    style={{
-                                      width: "100%",
-                                      height: "auto",
-                                      borderRadius: "4px",
-                                    }}
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = "none";
-                                    }}
-                                  />
-                                  <p
-                                    style={{
-                                      margin: "0.5rem 0 0 0",
-                                      fontSize: "0.9rem",
-                                      color: "#666",
-                                    }}
-                                  >
-                                    {plot.filename}
-                                  </p>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )}
-
-              {/* Advanced Plots Section */}
-              {analysisResults.advanced_plots &&
-                analysisResults.multiple_portfolios &&
-                (analysisResults.advanced_plots.correlation_heatmap ||
-                  analysisResults.advanced_plots.monte_carlo_simulation) && (
-                  <div className="advanced-plots">
-                    <h3>📈 Advanced Analysis</h3>
-                    <div
-                      className="advanced-plots-grid"
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(400px, 1fr))",
-                        gap: "1.5rem",
-                        marginBottom: "2rem",
-                      }}
-                    >
-                      {/* Correlation Heatmap */}
-                      {analysisResults.advanced_plots.correlation_heatmap && (
-                        <div
-                          className="advanced-plot-card"
-                          style={{
-                            background: "#fff",
-                            padding: "1.5rem",
-                            borderRadius: "8px",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                            border: "1px solid #17a2b8",
-                          }}
-                        >
-                          <h4>🔗 Portfolio Correlation Matrix</h4>
-                          <p
-                            style={{
-                              color: "#666",
-                              fontSize: "0.9rem",
-                              marginBottom: "1rem",
-                            }}
-                          >
-                            Shows correlation between daily returns of selected
-                            portfolios. Values closer to 1 indicate strong
-                            positive correlation.
-                          </p>
-                          <div className="plot-container">
-                            <img
-                              src={
-                                analysisResults.advanced_plots
-                                  .correlation_heatmap
-                              }
-                              alt="Portfolio Correlation Heatmap"
-                              style={{
-                                width: "100%",
-                                height: "auto",
-                                borderRadius: "4px",
-                                border: "1px solid #e9ecef",
-                              }}
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Monte Carlo Simulation */}
-                      {analysisResults.advanced_plots
-                        .monte_carlo_simulation && (
-                        <div
-                          className="advanced-plot-card"
-                          style={{
-                            background: "#fff",
-                            padding: "1.5rem",
-                            borderRadius: "8px",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                            border: "1px solid #ffc107",
-                          }}
-                        >
-                          <h4>🎲 Monte Carlo Simulation</h4>
-                          <p
-                            style={{
-                              color: "#666",
-                              fontSize: "0.9rem",
-                              marginBottom: "1rem",
-                            }}
-                          >
-                            1-year forecast based on 1,000 simulations using
-                            historical return patterns. Shows expected portfolio
-                            value range and confidence intervals.
-                          </p>
-                          <div className="plot-container">
-                            <img
-                              src={
-                                analysisResults.advanced_plots
-                                  .monte_carlo_simulation
-                              }
-                              alt="Monte Carlo Simulation"
-                              style={{
-                                width: "100%",
-                                height: "auto",
-                                borderRadius: "4px",
-                                border: "1px solid #e9ecef",
-                              }}
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-              {/* Clear Results Button */}
-              <div className="results-actions" style={{ marginTop: "1.5rem" }}>
-                <button
-                  onClick={() => setAnalysisResults(null)}
-                  className="btn btn-secondary"
-                >
-                  Clear Results
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
