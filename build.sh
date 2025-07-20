@@ -1,31 +1,36 @@
 #!/bin/bash
+set -e  # Exit on any error
 
 # Build script for Render deployment
-echo "Starting build process..."
+echo "🚀 Starting build process..."
+
+# Make sure we're in the right directory
+cd /opt/render/project/src || cd "$(dirname "$0")"
 
 # Install Python dependencies
-echo "Installing Python dependencies..."
-pip install -r requirements.txt
+echo "📦 Installing Python dependencies..."
+pip install --no-cache-dir -r requirements.txt
 
 # Create uploads directory if it doesn't exist
+echo "📁 Creating required directories..."
 mkdir -p uploads/plots
 
 # Check if frontend directory exists
 if [ -d "frontend" ]; then
     # Navigate to frontend directory and build React app
-    echo "Building React frontend..."
+    echo "⚛️ Building React frontend..."
     cd frontend
     
     # Install dependencies
-    echo "Installing frontend dependencies..."
-    npm ci
+    echo "📦 Installing frontend dependencies..."
+    npm ci --only=production
     
     # Build the React app
-    echo "Building React application..."
+    echo "🏗️ Building React application..."
     npm run build
     
     cd ..
-    echo "React build completed successfully!"
+    echo "✅ React build completed successfully!"
     
     # Verify the build was successful
     if [ -d "frontend/dist" ]; then
@@ -46,11 +51,11 @@ if [ -d "frontend" ]; then
         echo "📁 Created fallback frontend structure"
     fi
 else
-    echo "Frontend directory not found, skipping React build..."
+    echo "⚠️ Frontend directory not found, skipping React build..."
     # Create minimal structure to prevent app startup issues
     mkdir -p frontend/dist/assets
     echo "<html><head><title>Portfolio Analysis API</title></head><body><h1>Portfolio Analysis API</h1><p>React frontend not available</p></body></html>" > frontend/dist/index.html
     echo "📁 Created minimal frontend structure for production"
 fi
 
-echo "Build completed successfully!"
+echo "🎉 Build completed successfully!"
