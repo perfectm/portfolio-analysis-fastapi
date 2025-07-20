@@ -195,8 +195,12 @@
                 return;
             }
             
+            // Store the new name before changing input state
+            const nameToSave = newName;
+            
             // Show loading state
             input.disabled = true;
+            const originalValue = input.value;
             input.value = 'Updating...';
             
             fetch(`/api/portfolio/${portfolioId}/name`, {
@@ -204,39 +208,39 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ name: newName })
+                body: JSON.stringify({ name: nameToSave })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update the name element
-                    nameElement.textContent = newName;
-                    nameElement.setAttribute('data-original-name', newName);
+                    // Update the name element with the actual new name
+                    nameElement.textContent = nameToSave;
+                    nameElement.setAttribute('data-original-name', nameToSave);
                     
                     // Update the edit button's data attribute
                     const editBtn = document.querySelector(`button[data-portfolio-id="${portfolioId}"].edit-btn`);
                     if (editBtn) {
-                        editBtn.setAttribute('data-portfolio-name', newName);
+                        editBtn.setAttribute('data-portfolio-name', nameToSave);
                     }
                     
                     // Update the delete button's data attribute
                     const deleteBtn = document.querySelector(`button[data-portfolio-id="${portfolioId}"].delete-btn`);
                     if (deleteBtn) {
-                        deleteBtn.setAttribute('data-portfolio-name', newName);
+                        deleteBtn.setAttribute('data-portfolio-name', nameToSave);
                     }
                     
                     restoreOriginal();
                 } else {
                     alert('Error updating portfolio name: ' + data.error);
                     input.disabled = false;
-                    input.value = newName;
+                    input.value = originalValue; // Restore the original typed value
                     input.focus();
                 }
             })
             .catch(error => {
                 alert('Error updating portfolio name: ' + error.message);
                 input.disabled = false;
-                input.value = newName;
+                input.value = originalValue; // Restore the original typed value
                 input.focus();
             });
         }
@@ -259,9 +263,14 @@
             }
         });
         
-        // Handle blur (click outside)
+        // Handle blur (click outside) - only save if value changed
         input.addEventListener('blur', function() {
-            setTimeout(saveChanges, 100); // Small delay to allow other events
+            const currentInputValue = input.value.trim();
+            if (currentInputValue && currentInputValue !== currentName && currentInputValue !== 'Updating...') {
+                setTimeout(saveChanges, 100); // Small delay to allow other events
+            } else {
+                restoreOriginal();
+            }
         });
     }
     
