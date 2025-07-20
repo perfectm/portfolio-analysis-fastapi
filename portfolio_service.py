@@ -11,6 +11,7 @@ import pandas as pd
 import logging
 
 from models import Portfolio, PortfolioData, AnalysisResult, AnalysisPlot, BlendedPortfolio, BlendedPortfolioMapping
+from config import DATE_COLUMNS, PL_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,25 @@ class PortfolioService:
                 logger.info(f"Portfolio with hash {file_hash} already exists: {existing.name}")
                 return existing
             
+            # Find the date column using the same logic as portfolio_processor
+            date_column = None
+            for col in DATE_COLUMNS:
+                if col in df.columns:
+                    date_column = col
+                    break
+            
             # Extract date range from dataframe
-            date_range_start = df['Date'].min() if not df.empty else None
-            date_range_end = df['Date'].max() if not df.empty else None
+            date_range_start = None
+            date_range_end = None
+            if date_column and not df.empty:
+                try:
+                    # Convert to datetime and get min/max
+                    date_series = pd.to_datetime(df[date_column])
+                    date_range_start = date_series.min()
+                    date_range_end = date_series.max()
+                except Exception as date_error:
+                    logger.warning(f"Could not parse dates from column '{date_column}': {date_error}")
+                    # Continue without date range if parsing fails
             
             # Create portfolio record
             portfolio = Portfolio(
@@ -93,25 +110,66 @@ class PortfolioService:
                     PortfolioData.portfolio_id == portfolio_id
                 ).order_by(PortfolioData.date).all()
             
+            # Find the date column using the same logic as portfolio_processor
+            date_column = None
+            for col in DATE_COLUMNS:
+                if col in df.columns:
+                    date_column = col
+                    break
+            
+            if date_column is None:
+                logger.error(f"No date column found. Looking for any of: {DATE_COLUMNS}")
+                logger.error(f"Available columns are: {df.columns.tolist()}")
+                raise ValueError(f"No date column found. Expected one of: {DATE_COLUMNS}")
+            
+            # Find the P/L column
+            pl_column = None
+            for col in PL_COLUMNS:
+                if col in df.columns:
+                    pl_column = col
+                    break
+                    
+            if pl_column is None:
+                logger.error(f"No P/L column found. Looking for any of: {PL_COLUMNS}")
+                logger.error(f"Available columns are: {df.columns.tolist()}")
+                raise ValueError(f"No P/L column found. Expected one of: {PL_COLUMNS}")
+            
+            logger.info(f"Using '{date_column}' as date column and '{pl_column}' as P/L column")
+            
             # Prepare data for bulk insert
             data_records = []
             cumulative_pl = 0
             starting_capital = 100000  # Default starting capital
             
             for idx, row in df.iterrows():
-                cumulative_pl += row['P/L']
+                # Clean P/L data - remove any currency symbols and convert to float
+                try:
+                    pl_value = str(row[pl_column]).replace('$', '').replace(',', '').replace('(', '-').replace(')', '')
+                    pl_value = float(pl_value)
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse P/L value: {row[pl_column]}, skipping row {idx}")
+                    continue
+                
+                # Parse date
+                try:
+                    date_value = pd.to_datetime(row[date_column])
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse date value: {row[date_column]}, skipping row {idx}")
+                    continue
+                
+                cumulative_pl += pl_value
                 account_value = starting_capital + cumulative_pl
                 
                 # Calculate daily return
                 daily_return = None
                 if idx > 0:
-                    prev_value = starting_capital + (cumulative_pl - row['P/L'])
-                    daily_return = (row['P/L'] / prev_value) * 100 if prev_value != 0 else 0
+                    prev_value = starting_capital + (cumulative_pl - pl_value)
+                    daily_return = (pl_value / prev_value) * 100 if prev_value != 0 else 0
                 
                 data_record = PortfolioData(
                     portfolio_id=portfolio_id,
-                    date=row['Date'],
-                    pl=row['P/L'],
+                    date=date_value,
+                    pl=pl_value,
                     cumulative_pl=cumulative_pl,
                     account_value=account_value,
                     daily_return=daily_return,
