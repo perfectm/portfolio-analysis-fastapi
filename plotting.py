@@ -255,7 +255,7 @@ def create_monte_carlo_simulation(
         std_return = daily_returns.std()
         
         # Current account value (starting point for simulation)
-        current_value = metrics['Final Account Value']
+        current_value = metrics.get('final_account_value', metrics.get('Final Account Value', 100000))
         
         # Create random return scenarios
         np.random.seed(42)  # For reproducible results

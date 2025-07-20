@@ -1142,6 +1142,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         
         # Create blended portfolio if multiple portfolios
         simplified_blended_result = None
+        heatmap_url = None
+        monte_carlo_url = None
+        
         if len(portfolios_data) > 1:
             try:
                 logger.info("[Analyze Portfolios] Creating blended portfolio analysis")
@@ -1177,6 +1180,40 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     except Exception as plot_error:
                         logger.error(f"[Analyze Portfolios] Error creating plots for blended portfolio: {str(plot_error)}")
                     
+                    # Create correlation heatmap for multiple portfolios
+                    try:
+                        logger.info("[Analyze Portfolios] Creating correlation heatmap")
+                        # Prepare correlation data
+                        correlation_data = pd.DataFrame()
+                        portfolio_names = []
+                        
+                        for i, (name, _) in enumerate(portfolios_data):
+                            if i < len(individual_results) and 'clean_df' in individual_results[i]:
+                                df = individual_results[i]['clean_df']
+                                if 'Daily Return' in df.columns:
+                                    correlation_data[name] = df['Daily Return']
+                                    portfolio_names.append(name)
+                        
+                        if len(correlation_data.columns) >= 2:
+                            heatmap_path = create_correlation_heatmap(correlation_data, portfolio_names)
+                            if heatmap_path:
+                                heatmap_filename = os.path.basename(heatmap_path)
+                                heatmap_url = f"/uploads/plots/{heatmap_filename}".replace("\\", "/")
+                                logger.info(f"[Analyze Portfolios] Correlation heatmap created: {heatmap_url}")
+                    except Exception as heatmap_error:
+                        logger.error(f"[Analyze Portfolios] Error creating correlation heatmap: {str(heatmap_error)}")
+                    
+                    # Create Monte Carlo simulation for blended portfolio
+                    try:
+                        logger.info("[Analyze Portfolios] Creating Monte Carlo simulation")
+                        mc_path = create_monte_carlo_simulation(blended_df, blended_metrics)
+                        if mc_path:
+                            mc_filename = os.path.basename(mc_path)
+                            monte_carlo_url = f"/uploads/plots/{mc_filename}".replace("\\", "/")
+                            logger.info(f"[Analyze Portfolios] Monte Carlo simulation created: {monte_carlo_url}")
+                    except Exception as mc_error:
+                        logger.error(f"[Analyze Portfolios] Error creating Monte Carlo simulation: {str(mc_error)}")
+                    
                     simplified_blended_result = {
                         'filename': f'Blended Portfolio ({len(portfolios_data)} strategies)',
                         'type': 'blended',
@@ -1208,7 +1245,11 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             "message": f"Successfully analyzed {len(portfolio_ids)} portfolios",
             "individual_results": simplified_individual_results,
             "blended_result": simplified_blended_result,
-            "multiple_portfolios": len(portfolios_data) > 1
+            "multiple_portfolios": len(portfolios_data) > 1,
+            "advanced_plots": {
+                "correlation_heatmap": heatmap_url,
+                "monte_carlo_simulation": monte_carlo_url
+            }
         }
         
     except Exception as e:
