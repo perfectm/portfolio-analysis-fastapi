@@ -320,7 +320,8 @@ async def debug_database_connection(db: Session = Depends(get_db)):
     Debug endpoint to check database connection and environment
     """
     import os
-    from database import engine
+    from database import engine, DATABASE_URL, postgresql_success
+    import traceback
     
     try:
         # Get environment info
@@ -328,20 +329,37 @@ async def debug_database_connection(db: Session = Depends(get_db)):
         db_host = os.getenv('DB_HOST', 'NOT SET')
         render_env = os.getenv('RENDER', 'NOT SET')
         
-        # Test database connection
+        # Test database connection directly
         portfolios = PortfolioService.get_portfolios(db, limit=10)
         
         # Get database engine info
         engine_url = str(engine.url)
+        
+        # Try direct PostgreSQL connection test
+        connection_test_result = "Not tested"
+        connection_error = "None"
+        
+        if database_url != 'NOT SET' and database_url.startswith('postgresql://'):
+            try:
+                from sqlalchemy import create_engine as test_engine
+                test_conn = test_engine(database_url, connect_args={"connect_timeout": 10})
+                with test_conn.connect() as conn:
+                    conn.execute("SELECT 1")
+                connection_test_result = "SUCCESS"
+            except Exception as e:
+                connection_test_result = "FAILED"
+                connection_error = str(e)
         
         return {
             "success": True,
             "environment": {
                 "DATABASE_URL": "SET" if database_url != 'NOT SET' else "NOT SET",
                 "DATABASE_URL_preview": database_url[:30] + "..." if database_url != 'NOT SET' else "NOT SET",
+                "DATABASE_URL_full_length": len(database_url) if database_url != 'NOT SET' else 0,
                 "DB_HOST": db_host,
                 "RENDER": render_env,
-                "ENGINE_URL": engine_url.replace(database_url.split('@')[1].split(':')[0], "***") if '@' in engine_url else engine_url
+                "ENGINE_URL": engine_url,
+                "POSTGRESQL_SUCCESS": postgresql_success
             },
             "database": {
                 "portfolios_count": len(portfolios),
@@ -352,6 +370,10 @@ async def debug_database_connection(db: Session = Depends(get_db)):
                         "upload_date": p.upload_date.isoformat() if p.upload_date else None
                     } for p in portfolios
                 ]
+            },
+            "connection_test": {
+                "result": connection_test_result,
+                "error": connection_error
             }
         }
         
@@ -359,10 +381,12 @@ async def debug_database_connection(db: Session = Depends(get_db)):
         return {
             "success": False,
             "error": str(e),
+            "traceback": traceback.format_exc(),
             "environment": {
                 "DATABASE_URL": "SET" if os.getenv('DATABASE_URL') else "NOT SET",
                 "DB_HOST": os.getenv('DB_HOST', 'NOT SET'),
-                "RENDER": os.getenv('RENDER', 'NOT SET')
+                "RENDER": os.getenv('RENDER', 'NOT SET'),
+                "ENGINE_URL": str(engine.url) if 'engine' in globals() else "NOT INITIALIZED"
             }
         }
 
