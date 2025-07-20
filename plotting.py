@@ -163,15 +163,31 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         Path to saved heatmap file or None if failed
     """
     try:
+        logger.info(f"[Correlation Heatmap] Input data shape: {correlation_data.shape}")
+        logger.info(f"[Correlation Heatmap] Input columns: {list(correlation_data.columns)}")
+        logger.info(f"[Correlation Heatmap] Portfolio names provided: {portfolio_names}")
+        
         # Create plots directory if it doesn't exist
         plots_dir = os.path.join(UPLOAD_FOLDER, 'plots')
         os.makedirs(plots_dir, exist_ok=True)
         
+        # Check if we have enough data for correlation
+        if correlation_data.shape[1] < 2:
+            logger.warning(f"[Correlation Heatmap] Insufficient columns for correlation: {correlation_data.shape[1]}")
+            return None
+            
+        if correlation_data.shape[0] < 2:
+            logger.warning(f"[Correlation Heatmap] Insufficient rows for correlation: {correlation_data.shape[0]}")
+            return None
+        
         # Fill NaN values with 0 for correlation calculation
         correlation_data_filled = correlation_data.fillna(0)
+        logger.info(f"[Correlation Heatmap] Data after filling NaN: shape {correlation_data_filled.shape}")
         
         # Calculate correlation matrix
         correlation_matrix = correlation_data_filled.corr()
+        logger.info(f"[Correlation Heatmap] Correlation matrix shape: {correlation_matrix.shape}")
+        logger.info(f"[Correlation Heatmap] Correlation matrix columns: {list(correlation_matrix.columns)}")
         
         # Create the heatmap with reduced figure size
         plt.figure(figsize=(8, 6), dpi=100)  # Reduced from 10x8
@@ -214,10 +230,11 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         plt.savefig(heatmap_path, dpi=150, bbox_inches='tight')  # Reduced from 300 DPI
         plt.close()  # Explicitly close figure to free memory
         
+        logger.info(f"[Correlation Heatmap] Successfully created heatmap: {heatmap_path}")
         return heatmap_path
         
     except Exception as e:
-        logger.error(f"Error creating correlation heatmap: {str(e)}")
+        logger.error(f"[Correlation Heatmap] Error creating correlation heatmap: {str(e)}", exc_info=True)
         return None
 
 

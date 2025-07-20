@@ -58,9 +58,12 @@ def create_blended_portfolio(
     # Store individual portfolio P/L data for weighted blending
     individual_portfolios_pl = []
     
+    successfully_processed_portfolios = []
+    
     for i, (filename, df) in enumerate(files_data):
         try:
             logger.info(f"Processing file for blended portfolio: {filename} (weight: {weights[i]:.3f})")
+            logger.info(f"Input DataFrame shape for {filename}: {df.shape}")
             
             # Process individual file to get clean trade data
             clean_df, individual_metrics = process_portfolio_data(
@@ -71,16 +74,23 @@ def create_blended_portfolio(
                 starting_capital=starting_capital
             )
             
+            logger.info(f"Processed DataFrame shape for {filename}: {clean_df.shape}")
+            
             # Store daily returns for correlation analysis
             portfolio_name = filename.replace('.csv', '')
             portfolio_names.append(portfolio_name)
+            successfully_processed_portfolios.append((filename, portfolio_name, i))
             
             # Get daily account returns for correlation
             daily_returns = clean_df.set_index('Date')['Daily Return'].fillna(0)
+            logger.info(f"Daily returns shape for {filename}: {daily_returns.shape}")
+            
             if correlation_data.empty:
                 correlation_data = daily_returns.to_frame(portfolio_name)
+                logger.info(f"Initialized correlation_data with {portfolio_name}: shape {correlation_data.shape}")
             else:
                 correlation_data = correlation_data.join(daily_returns.to_frame(portfolio_name), how='outer')
+                logger.info(f"Added {portfolio_name} to correlation_data: shape {correlation_data.shape}, columns: {list(correlation_data.columns)}")
             
             # Store individual portfolio P/L data with weighting
             # Group by date to get daily P/L and apply weight
@@ -88,9 +98,16 @@ def create_blended_portfolio(
             daily_pl['P/L'] = daily_pl['P/L'] * weights[i]  # Apply weight to P/L
             individual_portfolios_pl.append(daily_pl)
             
+            logger.info(f"Successfully processed {filename} for blended portfolio")
+            
         except Exception as e:
             logger.error(f"Error processing {filename} for blended portfolio: {str(e)}", exc_info=True)
+            logger.warning(f"Skipping {filename} - will not be included in correlation analysis or blended portfolio")
             continue
+    
+    logger.info(f"Successfully processed {len(successfully_processed_portfolios)} out of {len(files_data)} portfolios")
+    logger.info(f"Final correlation_data shape: {correlation_data.shape}, columns: {list(correlation_data.columns)}")
+    logger.info(f"Successfully processed portfolios: {[name for _, name, _ in successfully_processed_portfolios]}")
     
     # Combine all weighted portfolios
     if individual_portfolios_pl:
