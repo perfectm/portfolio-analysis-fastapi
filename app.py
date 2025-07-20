@@ -1033,6 +1033,7 @@ async def catch_all(path: str):
 async def analyze_selected_portfolios_weighted(request: Request, db: Session = Depends(get_db)):
     """
     Analyze selected portfolios by their IDs with optional weighting support
+    Fixed: Portfolio composition variable scope bug - v2.1
     """
     try:
         # Get the request data
