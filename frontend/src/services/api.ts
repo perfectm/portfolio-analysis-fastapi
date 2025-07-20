@@ -88,6 +88,25 @@ export const portfolioAPI = {
     });
   },
 
+  // Upload multiple portfolio CSV files
+  uploadMultiplePortfolios: async (files: File[]): Promise<{ message: string; portfolio_ids: number[] }> => {
+    const formData = new FormData();
+    files.forEach((file, index) => {
+      formData.append('files', file);
+    });
+    
+    return fetch(`${API_BASE_URL}/upload`, {
+      method: 'POST',
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(`${response.status}: ${errorData.detail || 'Upload failed'}`);
+      }
+      return response.json();
+    });
+  },
+
   // Get analysis for a specific portfolio
   getAnalysis: async (portfolioId: number): Promise<AnalysisResponse> => {
     return apiCall(`/api/analysis/${portfolioId}`);

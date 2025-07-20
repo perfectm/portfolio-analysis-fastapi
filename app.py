@@ -40,11 +40,15 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="uploads")
 # Mount React frontend static files (only if directory exists)
 frontend_dist_path = "frontend/dist"
 frontend_assets_path = f"{frontend_dist_path}/assets"
-if os.path.exists(frontend_dist_path) and os.path.exists(frontend_assets_path):
-    app.mount("/assets", StaticFiles(directory=frontend_assets_path), name="react-assets")
-    logger.info(f"Mounted React assets from {frontend_assets_path}")
+if os.path.exists(frontend_dist_path):
+    # Mount React assets directory
+    if os.path.exists(frontend_assets_path):
+        app.mount("/assets", StaticFiles(directory=frontend_assets_path), name="react-assets")
+        logger.info(f"Mounted React assets from {frontend_assets_path}")
+    else:
+        logger.warning(f"React assets directory not found at {frontend_assets_path}")
 else:
-    logger.warning(f"React assets directory not found at {frontend_assets_path}, skipping mount")
+    logger.warning(f"React dist directory not found at {frontend_dist_path}, skipping mount")
 
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
@@ -119,6 +123,16 @@ async def main(request: Request):
             </body>
         </html>
         """)
+
+@app.get("/vite.svg")
+async def serve_vite_svg():
+    """Serve vite.svg from frontend dist"""
+    vite_svg_path = 'frontend/dist/vite.svg'
+    if os.path.exists(vite_svg_path):
+        return FileResponse(vite_svg_path, media_type="image/svg+xml")
+    else:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Vite SVG not found")
 
 # Catch-all route for React Router (must be at the end)
 @app.get("/{path:path}", response_class=HTMLResponse)
