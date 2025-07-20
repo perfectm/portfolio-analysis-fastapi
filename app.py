@@ -38,10 +38,13 @@ templates = Jinja2Templates(directory="templates")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="uploads")
 
 # Mount React frontend static files (only if directory exists)
-import os
 frontend_dist_path = "frontend/dist"
-if os.path.exists(frontend_dist_path) and os.path.exists(f"{frontend_dist_path}/assets"):
-    app.mount("/assets", StaticFiles(directory=f"{frontend_dist_path}/assets"), name="react-assets")
+frontend_assets_path = f"{frontend_dist_path}/assets"
+if os.path.exists(frontend_dist_path) and os.path.exists(frontend_assets_path):
+    app.mount("/assets", StaticFiles(directory=frontend_assets_path), name="react-assets")
+    logger.info(f"Mounted React assets from {frontend_assets_path}")
+else:
+    logger.warning(f"React assets directory not found at {frontend_assets_path}, skipping mount")
 
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
@@ -71,8 +74,29 @@ app.add_middleware(
 async def startup_event():
     """Initialize database tables on application startup"""
     try:
+        # Ensure required directories exist
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs("uploads/plots", exist_ok=True)
+        os.makedirs("frontend/dist/assets", exist_ok=True)
+        
+        # Create minimal index.html if it doesn't exist
+        frontend_index_path = "frontend/dist/index.html"
+        if not os.path.exists(frontend_index_path):
+            with open(frontend_index_path, 'w') as f:
+                f.write("""
+                <html>
+                    <head><title>Portfolio Analysis API</title></head>
+                    <body>
+                        <h1>Portfolio Analysis API</h1>
+                        <p>The React frontend is not available.</p>
+                        <p>API documentation is available at <a href="/docs">/docs</a></p>
+                    </body>
+                </html>
+                """)
+        
         create_tables()
         logger.info("Database tables initialized successfully")
+        logger.info("Required directories ensured")
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
         # Continue running even if database fails (graceful degradation)

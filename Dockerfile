@@ -23,6 +23,11 @@ COPY . .
 # Copy built React frontend from previous stage
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
+# Ensure required directories exist
+RUN mkdir -p uploads/plots && \
+    mkdir -p frontend/dist/assets && \
+    touch frontend/dist/index.html
+
 EXPOSE 8000
 
 # Use PORT environment variable from Render
