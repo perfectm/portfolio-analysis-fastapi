@@ -148,3 +148,17 @@ Thumbs.db
 # Local environment variables
 .env.local
 .env.production
+.env.render
+
+# Security - files with sensitive data
+test_postgresql.py
+init_production_db.py
+create_tables.py
+check_env.py
+debug_portfolios.py
+
+# Documentation that might contain secrets
+DATABASE_TROUBLESHOOTING.md
+DEPLOYMENT.md
+SOLUTION.md
+FINAL_ACTION_PLAN.md

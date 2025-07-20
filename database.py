@@ -35,7 +35,7 @@ elif os.getenv("RENDER") or os.getenv("DB_HOST"):
     if not DB_PASSWORD:
         logger.error("DB_PASSWORD environment variable is not set or is empty!")
         logger.error("Please set DB_PASSWORD in your Render environment variables.")
-        logger.error("Expected password: iAthbnJVh3kqOBfeTWiG8sG6mr7DQ44G")
+        logger.error("Check your deployment platform's environment configuration.")
     
     DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     logger.info(f"Using Render database configuration with host: {DB_HOST}")
@@ -76,7 +76,7 @@ def create_database_engine():
         if "no password supplied" in error_msg or "password authentication failed" in error_msg:
             logger.error("🔑 AUTHENTICATION ERROR:")
             logger.error("  - Make sure DB_PASSWORD is set in your Render environment variables")
-            logger.error("  - Expected password: iAthbnJVh3kqOBfeTWiG8sG6mr7DQ44G")
+            logger.error("  - Check your deployment platform's environment configuration")
             logger.error("  - Check Render dashboard > Environment tab")
         elif "could not translate host name" in error_msg:
             logger.error("🌐 HOSTNAME ERROR:")

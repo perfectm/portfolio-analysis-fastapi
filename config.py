@@ -30,7 +30,7 @@ DEFAULT_SIMULATIONS = 1000
 DEFAULT_FORECAST_DAYS = 252
 
 # Session configuration
-SESSION_SECRET_KEY = "your-secret-key"
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "dev-secret-key-change-in-production")
 
 # Portfolio weighting settings
 DEFAULT_EQUAL_WEIGHTING = True

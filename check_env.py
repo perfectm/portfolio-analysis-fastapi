@@ -45,7 +45,7 @@ def check_environment():
     
     if not db_password:
         print("   🚨 CRITICAL: Set DB_PASSWORD environment variable")
-        print("   Expected value: iAthbnJVh3kqOBfeTWiG8sG6mr7DQ44G")
+        print("   Contact your database administrator for the correct password")
     
     if not db_host:
         print("   ⚠️  Set DB_HOST to: dpg-d1u03gbipnbc73cqnl2g-a")
