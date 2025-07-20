@@ -1085,8 +1085,32 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         
         logger.info(f"[Analyze Portfolios] Individual analysis completed for {len(individual_results)} portfolios")
         
+        # Simplify individual results for JSON serialization
+        simplified_individual_results = []
+        for result in individual_results:
+            if 'metrics' in result:
+                simplified_result = {
+                    'filename': result.get('filename', 'Unknown'),
+                    'type': result.get('type', 'file'),
+                    'plots': result.get('plots', []),
+                    'metrics': {
+                        'sharpe_ratio': float(result['metrics'].get('sharpe_ratio', 0)),
+                        'total_return': float(result['metrics'].get('total_return', 0)),
+                        'total_pl': float(result['metrics'].get('total_pl', 0)),
+                        'final_account_value': float(result['metrics'].get('final_account_value', 100000)),
+                        'max_drawdown': float(result['metrics'].get('max_drawdown', 0)),
+                        'max_drawdown_percent': float(result['metrics'].get('max_drawdown_percent', 0)),
+                        'cagr': float(result['metrics'].get('cagr', 0)),
+                        'annual_volatility': float(result['metrics'].get('annual_volatility', 0)),
+                        'mar_ratio': float(result['metrics'].get('mar_ratio', 0)),
+                        'time_period_years': float(result['metrics'].get('time_period_years', 0)),
+                        'number_of_trading_days': int(result['metrics'].get('number_of_trading_days', 0))
+                    }
+                }
+                simplified_individual_results.append(simplified_result)
+        
         # Create blended portfolio if multiple portfolios
-        blended_result = None
+        simplified_blended_result = None
         if len(portfolios_data) > 1:
             try:
                 logger.info("[Analyze Portfolios] Creating blended portfolio analysis")
@@ -1099,25 +1123,37 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 )
                 
                 if blended_df is not None and blended_metrics is not None:
-                    blended_result = {
+                    simplified_blended_result = {
                         'filename': f'Blended Portfolio ({len(portfolios_data)} strategies)',
-                        'metrics': blended_metrics,
+                        'type': 'blended',
                         'plots': [],
-                        'type': 'blended'
+                        'metrics': {
+                            'sharpe_ratio': float(blended_metrics.get('sharpe_ratio', 0)),
+                            'total_return': float(blended_metrics.get('total_return', 0)),
+                            'total_pl': float(blended_metrics.get('total_pl', 0)),
+                            'final_account_value': float(blended_metrics.get('final_account_value', 100000)),
+                            'max_drawdown': float(blended_metrics.get('max_drawdown', 0)),
+                            'max_drawdown_percent': float(blended_metrics.get('max_drawdown_percent', 0)),
+                            'cagr': float(blended_metrics.get('cagr', 0)),
+                            'annual_volatility': float(blended_metrics.get('annual_volatility', 0)),
+                            'mar_ratio': float(blended_metrics.get('mar_ratio', 0)),
+                            'time_period_years': float(blended_metrics.get('time_period_years', 0)),
+                            'number_of_trading_days': int(blended_metrics.get('number_of_trading_days', 0))
+                        }
                     }
                     logger.info("[Analyze Portfolios] Blended portfolio created successfully")
                 else:
                     logger.warning("[Analyze Portfolios] Blended portfolio creation failed")
             except Exception as e:
                 logger.error(f"[Analyze Portfolios] Blended portfolio creation error: {str(e)}")
-                blended_result = None
+                simplified_blended_result = None
         
         logger.info(f"[Analyze Portfolios] Analysis completed successfully for {len(portfolio_ids)} portfolios")
         return {
             "success": True,
             "message": f"Successfully analyzed {len(portfolio_ids)} portfolios",
-            "individual_results": individual_results,
-            "blended_result": blended_result,
+            "individual_results": simplified_individual_results,
+            "blended_result": simplified_blended_result,
             "multiple_portfolios": len(portfolios_data) > 1
         }
         
