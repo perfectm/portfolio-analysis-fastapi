@@ -2,6 +2,7 @@
 Plotting and visualization utilities for portfolio analysis
 """
 import os
+import time
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -226,7 +227,6 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         plt.tight_layout()
         
         # Create unique filename based on portfolio names and timestamp
-        import time
         portfolio_hash = str(hash(tuple(sorted(correlation_data.columns))))[-8:]  # Last 8 chars of hash
         timestamp = str(int(time.time()))[-6:]  # Last 6 chars of timestamp
         heatmap_filename = f'correlation_heatmap_{len(correlation_data.columns)}portfolios_{portfolio_hash}_{timestamp}.png'
@@ -336,7 +336,6 @@ Probability of Loss: {(final_values < current_value).mean() * 100:.1f}%"""
         plt.tight_layout()
         
         # Create unique filename based on portfolio metrics and timestamp
-        import time
         portfolio_id = str(hash(str(metrics.get('sharpe_ratio', 0)) + str(metrics.get('total_return', 0))))[-8:]
         timestamp = str(int(time.time()))[-6:]
         mc_filename = f'monte_carlo_{num_simulations}sims_{portfolio_id}_{timestamp}.png'
