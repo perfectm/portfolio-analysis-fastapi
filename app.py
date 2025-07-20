@@ -1,9 +1,10 @@
 import os
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, Request, Form, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from typing import List
@@ -32,10 +33,24 @@ logger = logging.getLogger(__name__)
 # FastAPI app setup
 app = FastAPI(title="Portfolio Analysis API", version="1.0.0")
 templates = Jinja2Templates(directory="templates")
+
+# Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="uploads")
+
+# Mount React frontend static files
+app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="react-assets")
 
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
+
+# Add CORS middleware to allow React frontend to communicate with API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"],  # React dev servers
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialize database tables on startup
 @app.on_event("startup")
@@ -50,8 +65,19 @@ async def startup_event():
 
 @app.get("/", response_class=HTMLResponse)
 async def main(request: Request):
-    """Main page endpoint"""
-    return templates.TemplateResponse("upload.html", {"request": request})
+    """Serve React frontend"""
+    return FileResponse('frontend/dist/index.html')
+
+# Catch-all route for React Router (must be at the end)
+@app.get("/{path:path}", response_class=HTMLResponse)
+async def catch_all(path: str):
+    """Serve React app for any route not handled by API"""
+    # Only serve React app for non-API routes
+    if not path.startswith("api/") and not path.startswith("uploads/"):
+        return FileResponse('frontend/dist/index.html')
+    # For API routes that don't exist, return 404
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 @app.get("/portfolios", response_class=HTMLResponse)

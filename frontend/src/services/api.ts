@@ -61,9 +61,14 @@ const apiCall = async (url: string, options: RequestInit = {}): Promise<any> => 
 
 // API service methods
 export const portfolioAPI = {
-  // Get all portfolios
+  // Get all portfolios/strategies
   getPortfolios: async (): Promise<PortfoliosResponse> => {
     return apiCall('/api/portfolios');
+  },
+
+  // Get strategies list (lightweight)
+  getStrategiesList: async (): Promise<any> => {
+    return apiCall('/api/strategies/list');
   },
 
   // Upload a new portfolio CSV file
@@ -89,7 +94,7 @@ export const portfolioAPI = {
   },
 
   // Delete a portfolio
-  deletePortfolio: async (portfolioId: number): Promise<{ message: string }> => {
+  deletePortfolio: async (portfolioId: number): Promise<any> => {
     return apiCall(`/api/portfolio/${portfolioId}`, { method: 'DELETE' });
   },
 
