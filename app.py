@@ -338,6 +338,12 @@ async def get_strategies(
         }
 
 
+@app.get("/api/test")
+async def test_endpoint():
+    """Simple test endpoint"""
+    return {"status": "working", "message": "API test endpoint is functional"}
+
+
 @app.get("/api/strategies/list")
 async def get_strategies_list(db: Session = Depends(get_db)):
     """
