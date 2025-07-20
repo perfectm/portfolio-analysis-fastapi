@@ -28,12 +28,14 @@ Then edit `.env.production` with your actual database credentials.
 ### Hosting Platform Setup
 
 #### Render.com
+
 1. Go to your Render dashboard
 2. Select your web service
 3. Navigate to "Environment" tab
 4. Add the required environment variables
 
 #### Other Platforms
+
 Set the environment variables according to your platform's documentation.
 
 ### Security Best Practices
