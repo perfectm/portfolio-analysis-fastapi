@@ -289,304 +289,6 @@ export default function Portfolios() {
                 </button>
               </div>
 
-              {/* Individual Portfolio Results */}
-              {analysisResults.individual_results &&
-                analysisResults.individual_results.length > 0 && (
-                  <div className="individual-results">
-                    <h3>Individual Portfolio Analysis</h3>
-                    <div
-                      className="results-grid"
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(350px, 1fr))",
-                        gap: "1.5rem",
-                        marginBottom: "2rem",
-                      }}
-                    >
-                      {analysisResults.individual_results.map(
-                        (result, index) => (
-                          <div
-                            key={index}
-                            className="result-card"
-                            style={{
-                              background: "#fff",
-                              padding: "1.5rem",
-                              borderRadius: "8px",
-                              border: "1px solid #e9ecef",
-                              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                            }}
-                          >
-                            <h4 style={{ marginBottom: "1rem" }}>
-                              {result.filename}
-                            </h4>
-
-                            {/* Key Metrics */}
-                            <div
-                              className="metrics-grid"
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr",
-                                gap: "0.75rem",
-                                marginBottom: "1rem",
-                              }}
-                            >
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Total Return
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color:
-                                      result.metrics.total_return >= 0
-                                        ? "#28a745"
-                                        : "#dc3545",
-                                  }}
-                                >
-                                  {result.metrics.total_return?.toFixed(2)}%
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Sharpe Ratio
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color:
-                                      result.metrics.sharpe_ratio >= 1
-                                        ? "#28a745"
-                                        : result.metrics.sharpe_ratio >= 0.5
-                                        ? "#ffc107"
-                                        : "#dc3545",
-                                  }}
-                                >
-                                  {result.metrics.sharpe_ratio?.toFixed(2)}
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Max Drawdown
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color: "#dc3545",
-                                  }}
-                                >
-                                  {result.metrics.max_drawdown_percent?.toFixed(
-                                    2
-                                  )}
-                                  %
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  CAGR
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color:
-                                      result.metrics.cagr >= 0
-                                        ? "#28a745"
-                                        : "#dc3545",
-                                  }}
-                                >
-                                  {result.metrics.cagr?.toFixed(2)}%
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Total P/L
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color:
-                                      result.metrics.total_pl >= 0
-                                        ? "#28a745"
-                                        : "#dc3545",
-                                  }}
-                                >
-                                  $
-                                  {result.metrics.total_pl?.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    }
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Final Account Value
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color: "#007bff",
-                                  }}
-                                >
-                                  $
-                                  {result.metrics.final_account_value?.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    }
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Max Drawdown ($)
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color: "#dc3545",
-                                  }}
-                                >
-                                  $
-                                  {Math.abs(
-                                    result.metrics.max_drawdown || 0
-                                  ).toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#666",
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Annual Volatility
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color:
-                                      (result.metrics.annual_volatility || 0) <=
-                                      15
-                                        ? "#28a745"
-                                        : (result.metrics.annual_volatility ||
-                                            0) <= 25
-                                        ? "#ffc107"
-                                        : "#dc3545",
-                                  }}
-                                >
-                                  {result.metrics.annual_volatility?.toFixed(2)}
-                                  %
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Portfolio Plots */}
-                            {result.plots && result.plots.length > 0 && (
-                              <div className="plots-section">
-                                <h5 style={{ marginBottom: "0.75rem" }}>
-                                  Visualizations
-                                </h5>
-                                <div
-                                  className="plots-grid"
-                                  style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "1fr",
-                                    gap: "1rem",
-                                  }}
-                                >
-                                  {result.plots.map((plot, plotIndex) => (
-                                    <div key={plotIndex} className="plot-item">
-                                      <img
-                                        src={plot.url}
-                                        alt={plot.filename}
-                                        style={{
-                                          width: "100%",
-                                          height: "auto",
-                                          borderRadius: "4px",
-                                          border: "1px solid #e9ecef",
-                                        }}
-                                        onError={(e) => {
-                                          e.currentTarget.style.display =
-                                            "none";
-                                        }}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                )}
-
               {/* Blended Portfolio Results */}
               {analysisResults.blended_result && (
                 <div className="blended-results">
@@ -951,6 +653,304 @@ export default function Portfolios() {
                   </div>
                 </div>
               )}
+
+              {/* Individual Portfolio Results */}
+              {analysisResults.individual_results &&
+                analysisResults.individual_results.length > 0 && (
+                  <div className="individual-results">
+                    <h3>Individual Portfolio Analysis</h3>
+                    <div
+                      className="results-grid"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(350px, 1fr))",
+                        gap: "1.5rem",
+                        marginBottom: "2rem",
+                      }}
+                    >
+                      {analysisResults.individual_results.map(
+                        (result, index) => (
+                          <div
+                            key={index}
+                            className="result-card"
+                            style={{
+                              background: "#fff",
+                              padding: "1.5rem",
+                              borderRadius: "8px",
+                              border: "1px solid #e9ecef",
+                              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                            }}
+                          >
+                            <h4 style={{ marginBottom: "1rem" }}>
+                              {result.filename}
+                            </h4>
+
+                            {/* Key Metrics */}
+                            <div
+                              className="metrics-grid"
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: "0.75rem",
+                                marginBottom: "1rem",
+                              }}
+                            >
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Total Return
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.total_return >= 0
+                                        ? "#28a745"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.total_return?.toFixed(2)}%
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Sharpe Ratio
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.sharpe_ratio >= 1
+                                        ? "#28a745"
+                                        : result.metrics.sharpe_ratio >= 0.5
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.sharpe_ratio?.toFixed(2)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Max Drawdown
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.max_drawdown_percent?.toFixed(
+                                    2
+                                  )}
+                                  %
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  CAGR
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.cagr >= 0
+                                        ? "#28a745"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.cagr?.toFixed(2)}%
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Total P/L
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.total_pl >= 0
+                                        ? "#28a745"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  $
+                                  {result.metrics.total_pl?.toLocaleString(
+                                    undefined,
+                                    {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    }
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Final Account Value
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: "#007bff",
+                                  }}
+                                >
+                                  $
+                                  {result.metrics.final_account_value?.toLocaleString(
+                                    undefined,
+                                    {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    }
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Max Drawdown ($)
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: "#dc3545",
+                                  }}
+                                >
+                                  $
+                                  {Math.abs(
+                                    result.metrics.max_drawdown || 0
+                                  ).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Annual Volatility
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      (result.metrics.annual_volatility || 0) <=
+                                      15
+                                        ? "#28a745"
+                                        : (result.metrics.annual_volatility ||
+                                            0) <= 25
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.annual_volatility?.toFixed(2)}
+                                  %
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Portfolio Plots */}
+                            {result.plots && result.plots.length > 0 && (
+                              <div className="plots-section">
+                                <h5 style={{ marginBottom: "0.75rem" }}>
+                                  Visualizations
+                                </h5>
+                                <div
+                                  className="plots-grid"
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr",
+                                    gap: "1rem",
+                                  }}
+                                >
+                                  {result.plots.map((plot, plotIndex) => (
+                                    <div key={plotIndex} className="plot-item">
+                                      <img
+                                        src={plot.url}
+                                        alt={plot.filename}
+                                        style={{
+                                          width: "100%",
+                                          height: "auto",
+                                          borderRadius: "4px",
+                                          border: "1px solid #e9ecef",
+                                        }}
+                                        onError={(e) => {
+                                          e.currentTarget.style.display =
+                                            "none";
+                                        }}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
 
               {/* Advanced Plots Section */}
               {analysisResults.advanced_plots &&
