@@ -23,7 +23,7 @@ if [ -d "frontend" ]; then
     
     # Install dependencies
     echo "📦 Installing frontend dependencies..."
-    npm ci --only=production
+    npm ci
     
     # Build the React app
     echo "🏗️ Building React application..."
