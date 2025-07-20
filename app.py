@@ -314,6 +314,59 @@ async def get_strategy_analysis(
         }
 
 
+@app.get("/api/debug/database")
+async def debug_database_connection(db: Session = Depends(get_db)):
+    """
+    Debug endpoint to check database connection and environment
+    """
+    import os
+    from database import engine
+    
+    try:
+        # Get environment info
+        database_url = os.getenv('DATABASE_URL', 'NOT SET')
+        db_host = os.getenv('DB_HOST', 'NOT SET')
+        render_env = os.getenv('RENDER', 'NOT SET')
+        
+        # Test database connection
+        portfolios = PortfolioService.get_portfolios(db, limit=10)
+        
+        # Get database engine info
+        engine_url = str(engine.url)
+        
+        return {
+            "success": True,
+            "environment": {
+                "DATABASE_URL": "SET" if database_url != 'NOT SET' else "NOT SET",
+                "DATABASE_URL_preview": database_url[:30] + "..." if database_url != 'NOT SET' else "NOT SET",
+                "DB_HOST": db_host,
+                "RENDER": render_env,
+                "ENGINE_URL": engine_url.replace(database_url.split('@')[1].split(':')[0], "***") if '@' in engine_url else engine_url
+            },
+            "database": {
+                "portfolios_count": len(portfolios),
+                "portfolios": [
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "upload_date": p.upload_date.isoformat() if p.upload_date else None
+                    } for p in portfolios
+                ]
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "environment": {
+                "DATABASE_URL": "SET" if os.getenv('DATABASE_URL') else "NOT SET",
+                "DB_HOST": os.getenv('DB_HOST', 'NOT SET'),
+                "RENDER": os.getenv('RENDER', 'NOT SET')
+            }
+        }
+
+
 @app.post("/upload")
 async def upload_files(
     request: Request,
