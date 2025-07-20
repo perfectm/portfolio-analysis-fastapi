@@ -31,7 +31,7 @@ from portfolio_service import PortfolioService
 logger = logging.getLogger(__name__)
 
 # FastAPI app setup
-app = FastAPI(title="Portfolio Analysis API", version="1.0.0")
+app = FastAPI(title="Cotton's Portfolio Analyzer", version="1.0.0")
 templates = Jinja2Templates(directory="templates")
 
 # Mount static files for uploads
@@ -89,9 +89,9 @@ async def startup_event():
             with open(frontend_index_path, 'w') as f:
                 f.write("""
                 <html>
-                    <head><title>Portfolio Analysis API</title></head>
+                    <head><title>Cotton's Portfolio Analyzer</title></head>
                     <body>
-                        <h1>Portfolio Analysis API</h1>
+                        <h1>Cotton's Portfolio Analyzer</h1>
                         <p>The React frontend is not available.</p>
                         <p>API documentation is available at <a href="/docs">/docs</a></p>
                     </body>
@@ -115,9 +115,9 @@ async def main(request: Request):
         # Fallback to a simple HTML page if React build doesn't exist
         return HTMLResponse("""
         <html>
-            <head><title>Portfolio Analysis API</title></head>
+            <head><title>Cotton's Portfolio Analyzer</title></head>
             <body>
-                <h1>Portfolio Analysis API</h1>
+                <h1>Cotton's Portfolio Analyzer</h1>
                 <p>The React frontend is not available. Please build the frontend first.</p>
                 <p>API documentation is available at <a href="/docs">/docs</a></p>
             </body>
@@ -1009,9 +1009,9 @@ async def catch_all(path: str):
         # Fallback for missing React build
         return HTMLResponse("""
         <html>
-            <head><title>Portfolio Analysis API</title></head>
+            <head><title>Cotton's Portfolio Analyzer</title></head>
             <body>
-                <h1>Portfolio Analysis API</h1>
+                <h1>Cotton's Portfolio Analyzer</h1>
                 <p>The React frontend is not available.</p>
                 <p>API documentation is available at <a href="/docs">/docs</a></p>
             </body>

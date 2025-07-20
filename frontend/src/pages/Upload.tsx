@@ -1,65 +1,77 @@
-import React, { useState } from 'react';
-import { portfolioAPI } from '../services/api';
-import './Upload.css';
+import React, { useState } from "react";
+import { portfolioAPI } from "../services/api";
+import "./Upload.css";
 
 const Upload: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState<string>('');
-  const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
+  const [message, setMessage] = useState<string>("");
+  const [messageType, setMessageType] = useState<"success" | "error" | "">("");
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     if (files.length > 0) {
-      const csvFiles = files.filter(file => 
-        file.type === 'text/csv' || file.name.endsWith('.csv')
+      const csvFiles = files.filter(
+        (file) => file.type === "text/csv" || file.name.endsWith(".csv")
       );
-      
+
       if (csvFiles.length !== files.length) {
-        setMessage('Only CSV files are allowed. Non-CSV files have been removed.');
-        setMessageType('error');
+        setMessage(
+          "Only CSV files are allowed. Non-CSV files have been removed."
+        );
+        setMessageType("error");
       } else {
-        setMessage('');
+        setMessage("");
       }
-      
+
       setSelectedFiles(csvFiles);
     }
   };
 
   const removeFile = (index: number) => {
-    setSelectedFiles(files => files.filter((_, i) => i !== index));
+    setSelectedFiles((files) => files.filter((_, i) => i !== index));
   };
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
-      setMessage('Please select at least one CSV file');
-      setMessageType('error');
+      setMessage("Please select at least one CSV file");
+      setMessageType("error");
       return;
     }
 
     setUploading(true);
-    setMessage('');
+    setMessage("");
 
     try {
       if (selectedFiles.length === 1) {
         // Single file upload
         const result = await portfolioAPI.uploadPortfolio(selectedFiles[0]);
         setMessage(`Upload successful! Portfolio ID: ${result.portfolio_id}`);
-        setMessageType('success');
+        setMessageType("success");
       } else {
         // Multiple file upload
-        const result = await portfolioAPI.uploadMultiplePortfolios(selectedFiles);
-        setMessage(`Upload successful! Uploaded ${selectedFiles.length} portfolios.`);
-        setMessageType('success');
+        const result = await portfolioAPI.uploadMultiplePortfolios(
+          selectedFiles
+        );
+        setMessage(
+          `Upload successful! Uploaded ${selectedFiles.length} portfolios.`
+        );
+        setMessageType("success");
       }
-      
+
       setSelectedFiles([]);
       // Reset file input
-      const fileInput = document.getElementById('file-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
+      const fileInput = document.getElementById(
+        "file-input"
+      ) as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
     } catch (error) {
-      setMessage(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setMessageType('error');
+      setMessage(
+        `Upload failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+      setMessageType("error");
     } finally {
       setUploading(false);
     }
@@ -73,18 +85,20 @@ const Upload: React.FC = () => {
     event.preventDefault();
     const files = Array.from(event.dataTransfer.files);
     if (files.length > 0) {
-      const csvFiles = files.filter(file => 
-        file.type === 'text/csv' || file.name.endsWith('.csv')
+      const csvFiles = files.filter(
+        (file) => file.type === "text/csv" || file.name.endsWith(".csv")
       );
-      
+
       if (csvFiles.length !== files.length) {
-        setMessage('Only CSV files are allowed. Non-CSV files have been removed.');
-        setMessageType('error');
+        setMessage(
+          "Only CSV files are allowed. Non-CSV files have been removed."
+        );
+        setMessageType("error");
       } else {
-        setMessage('');
+        setMessage("");
       }
-      
-      setSelectedFiles(prev => [...prev, ...csvFiles]);
+
+      setSelectedFiles((prev) => [...prev, ...csvFiles]);
     }
   };
 
@@ -93,12 +107,15 @@ const Upload: React.FC = () => {
       <div className="upload-container">
         <h1>Upload Portfolio CSV Files</h1>
         <p className="upload-description">
-          Upload one or more trading portfolio CSV files to get detailed analytics and insights.
-          Multiple files will be analyzed individually and can be blended together for comparison.
+          Upload one or more trading portfolio CSV files to get detailed
+          analytics and insights. Multiple files will be analyzed individually
+          and can be blended together for comparison.
         </p>
 
-        <div 
-          className={`upload-area ${selectedFiles.length > 0 ? 'has-file' : ''}`}
+        <div
+          className={`upload-area ${
+            selectedFiles.length > 0 ? "has-file" : ""
+          }`}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
@@ -112,9 +129,11 @@ const Upload: React.FC = () => {
                     <div key={index} className="file-item">
                       <div className="file-details">
                         <p className="file-name">{file.name}</p>
-                        <p className="file-size">Size: {(file.size / 1024).toFixed(2)} KB</p>
+                        <p className="file-size">
+                          Size: {(file.size / 1024).toFixed(2)} KB
+                        </p>
                       </div>
-                      <button 
+                      <button
                         type="button"
                         onClick={() => removeFile(index)}
                         className="remove-file-btn"
@@ -143,21 +162,19 @@ const Upload: React.FC = () => {
           </div>
         </div>
 
-        {message && (
-          <div className={`message ${messageType}`}>
-            {message}
-          </div>
-        )}
+        {message && <div className={`message ${messageType}`}>{message}</div>}
 
         <div className="upload-actions">
           <button
             onClick={handleUpload}
             disabled={selectedFiles.length === 0 || uploading}
-            className={`btn btn-primary ${uploading ? 'loading' : ''}`}
+            className={`btn btn-primary ${uploading ? "loading" : ""}`}
           >
-            {uploading ? 'Uploading...' : 
-             selectedFiles.length === 1 ? 'Upload Portfolio' : 
-             `Upload ${selectedFiles.length} Portfolios`}
+            {uploading
+              ? "Uploading..."
+              : selectedFiles.length === 1
+              ? "Upload Portfolio"
+              : `Upload ${selectedFiles.length} Portfolios`}
           </button>
         </div>
 
@@ -165,9 +182,15 @@ const Upload: React.FC = () => {
           <h3>CSV Format Requirements:</h3>
           <ul>
             <li>Files must be in CSV format (.csv)</li>
-            <li>Should contain trading data with columns for dates, trades, P&L, etc.</li>
+            <li>
+              Should contain trading data with columns for dates, trades, P&L,
+              etc.
+            </li>
             <li>Maximum file size per file: 10MB</li>
-            <li>Multiple files will be analyzed individually and can be blended for comparison</li>
+            <li>
+              Multiple files will be analyzed individually and can be blended
+              for comparison
+            </li>
             <li>Ensure data is properly formatted for accurate analysis</li>
           </ul>
         </div>
