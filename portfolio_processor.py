@@ -116,9 +116,9 @@ def process_portfolio_data(
     else:
         actual_starting_capital = starting_capital
     
-    # Calculate metrics with actual starting capital
+    # Calculate metrics with both original and actual starting capital
     metrics = _calculate_portfolio_metrics(
-        clean_df, rf_rate, daily_rf_rate, actual_starting_capital
+        clean_df, rf_rate, daily_rf_rate, starting_capital, actual_starting_capital
     )
     
     # Calculate drawdown
@@ -180,7 +180,8 @@ def _calculate_portfolio_metrics(
     clean_df: pd.DataFrame, 
     rf_rate: float, 
     daily_rf_rate: float, 
-    starting_capital: float
+    original_starting_capital: float,
+    actual_starting_capital: float
 ) -> Dict[str, Any]:
     """Calculate portfolio performance metrics"""
     # Initialize variables with default values
@@ -194,36 +195,50 @@ def _calculate_portfolio_metrics(
         # Calculate strategy metrics with error handling - only use days with trades
         valid_returns = clean_df['Strategy Return'][clean_df['Has_Trade']]
         
-        logger.info(f"[Metrics] Debug info:")
         logger.info(f"  - Clean DF shape: {clean_df.shape}")
-        logger.info(f"  - Starting capital: {starting_capital}")
+        logger.info(f"  - Original starting capital: {original_starting_capital}")
+        logger.info(f"  - Actual starting capital: {actual_starting_capital}")
         logger.info(f"  - Has trades count: {clean_df['Has_Trade'].sum()}")
         logger.info(f"  - Valid returns count: {len(valid_returns)}")
         logger.info(f"  - Account value range: {clean_df['Account Value'].min():.2f} to {clean_df['Account Value'].max():.2f}")
         logger.info(f"  - Cumulative P/L final: {clean_df['Cumulative P/L'].iloc[-1]:.2f}")
         
         if len(valid_returns) > 0:
-            # Calculate total return based on account value
-            total_return = (clean_df['Account Value'].iloc[-1] / starting_capital) - 1
+            # Debug: Let's trace the calculation step by step
+            final_account_value = clean_df['Account Value'].iloc[-1]
+            total_pl = clean_df['Cumulative P/L'].iloc[-1]
             
-            logger.info(f"  - Total return calculated: {total_return:.4f}")
+            logger.info(f"  - [DEBUG] Original starting capital: ${original_starting_capital:,.2f}")
+            logger.info(f"  - [DEBUG] Actual starting capital: ${actual_starting_capital:,.2f}")
+            logger.info(f"  - [DEBUG] Final account value: ${final_account_value:,.2f}")
+            logger.info(f"  - [DEBUG] Total P/L: ${total_pl:,.2f}")
+            logger.info(f"  - [DEBUG] Expected account value: ${original_starting_capital + total_pl:,.2f}")
+            
+            # Calculate total return based on ORIGINAL starting capital for percentage calculation
+            total_return = (final_account_value / original_starting_capital) - 1
+            
+            logger.info(f"  - [DEBUG] Total return calculation: ({final_account_value:,.2f} / {original_starting_capital:,.2f}) - 1 = {total_return:.6f}")
+            logger.info(f"  - [DEBUG] Total return as percentage: {total_return*100:.2f}%")
             
             # Calculate number of years using actual/actual basis
             num_years = _calculate_years_fraction(clean_df['Date'].min(), clean_df['Date'].max())
             
-            logger.info(f"  - Time period years: {num_years:.4f}")
+            logger.info(f"  - [DEBUG] Time period years: {num_years:.4f}")
             
-            # Calculate annualized return
+            # Calculate annualized return (CAGR)
             if num_years > 0:
                 strategy_mean_return = (1 + total_return) ** (1/num_years) - 1
             else:
                 strategy_mean_return = total_return
+                
+            logger.info(f"  - [DEBUG] CAGR calculation: (1 + {total_return:.6f}) ^ (1/{num_years:.4f}) - 1 = {strategy_mean_return:.6f}")
+            logger.info(f"  - [DEBUG] CAGR as percentage: {strategy_mean_return*100:.2f}%")
             
             logger.info(f"  - CAGR calculated: {strategy_mean_return:.4f}")
             
-            # Calculate Sharpe ratio and volatility
+            # Calculate Sharpe ratio and volatility - use actual starting capital for returns calculation
             sharpe_ratio, strategy_std = _calculate_sharpe_ratio(
-                clean_df, rf_rate, starting_capital
+                clean_df, rf_rate, actual_starting_capital
             )
             
             logger.info(f"  - Sharpe ratio: {sharpe_ratio:.4f}")
@@ -231,11 +246,11 @@ def _calculate_portfolio_metrics(
             
         else:
             logger.warning("No valid returns found for strategy metrics calculation")
-            return _get_default_metrics(starting_capital)
+            return _get_default_metrics(original_starting_capital)
             
     except Exception as e:
         logger.error(f"Error calculating metrics: {str(e)}")
-        return _get_default_metrics(starting_capital, clean_df)
+        return _get_default_metrics(original_starting_capital, clean_df)
     
     return {
         'sharpe_ratio': float(sharpe_ratio),

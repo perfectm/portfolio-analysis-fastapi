@@ -1117,9 +1117,14 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         portfolio_ids = body.get("portfolio_ids", [])
         weighting_method = body.get("weighting_method", "equal")
         weights = body.get("weights", None)
+        starting_capital = body.get("starting_capital", 100000.0)
         
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
+        
+        # Validate starting capital
+        if starting_capital <= 0:
+            return {"success": False, "error": "Starting capital must be greater than 0"}
         
         # Limit number of portfolios to prevent memory issues
         if len(portfolio_ids) > 6:  # Reduced from 8 to 6
@@ -1128,6 +1133,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         logger.info(f"[Weighted Analysis] Analyzing portfolios: {portfolio_ids}")
         logger.info(f"[Weighted Analysis] Weighting method: {weighting_method}")
         logger.info(f"[Weighted Analysis] Weights: {weights}")
+        logger.info(f"[Weighted Analysis] Starting capital: ${starting_capital:,.2f}")
         
         # Validate weights if custom weighting
         portfolio_weights = None
@@ -1173,7 +1179,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             rf_rate=0.05,
             sma_window=20,
             use_trading_filter=True,
-            starting_capital=100000.0  # This will be adjusted dynamically in process_portfolio_data
+            starting_capital=starting_capital
         )
         
         logger.info(f"[Weighted Analysis] Individual analysis completed for {len(individual_results)} portfolios")
@@ -1254,7 +1260,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     rf_rate=0.05,
                     sma_window=20,
                     use_trading_filter=True,
-                    starting_capital=100000.0,
+                    starting_capital=starting_capital,
                     weights=portfolio_weights  # Pass the weights to the blender
                 )
                 
@@ -1493,11 +1499,17 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         # Get the portfolio IDs from the request
         body = await request.json()
         portfolio_ids = body.get("portfolio_ids", [])
+        starting_capital = body.get("starting_capital", 100000.0)
         
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
         
+        # Validate starting capital
+        if starting_capital <= 0:
+            return {"success": False, "error": "Starting capital must be greater than 0"}
+        
         logger.info(f"[Analyze Portfolios] Analyzing portfolios: {portfolio_ids}")
+        logger.info(f"[Analyze Portfolios] Starting capital: ${starting_capital:,.2f}")
         
         # Get portfolio data from database
         portfolios_data = []
@@ -1527,7 +1539,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             rf_rate=0.05,
             sma_window=20,
             use_trading_filter=True,
-            starting_capital=100000.0
+            starting_capital=starting_capital
         )
         
         logger.info(f"[Analyze Portfolios] Individual analysis completed for {len(individual_results)} portfolios")
@@ -1600,7 +1612,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     rf_rate=0.05,
                     sma_window=20,
                     use_trading_filter=True,
-                    starting_capital=100000.0
+                    starting_capital=starting_capital
                 )
                 
                 if blended_df is not None and blended_metrics is not None:

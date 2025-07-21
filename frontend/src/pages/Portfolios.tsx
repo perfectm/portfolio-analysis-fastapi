@@ -67,6 +67,9 @@ export default function Portfolios() {
     Record<number, number>
   >({});
 
+  // Analysis parameters
+  const [startingCapital, setStartingCapital] = useState<number>(100000);
+
   // Force a fresh deployment with checkboxes
 
   useEffect(() => {
@@ -374,6 +377,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
       let endpoint = `${API_BASE_URL}/api/analyze-portfolios`;
       let requestBody: any = {
         portfolio_ids: selectedPortfolios,
+        starting_capital: startingCapital,
       };
 
       // Add weighting parameters for multiple portfolios if using weighted endpoint
@@ -422,6 +426,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
               },
               body: JSON.stringify({
                 portfolio_ids: selectedPortfolios,
+                starting_capital: startingCapital,
               }),
             }
           );
@@ -539,6 +544,70 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   }`}
             </button>
           </div>
+
+          {/* Analysis Parameters */}
+          {selectedPortfolios.length > 0 && (
+            <div
+              className="analysis-parameters"
+              style={{
+                marginBottom: "1.5rem",
+                padding: "1.5rem",
+                background: "#f8f9fa",
+                borderRadius: "8px",
+                border: "1px solid #e9ecef",
+              }}
+            >
+              <h3 style={{ marginBottom: "1rem", color: "#495057" }}>
+                ⚙️ Analysis Parameters
+              </h3>
+
+              <div style={{ marginBottom: "1rem" }}>
+                <label
+                  htmlFor="startingCapital"
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontWeight: "bold",
+                    color: "#495057",
+                  }}
+                >
+                  💰 Starting Capital ($)
+                </label>
+                <input
+                  id="startingCapital"
+                  type="number"
+                  min="1000"
+                  max="10000000"
+                  step="1000"
+                  value={startingCapital}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value) && value > 0) {
+                      setStartingCapital(value);
+                    }
+                  }}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #ced4da",
+                    borderRadius: "4px",
+                    width: "200px",
+                    fontSize: "1rem",
+                  }}
+                  placeholder="100000"
+                />
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#6c757d",
+                    marginTop: "0.25rem",
+                  }}
+                >
+                  The initial capital amount for portfolio analysis. Default is
+                  $100,000.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Weighting Controls */}
           {selectedPortfolios.length > 1 && (
