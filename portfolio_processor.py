@@ -105,9 +105,20 @@ def process_portfolio_data(
     # For Sharpe calculation, we'll only use days with trades
     clean_df['Strategy Return'] = clean_df['Strategy Return'].where(clean_df['Has_Trade'])
     
-    # Calculate metrics
+    # Dynamic starting capital calculation - adjust for existing cumulative P/L
+    if not clean_df.empty:
+        clean_df_sorted = clean_df.sort_values('Date')
+        first_cumulative_pl = clean_df_sorted['Cumulative P/L'].iloc[0]
+        actual_starting_capital = starting_capital - first_cumulative_pl
+        logger.info(f"Original starting capital: ${starting_capital:,.2f}")
+        logger.info(f"First cumulative P/L: ${first_cumulative_pl:,.2f}")
+        logger.info(f"Calculated actual starting capital: ${actual_starting_capital:,.2f}")
+    else:
+        actual_starting_capital = starting_capital
+    
+    # Calculate metrics with actual starting capital
     metrics = _calculate_portfolio_metrics(
-        clean_df, rf_rate, daily_rf_rate, starting_capital
+        clean_df, rf_rate, daily_rf_rate, actual_starting_capital
     )
     
     # Calculate drawdown
@@ -117,7 +128,7 @@ def process_portfolio_data(
     drawdown_metrics = _calculate_drawdown_metrics(clean_df)
     metrics.update(drawdown_metrics)
     
-    _log_portfolio_summary(clean_df, metrics, starting_capital)
+    _log_portfolio_summary(clean_df, metrics, actual_starting_capital)
     
     # Convert numpy types to Python native types for JSON serialization
     metrics = _convert_numpy_types(metrics)

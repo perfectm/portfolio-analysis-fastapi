@@ -380,3 +380,31 @@ class PortfolioService:
             query = query.filter(AnalysisResult.portfolio_id == portfolio_id)
         
         return query.limit(limit).all()
+    
+    @staticmethod
+    def get_all_portfolios(db: Session) -> List[Portfolio]:
+        """
+        Get all portfolios from the database
+        """
+        try:
+            portfolios = db.query(Portfolio).order_by(desc(Portfolio.upload_date)).all()
+            logger.info(f"Retrieved {len(portfolios)} portfolios from database")
+            return portfolios
+        except Exception as e:
+            logger.error(f"Error fetching all portfolios: {e}")
+            raise
+    
+    @staticmethod
+    def get_latest_analysis_result(db: Session, portfolio_id: int) -> Optional[AnalysisResult]:
+        """
+        Get the latest analysis result for a specific portfolio
+        """
+        try:
+            result = (db.query(AnalysisResult)
+                     .filter(AnalysisResult.portfolio_id == portfolio_id)
+                     .order_by(desc(AnalysisResult.created_at))
+                     .first())
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching latest analysis result for portfolio {portfolio_id}: {e}")
+            raise

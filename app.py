@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import gc  # Add garbage collection for memory management
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Request, Form, Depends
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,8 +31,49 @@ from portfolio_service import PortfolioService
 # Set up logging
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI startup and shutdown events"""
+    # Startup
+    try:
+        # Ensure required directories exist
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs("uploads/plots", exist_ok=True)
+        os.makedirs("frontend/dist/assets", exist_ok=True)
+        
+        # Create minimal index.html if it doesn't exist
+        frontend_index_path = "frontend/dist/index.html"
+        if not os.path.exists(frontend_index_path):
+            with open(frontend_index_path, 'w') as f:
+                f.write("""
+                <html>
+                    <head><title>Cotton's Portfolio Analyzer</title></head>
+                    <body>
+                        <h1>Cotton's Portfolio Analyzer</h1>
+                        <p>The React frontend is not available.</p>
+                        <p>API documentation is available at <a href="/docs">/docs</a></p>
+                    </body>
+                </html>
+                """)
+        
+        create_tables()
+        logger.info("Database tables initialized successfully")
+        logger.info("Required directories ensured")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        # Continue running even if database fails (graceful degradation)
+    
+    yield
+    
+    # Shutdown (if needed)
+    # Add cleanup code here if necessary
+
 # FastAPI app setup
-app = FastAPI(title="Cotton's Portfolio Analyzer", version="1.0.0")
+app = FastAPI(
+    title="Cotton's Portfolio Analyzer", 
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory=UPLOAD_FOLDER), name="uploads")
@@ -68,41 +110,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-# Initialize database tables on startup
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database tables on application startup"""
-    try:
-        # Ensure required directories exist
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        os.makedirs("uploads/plots", exist_ok=True)
-        os.makedirs("frontend/dist/assets", exist_ok=True)
-        
-        # Create minimal index.html if it doesn't exist
-        frontend_index_path = "frontend/dist/index.html"
-        if not os.path.exists(frontend_index_path):
-            with open(frontend_index_path, 'w') as f:
-                f.write("""
-                <html>
-                    <head><title>Cotton's Portfolio Analyzer</title></head>
-                    <body>
-                        <h1>Cotton's Portfolio Analyzer</h1>
-                        <p>The React frontend is not available.</p>
-                        <p>API documentation is available at <a href="/docs">/docs</a></p>
-                    </body>
-                </html>
-                """)
-        
-        create_tables()
-        logger.info("Database tables initialized successfully")
-        logger.info("Required directories ensured")
-    except Exception as e:
-        logger.error(f"Error initializing database: {e}")
-        # Continue running even if database fails (graceful degradation)
 
 @app.get("/", response_class=HTMLResponse)
 async def main(request: Request):
@@ -533,6 +543,67 @@ async def debug_database_connection(db: Session = Depends(get_db)):
                 "RENDER": os.getenv('RENDER', 'NOT SET'),
                 "ENGINE_URL": str(engine.url) if 'engine' in globals() else "NOT INITIALIZED"
             }
+        }
+
+
+@app.get("/api/portfolios")
+async def get_portfolios(db: Session = Depends(get_db)):
+    """
+    Get all portfolios from the database
+    
+    Returns:
+        JSON response with list of portfolios and their metadata
+    """
+    try:
+        logger.info("[API Portfolios] Fetching all portfolios")
+        portfolios = PortfolioService.get_all_portfolios(db)
+        
+        result = []
+        for portfolio in portfolios:
+            # Get the latest analysis result for this portfolio
+            latest_analysis = PortfolioService.get_latest_analysis_result(db, portfolio.id)
+            
+            portfolio_data = {
+                "id": portfolio.id,
+                "name": portfolio.name,
+                "filename": portfolio.filename,
+                "upload_date": portfolio.upload_date.isoformat() if portfolio.upload_date else None,
+                "data_count": portfolio.row_count,
+                "file_size": portfolio.file_size,
+                "date_range_start": portfolio.date_range_start.isoformat() if portfolio.date_range_start else None,
+                "date_range_end": portfolio.date_range_end.isoformat() if portfolio.date_range_end else None
+            }
+            
+            if latest_analysis:
+                import json
+                # Parse metrics_json if it exists
+                metrics_data = None
+                if latest_analysis.metrics_json:
+                    try:
+                        metrics_data = json.loads(latest_analysis.metrics_json)
+                    except json.JSONDecodeError:
+                        metrics_data = latest_analysis.metrics_json
+                
+                portfolio_data["latest_analysis"] = {
+                    "id": latest_analysis.id,
+                    "analysis_type": latest_analysis.analysis_type,
+                    "created_at": latest_analysis.created_at.isoformat() if latest_analysis.created_at else None,
+                    "metrics": metrics_data
+                }
+            
+            result.append(portfolio_data)
+        
+        logger.info(f"[API Portfolios] Returning {len(result)} portfolios")
+        return {
+            "success": True,
+            "portfolios": result
+        }
+        
+    except Exception as e:
+        logger.error(f"[API Portfolios] Error fetching portfolios: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
         }
 
 
@@ -1096,13 +1167,13 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         
         logger.info(f"[Weighted Analysis] Processing {len(portfolios_data)} portfolios")
         
-        # Process individual portfolios
+        # Process individual portfolios with dynamic starting capital
         individual_results = process_individual_portfolios(
             portfolios_data,
             rf_rate=0.05,
             sma_window=20,
             use_trading_filter=True,
-            starting_capital=100000.0
+            starting_capital=100000.0  # This will be adjusted dynamically in process_portfolio_data
         )
         
         logger.info(f"[Weighted Analysis] Individual analysis completed for {len(individual_results)} portfolios")
