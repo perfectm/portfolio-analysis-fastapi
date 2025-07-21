@@ -1321,6 +1321,98 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         return {"success": False, "error": f"Weighted analysis failed: {str(e)}"}
 
 
+@app.post("/api/optimize-weights")
+async def optimize_portfolio_weights(request: Request, db: Session = Depends(get_db)):
+    """
+    Optimize portfolio weights to maximize return while minimizing drawdown
+    """
+    try:
+        # Get the portfolio IDs and optimization parameters from the request
+        body = await request.json()
+        portfolio_ids = body.get("portfolio_ids", [])
+        method = body.get("method", "differential_evolution")  # 'scipy', 'differential_evolution', 'grid_search'
+        
+        if not portfolio_ids:
+            return {"success": False, "error": "No portfolio IDs provided"}
+        
+        if len(portfolio_ids) < 2:
+            return {"success": False, "error": "Need at least 2 portfolios for weight optimization"}
+        
+        if len(portfolio_ids) > 6:
+            return {"success": False, "error": "Maximum 6 portfolios allowed for optimization to prevent performance issues"}
+        
+        logger.info(f"[Weight Optimization] Optimizing weights for portfolios: {portfolio_ids}")
+        logger.info(f"[Weight Optimization] Using optimization method: {method}")
+        
+        # Import the optimizer (lazy import to avoid startup issues if scipy not available)
+        try:
+            from portfolio_optimizer import PortfolioOptimizer, OptimizationObjective
+        except ImportError as e:
+            return {
+                "success": False,
+                "error": "Portfolio optimization requires scipy. Please install scipy>=1.10.0",
+                "details": str(e)
+            }
+        
+        # Create optimizer with default settings
+        optimizer = PortfolioOptimizer(
+            objective=OptimizationObjective(),
+            rf_rate=0.05,
+            sma_window=20,
+            use_trading_filter=True,
+            starting_capital=100000.0
+        )
+        
+        # Run optimization
+        result = optimizer.optimize_weights_from_ids(db, portfolio_ids, method)
+        
+        if not result.success:
+            return {
+                "success": False,
+                "error": result.message,
+                "explored_combinations": len(result.explored_combinations)
+            }
+        
+        # Get portfolio names for response
+        portfolio_names = []
+        for portfolio_id in portfolio_ids:
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+            if portfolio:
+                portfolio_names.append(portfolio.name)
+        
+        # Create weight mapping
+        weight_mapping = dict(zip(portfolio_names, result.optimal_weights))
+        
+        logger.info(f"[Weight Optimization] Optimization completed successfully")
+        logger.info(f"[Weight Optimization] Optimal weights: {weight_mapping}")
+        logger.info(f"[Weight Optimization] CAGR: {result.optimal_cagr:.4f}, Max Drawdown: {result.optimal_max_drawdown:.4f}")
+        logger.info(f"[Weight Optimization] Return/Drawdown Ratio: {result.optimal_return_drawdown_ratio:.4f}")
+        
+        return {
+            "success": True,
+            "message": f"Weight optimization completed using {result.optimization_method}",
+            "optimal_weights": weight_mapping,
+            "optimal_weights_array": result.optimal_weights,
+            "metrics": {
+                "cagr": result.optimal_cagr,
+                "max_drawdown_percent": result.optimal_max_drawdown,
+                "return_drawdown_ratio": result.optimal_return_drawdown_ratio,
+                "sharpe_ratio": result.optimal_sharpe_ratio
+            },
+            "optimization_details": {
+                "method": result.optimization_method,
+                "iterations": result.iterations,
+                "combinations_explored": len(result.explored_combinations)
+            },
+            "portfolio_names": portfolio_names,
+            "portfolio_ids": portfolio_ids
+        }
+        
+    except Exception as e:
+        logger.error(f"[Weight Optimization] Error optimizing weights: {str(e)}", exc_info=True)
+        return {"success": False, "error": f"Weight optimization failed: {str(e)}"}
+
+
 @app.post("/api/analyze-portfolios")
 async def analyze_selected_portfolios(request: Request, db: Session = Depends(get_db)):
     """

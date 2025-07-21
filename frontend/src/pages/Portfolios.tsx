@@ -249,6 +249,82 @@ export default function Portfolios() {
     );
   };
 
+  const optimizePortfolioWeights = async () => {
+    if (selectedPortfolios.length < 2) {
+      alert("Please select at least 2 portfolios for weight optimization");
+      return;
+    }
+
+    if (selectedPortfolios.length > 6) {
+      alert("Maximum 6 portfolios allowed for optimization to prevent performance issues");
+      return;
+    }
+
+    setAnalyzing(true);
+    setAnalysisResults(null);
+
+    try {
+      const optimizeResponse = await fetch(`${API_BASE_URL}/api/optimize-weights`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          portfolio_ids: selectedPortfolios,
+          method: "differential_evolution", // Can be 'scipy', 'differential_evolution', 'grid_search'
+        }),
+      });
+
+      if (optimizeResponse.ok) {
+        const optimizationResult = await optimizeResponse.json();
+        console.log("Optimization result:", optimizationResult);
+
+        if (optimizationResult.success) {
+          // Update the weights with the optimized values
+          setWeightingMethod("custom");
+          const optimizedWeights: Record<number, number> = {};
+          selectedPortfolios.forEach((portfolioId, index) => {
+            optimizedWeights[portfolioId] = optimizationResult.optimal_weights_array[index];
+          });
+          setPortfolioWeights(optimizedWeights);
+
+          // Show optimization results to the user
+          const message = `
+Optimization completed successfully!
+
+Optimal weights found:
+${Object.entries(optimizationResult.optimal_weights)
+  .map(([name, weight]) => `• ${name}: ${(weight * 100).toFixed(1)}%`)
+  .join('\n')}
+
+Expected Performance:
+• CAGR: ${(optimizationResult.metrics.cagr * 100).toFixed(2)}%
+• Max Drawdown: ${(optimizationResult.metrics.max_drawdown_percent * 100).toFixed(2)}%
+• Return/Drawdown Ratio: ${optimizationResult.metrics.return_drawdown_ratio.toFixed(2)}
+• Sharpe Ratio: ${optimizationResult.metrics.sharpe_ratio.toFixed(2)}
+
+Method: ${optimizationResult.optimization_details.method}
+Combinations explored: ${optimizationResult.optimization_details.combinations_explored}
+
+The weights have been applied automatically. Click 'Analyze' to see the full results.
+          `.trim();
+
+          alert(message);
+        } else {
+          alert(`Weight optimization failed: ${optimizationResult.error}`);
+        }
+      } else {
+        const errorData = await optimizeResponse.json();
+        alert(`Weight optimization failed: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Weight optimization failed:", error);
+      alert(`Weight optimization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const analyzeSelectedPortfolios = async () => {
     if (selectedPortfolios.length === 0) {
       alert("Please select at least one portfolio to analyze");
@@ -411,6 +487,22 @@ export default function Portfolios() {
             >
               Clear Selection
             </button>
+            {selectedPortfolios.length >= 2 && (
+              <button
+                onClick={optimizePortfolioWeights}
+                disabled={analyzing || selectedPortfolios.length > 6}
+                className="btn btn-success"
+                style={{
+                  padding: "0.5rem 1.5rem",
+                  fontSize: "0.9rem",
+                  marginRight: "0.5rem",
+                  opacity: analyzing || selectedPortfolios.length > 6 ? 0.5 : 1,
+                }}
+                title="Find optimal weights to maximize return while minimizing drawdown"
+              >
+                {analyzing ? "Optimizing..." : "🎯 Optimize Weights"}
+              </button>
+            )}
             <button
               onClick={analyzeSelectedPortfolios}
               disabled={selectedPortfolios.length === 0 || analyzing}
@@ -418,7 +510,7 @@ export default function Portfolios() {
               style={{
                 padding: "0.5rem 1.5rem",
                 fontSize: "0.9rem",
-                marginLeft: "auto",
+                marginLeft: selectedPortfolios.length >= 2 ? "0" : "auto",
                 opacity: selectedPortfolios.length === 0 ? 0.5 : 1,
               }}
             >
@@ -445,6 +537,18 @@ export default function Portfolios() {
               <h3 style={{ marginBottom: "1rem", color: "#495057" }}>
                 ⚖️ Portfolio Weighting
               </h3>
+              
+              <div style={{ 
+                marginBottom: "1rem", 
+                padding: "0.75rem", 
+                background: "#e8f5e8", 
+                borderRadius: "6px", 
+                border: "1px solid #c3e6cb",
+                fontSize: "0.9rem",
+                color: "#155724"
+              }}>
+                💡 <strong>Tip:</strong> Use the "🎯 Optimize Weights" button above to automatically find the best weights that maximize returns while minimizing drawdown. This uses advanced optimization algorithms to balance risk and reward.
+              </div>
 
               {/* Weighting Method Selection */}
               <div style={{ marginBottom: "1rem" }}>

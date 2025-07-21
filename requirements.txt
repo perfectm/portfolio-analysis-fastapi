@@ -21,3 +21,6 @@ httpx>=0.24.0
 
 # Environment management
 python-dotenv>=1.0.0
+
+# Optimization dependencies
+scipy>=1.10.0
