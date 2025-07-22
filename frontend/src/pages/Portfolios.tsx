@@ -928,9 +928,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 : "#dc3545",
                           }}
                         >
-                          {analysisResults.blended_result.metrics.total_return?.toFixed(
-                            2
-                          )}
+                          {(
+                            analysisResults.blended_result.metrics
+                              .total_return * 100
+                          )?.toFixed(2)}
                           %
                         </div>
                       </div>
@@ -1296,7 +1297,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                         : "#dc3545",
                                   }}
                                 >
-                                  {result.metrics.total_return?.toFixed(2)}%
+                                  {(result.metrics.total_return * 100)?.toFixed(
+                                    2
+                                  )}
+                                  %
                                 </div>
                               </div>
 
