@@ -253,15 +253,18 @@ class PortfolioService:
                 use_trading_filter=analysis_params.get('use_trading_filter'),
                 starting_capital=analysis_params.get('starting_capital'),
                 metrics_json=json.dumps(metrics),
-                sharpe_ratio=metrics.get('Sharpe Ratio'),
-                mar_ratio=metrics.get('MAR Ratio'),
-                cagr=metrics.get('CAGR'),
-                annual_volatility=metrics.get('Annual Volatility'),
-                total_return=metrics.get('Total Return'),
-                total_pl=metrics.get('Total P/L'),
-                final_account_value=metrics.get('Final Account Value'),
-                max_drawdown=metrics.get('Max Drawdown'),
-                max_drawdown_percent=metrics.get('Max Drawdown %')
+                sharpe_ratio=metrics.get('sharpe_ratio'),
+                sortino_ratio=metrics.get('sortino_ratio'),
+                ulcer_index=metrics.get('ulcer_index'),
+                mar_ratio=metrics.get('mar_ratio'),
+                cagr=metrics.get('cagr'),
+                annual_volatility=metrics.get('annual_volatility'),
+                total_return=metrics.get('total_return'),
+                total_pl=metrics.get('total_pl'),
+                final_account_value=metrics.get('final_account_value'),
+                max_drawdown=metrics.get('max_drawdown'),
+                max_drawdown_percent=metrics.get('max_drawdown_percent'),
+                max_drawdown_date=metrics.get('max_drawdown_date')
             )
             
             db.add(analysis_result)
