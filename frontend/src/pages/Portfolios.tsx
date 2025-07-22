@@ -1191,6 +1191,44 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           %
                         </div>
                       </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          MAR Ratio
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              (analysisResults.blended_result.metrics
+                                .mar_ratio || 0) >= 0.5
+                                ? "#28a745"
+                                : (analysisResults.blended_result.metrics
+                                    .mar_ratio || 0) >= 0.25
+                                ? "#ffc107"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.mar_ratio?.toFixed(
+                            2
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Blended Portfolio Plots */}
@@ -1490,6 +1528,33 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 >
                                   {result.metrics.annual_volatility?.toFixed(2)}
                                   %
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  MAR Ratio
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      (result.metrics.mar_ratio || 0) >= 0.5
+                                        ? "#28a745"
+                                        : (result.metrics.mar_ratio || 0) >=
+                                          0.25
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.mar_ratio?.toFixed(2)}
                                 </div>
                               </div>
                             </div>
