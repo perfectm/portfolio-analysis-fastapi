@@ -1001,7 +1001,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           marginBottom: "1.5rem",
                           padding: "1rem",
-                          background: "#e3f2fd",
+                          background: "#fff",
                           borderRadius: "6px",
                           border: "1px solid #bbdefb",
                         }}
