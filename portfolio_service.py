@@ -256,6 +256,7 @@ class PortfolioService:
                 sharpe_ratio=metrics.get('sharpe_ratio'),
                 sortino_ratio=metrics.get('sortino_ratio'),
                 ulcer_index=metrics.get('ulcer_index'),
+                kelly_criterion=metrics.get('kelly_criterion'),
                 mar_ratio=metrics.get('mar_ratio'),
                 cagr=metrics.get('cagr'),
                 annual_volatility=metrics.get('annual_volatility'),

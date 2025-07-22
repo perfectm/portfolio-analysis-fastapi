@@ -83,6 +83,7 @@ class AnalysisResult(Base):
     sharpe_ratio = Column(Float)
     sortino_ratio = Column(Float)
     ulcer_index = Column(Float)
+    kelly_criterion = Column(Float)
     mar_ratio = Column(Float)
     cagr = Column(Float)
     annual_volatility = Column(Float)

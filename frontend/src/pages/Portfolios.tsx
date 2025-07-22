@@ -20,6 +20,7 @@ interface AnalysisResult {
     sharpe_ratio: number;
     sortino_ratio: number;
     ulcer_index: number;
+    kelly_criterion: number;
     total_return: number;
     total_pl: number;
     final_account_value: number;
@@ -1387,6 +1388,51 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             : "N/A"}
                         </div>
                       </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Kelly Criterion
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics
+                                .kelly_criterion > 0.25
+                                ? "#dc3545"
+                                : analysisResults.blended_result.metrics
+                                    .kelly_criterion > 0.1
+                                ? "#ffc107"
+                                : analysisResults.blended_result.metrics
+                                    .kelly_criterion > 0
+                                ? "#28a745"
+                                : "#6c757d",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics
+                            .kelly_criterion >= 0
+                            ? `${(
+                                analysisResults.blended_result.metrics
+                                  .kelly_criterion * 100
+                              ).toFixed(1)}%`
+                            : "N/A"}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Blended Portfolio Plots */}
@@ -1767,6 +1813,38 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                   }}
                                 >
                                   {result.metrics.ulcer_index?.toFixed(2)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Kelly Criterion
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.kelly_criterion > 0.25
+                                        ? "#dc3545"
+                                        : result.metrics.kelly_criterion > 0.1
+                                        ? "#ffc107"
+                                        : result.metrics.kelly_criterion > 0
+                                        ? "#28a745"
+                                        : "#6c757d",
+                                  }}
+                                >
+                                  {result.metrics.kelly_criterion >= 0
+                                    ? `${(
+                                        result.metrics.kelly_criterion * 100
+                                      ).toFixed(1)}%`
+                                    : "N/A"}
                                 </div>
                               </div>
 

@@ -244,10 +244,12 @@ def _calculate_portfolio_metrics(
             # Calculate additional risk metrics
             sortino_ratio = _calculate_sortino_ratio(clean_df, rf_rate)
             ulcer_index = _calculate_ulcer_index(clean_df)
+            kelly_criterion = _calculate_kelly_criterion(clean_df)
             
             logger.info(f"  - Sharpe ratio: {sharpe_ratio:.4f}")
             logger.info(f"  - Sortino ratio: {sortino_ratio:.4f}")
             logger.info(f"  - Ulcer index: {ulcer_index:.4f}")
+            logger.info(f"  - Kelly criterion: {kelly_criterion:.4f}")
             logger.info(f"  - Annual volatility: {strategy_std:.4f}")
             
         else:
@@ -262,6 +264,7 @@ def _calculate_portfolio_metrics(
         'sharpe_ratio': float(sharpe_ratio),
         'sortino_ratio': float(sortino_ratio),
         'ulcer_index': float(ulcer_index),
+        'kelly_criterion': float(kelly_criterion),
         'cagr': float(strategy_mean_return),  # Already as decimal
         'annual_volatility': float(strategy_std),  # Already as decimal
         'total_return': float(total_return),  # Already as decimal
@@ -385,6 +388,52 @@ def _calculate_ulcer_index(clean_df: pd.DataFrame) -> float:
     logger.info(f"Ulcer Index: {ulcer_index:.4f}")
     
     return ulcer_index
+
+
+def _calculate_kelly_criterion(clean_df: pd.DataFrame) -> float:
+    """Calculate Kelly Criterion for optimal position sizing"""
+    # Kelly Criterion = (bp - q) / b
+    # Where:
+    # b = odds received on the wager (average win / average loss)
+    # p = probability of winning
+    # q = probability of losing (1 - p)
+    
+    # Get winning and losing trades
+    winning_trades = clean_df[clean_df['P/L'] > 0]['P/L']
+    losing_trades = clean_df[clean_df['P/L'] < 0]['P/L']
+    
+    if len(winning_trades) == 0 or len(losing_trades) == 0:
+        logger.info("Kelly Criterion: Not enough winning or losing trades for calculation")
+        return 0.0
+    
+    # Calculate win probability
+    total_trades = len(clean_df)
+    win_probability = len(winning_trades) / total_trades
+    loss_probability = 1 - win_probability
+    
+    # Calculate average win and average loss
+    avg_win = winning_trades.mean()
+    avg_loss = abs(losing_trades.mean())  # Make positive for calculation
+    
+    # Calculate odds (b)
+    if avg_loss == 0:
+        logger.info("Kelly Criterion: Average loss is zero, cannot calculate")
+        return 0.0
+    
+    odds = avg_win / avg_loss
+    
+    # Calculate Kelly Criterion percentage
+    kelly_percentage = (odds * win_probability - loss_probability) / odds
+    
+    logger.info(f"Kelly Criterion Calculation:")
+    logger.info(f"Win Probability: {win_probability:.4f}")
+    logger.info(f"Loss Probability: {loss_probability:.4f}")
+    logger.info(f"Average Win: ${avg_win:.2f}")
+    logger.info(f"Average Loss: ${avg_loss:.2f}")
+    logger.info(f"Odds (Win/Loss ratio): {odds:.4f}")
+    logger.info(f"Kelly Criterion: {kelly_percentage:.4f} ({kelly_percentage*100:.2f}%)")
+    
+    return kelly_percentage
 
 
 def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
