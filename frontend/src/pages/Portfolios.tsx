@@ -2205,20 +2205,26 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 width: "100%",
                 borderCollapse: "collapse",
                 fontSize: "0.9rem",
+                background: theme.palette.background.paper,
+                color: theme.palette.text.primary,
               }}
             >
               <thead>
                 <tr
                   style={{
-                    backgroundColor: "#f8f9fa",
-                    borderBottom: "2px solid #dee2e6",
+                    backgroundColor:
+                      theme.palette.mode === "dark"
+                        ? theme.palette.background.default
+                        : theme.palette.grey[100],
+                    borderBottom: `2px solid ${theme.palette.divider}`,
                   }}
                 >
                   <th
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: "1px solid #dee2e6",
+                      borderRight: `1px solid ${theme.palette.divider}`,
+                      color: theme.palette.text.primary,
                     }}
                   >
                     <input
@@ -2241,8 +2247,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: "1px solid #dee2e6",
+                      borderRight: `1px solid ${theme.palette.divider}`,
                       minWidth: "150px",
+                      color: theme.palette.text.primary,
                     }}
                   >
                     Portfolio
@@ -2251,8 +2258,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: "1px solid #dee2e6",
+                      borderRight: `1px solid ${theme.palette.divider}`,
                       minWidth: "120px",
+                      color: theme.palette.text.primary,
                     }}
                   >
                     File
@@ -2261,8 +2269,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
-                      borderRight: "1px solid #dee2e6",
+                      borderRight: `1px solid ${theme.palette.divider}`,
                       minWidth: "80px",
+                      color: theme.palette.text.primary,
                     }}
                   >
                     Records
@@ -2271,8 +2280,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
-                      borderRight: "1px solid #dee2e6",
+                      borderRight: `1px solid ${theme.palette.divider}`,
                       minWidth: "100px",
+                      color: theme.palette.text.primary,
                     }}
                   >
                     Uploaded
@@ -2281,8 +2291,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: "1px solid #dee2e6",
+                      borderRight: `1px solid ${theme.palette.divider}`,
                       minWidth: "150px",
+                      color: theme.palette.text.primary,
                     }}
                   >
                     Strategy
@@ -2292,6 +2303,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
                       minWidth: "120px",
+                      color: theme.palette.text.primary,
                     }}
                   >
                     Actions
@@ -2303,13 +2315,16 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   <React.Fragment key={portfolio.id}>
                     <tr
                       style={{
-                        borderBottom: "1px solid #dee2e6",
+                        borderBottom: `1px solid ${theme.palette.divider}`,
                         backgroundColor: selectedPortfolios.includes(
                           portfolio.id
                         )
-                          ? "#f0f8ff"
-                          : "#fff",
+                          ? theme.palette.mode === "dark"
+                            ? theme.palette.action.selected
+                            : theme.palette.action.hover
+                          : theme.palette.background.paper,
                         cursor: "pointer",
+                        color: theme.palette.text.primary,
                       }}
                       onClick={() => {
                         const newExpanded = [...expandedPortfolios];
@@ -2325,7 +2340,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: "1px solid #dee2e6",
+                          borderRight: `1px solid ${theme.palette.divider}`,
+                          color: theme.palette.text.primary,
                         }}
                       >
                         <input
@@ -2341,7 +2357,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: "1px solid #dee2e6",
+                          borderRight: `1px solid ${theme.palette.divider}`,
+                          color: theme.palette.text.primary,
                         }}
                       >
                         {editingPortfolioId === portfolio.id ? (
@@ -2443,7 +2460,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: "1px solid #dee2e6",
+                          borderRight: `1px solid ${theme.palette.divider}`,
+                          color: theme.palette.text.primary,
                         }}
                       >
                         {portfolio.filename}
@@ -2452,7 +2470,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          borderRight: "1px solid #dee2e6",
+                          borderRight: `1px solid ${theme.palette.divider}`,
+                          color: theme.palette.text.primary,
                         }}
                       >
                         {portfolio.row_count}
@@ -2461,7 +2480,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          borderRight: "1px solid #dee2e6",
+                          borderRight: `1px solid ${theme.palette.divider}`,
+                          color: theme.palette.text.primary,
                         }}
                       >
                         {new Date(portfolio.upload_date).toLocaleDateString()}
@@ -2469,7 +2489,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: "1px solid #dee2e6",
+                          borderRight: `1px solid ${theme.palette.divider}`,
+                          color: theme.palette.text.primary,
                         }}
                       >
                         {editingStrategyId === portfolio.id ? (
@@ -2582,6 +2603,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
+                          color: theme.palette.text.primary,
                         }}
                       >
                         <div
@@ -2643,8 +2665,21 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       </td>
                     </tr>
                     {expandedPortfolios.includes(portfolio.id) && (
-                      <tr style={{ backgroundColor: "#f8f9fa" }}>
-                        <td colSpan={7} style={{ padding: "1rem" }}>
+                      <tr
+                        style={{
+                          backgroundColor:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.background.default
+                              : theme.palette.grey[100],
+                        }}
+                      >
+                        <td
+                          colSpan={7}
+                          style={{
+                            padding: "1rem",
+                            color: theme.palette.text.secondary,
+                          }}
+                        >
                           <div style={{ fontSize: "0.85rem" }}>
                             {portfolio.date_range_start &&
                               portfolio.date_range_end && (
