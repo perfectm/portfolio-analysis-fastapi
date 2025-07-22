@@ -999,9 +999,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color: "#dc3545",
                           }}
                         >
-                          {analysisResults.blended_result.metrics.max_drawdown_percent?.toFixed(
-                            2
-                          )}
+                          {(
+                            analysisResults.blended_result.metrics
+                              .max_drawdown_percent * 100
+                          )?.toFixed(2)}
                           %
                         </div>
                       </div>
@@ -1034,9 +1035,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 : "#dc3545",
                           }}
                         >
-                          {analysisResults.blended_result.metrics.cagr?.toFixed(
-                            2
-                          )}
+                          {(
+                            analysisResults.blended_result.metrics.cagr * 100
+                          )?.toFixed(2)}
                           %
                         </div>
                       </div>
@@ -1177,17 +1178,18 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             fontWeight: "bold",
                             color:
                               (analysisResults.blended_result.metrics
-                                .annual_volatility || 0) <= 15
+                                .annual_volatility * 100 || 0) <= 15
                                 ? "#28a745"
                                 : (analysisResults.blended_result.metrics
-                                    .annual_volatility || 0) <= 25
+                                    .annual_volatility * 100 || 0) <= 25
                                 ? "#ffc107"
                                 : "#dc3545",
                           }}
                         >
-                          {analysisResults.blended_result.metrics.annual_volatility?.toFixed(
-                            2
-                          )}
+                          {(
+                            analysisResults.blended_result.metrics
+                              .annual_volatility * 100
+                          )?.toFixed(2)}
                           %
                         </div>
                       </div>
@@ -1385,9 +1387,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     color: "#dc3545",
                                   }}
                                 >
-                                  {result.metrics.max_drawdown_percent?.toFixed(
-                                    2
-                                  )}
+                                  {(
+                                    result.metrics.max_drawdown_percent * 100
+                                  )?.toFixed(2)}
                                   %
                                 </div>
                               </div>
@@ -1412,7 +1414,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                         : "#dc3545",
                                   }}
                                 >
-                                  {result.metrics.cagr?.toFixed(2)}%
+                                  {(result.metrics.cagr * 100)?.toFixed(2)}%
                                 </div>
                               </div>
 
@@ -1517,16 +1519,18 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontSize: "1.1rem",
                                     fontWeight: "bold",
                                     color:
-                                      (result.metrics.annual_volatility || 0) <=
-                                      15
+                                      (result.metrics.annual_volatility * 100 ||
+                                        0) <= 15
                                         ? "#28a745"
-                                        : (result.metrics.annual_volatility ||
-                                            0) <= 25
+                                        : (result.metrics.annual_volatility *
+                                            100 || 0) <= 25
                                         ? "#ffc107"
                                         : "#dc3545",
                                   }}
                                 >
-                                  {result.metrics.annual_volatility?.toFixed(2)}
+                                  {(
+                                    result.metrics.annual_volatility * 100
+                                  )?.toFixed(2)}
                                   %
                                 </div>
                               </div>
