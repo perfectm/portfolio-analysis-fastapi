@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { portfolioAPI, API_BASE_URL } from "../services/api";
 
 interface Portfolio {
@@ -9,6 +9,7 @@ interface Portfolio {
   row_count: number;
   date_range_start?: string;
   date_range_end?: string;
+  strategy?: string;
 }
 
 interface AnalysisResult {
@@ -58,6 +59,11 @@ export default function Portfolios() {
     null
   );
   const [editingName, setEditingName] = useState<string>("");
+  const [expandedPortfolios, setExpandedPortfolios] = useState<number[]>([]);
+  const [editingStrategyId, setEditingStrategyId] = useState<number | null>(
+    null
+  );
+  const [editingStrategy, setEditingStrategy] = useState<string>("");
 
   // Weighting state
   const [weightingMethod, setWeightingMethod] = useState<"equal" | "custom">(
@@ -155,6 +161,43 @@ export default function Portfolios() {
     } catch (err) {
       alert("Failed to rename portfolio");
       console.error("Error renaming portfolio:", err);
+    }
+  };
+
+  const startEditingStrategy = (portfolio: Portfolio) => {
+    setEditingStrategyId(portfolio.id);
+    setEditingStrategy(portfolio.strategy || "");
+  };
+
+  const cancelEditingStrategy = () => {
+    setEditingStrategyId(null);
+    setEditingStrategy("");
+  };
+
+  const saveStrategy = async (portfolioId: number) => {
+    try {
+      const response = await portfolioAPI.updatePortfolioStrategy(
+        portfolioId,
+        editingStrategy.trim()
+      );
+
+      if (response.success) {
+        // Update the local state
+        setPortfolios(
+          portfolios.map((p) =>
+            p.id === portfolioId
+              ? { ...p, strategy: editingStrategy.trim() }
+              : p
+          )
+        );
+        setEditingStrategyId(null);
+        setEditingStrategy("");
+      } else {
+        alert(response.error || "Failed to update strategy");
+      }
+    } catch (err) {
+      alert("Failed to update strategy");
+      console.error("Error updating strategy:", err);
     }
   };
 
@@ -1711,163 +1754,485 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
             </div>
           )}
 
-          <div className="portfolios-grid">
-            {portfolios.map((portfolio) => (
-              <div
-                key={portfolio.id}
-                className="portfolio-card"
-                style={{
-                  border: selectedPortfolios.includes(portfolio.id)
-                    ? "2px solid #007bff"
-                    : "1px solid #e9ecef",
-                  background: selectedPortfolios.includes(portfolio.id)
-                    ? "#f0f8ff"
-                    : "#fff",
-                }}
-              >
-                <div
+          {/* Compact Portfolio Table */}
+          <div style={{ overflowX: "auto", marginTop: "1rem" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "0.9rem",
+              }}
+            >
+              <thead>
+                <tr
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    marginBottom: "1rem",
+                    backgroundColor: "#f8f9fa",
+                    borderBottom: "2px solid #dee2e6",
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedPortfolios.includes(portfolio.id)}
-                    onChange={() => togglePortfolioSelection(portfolio.id)}
+                  <th
                     style={{
-                      marginRight: "0.75rem",
-                      transform: "scale(1.2)",
-                      cursor: "pointer",
+                      padding: "0.75rem 0.5rem",
+                      textAlign: "left",
+                      borderRight: "1px solid #dee2e6",
                     }}
-                  />
-                  {editingPortfolioId === portfolio.id ? (
-                    <div
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectedPortfolios.length === portfolios.length &&
+                        portfolios.length > 0
+                      }
+                      onChange={() => {
+                        if (selectedPortfolios.length === portfolios.length) {
+                          setSelectedPortfolios([]);
+                        } else {
+                          setSelectedPortfolios(portfolios.map((p) => p.id));
+                        }
+                      }}
+                      style={{ transform: "scale(1.2)" }}
+                    />
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      textAlign: "left",
+                      borderRight: "1px solid #dee2e6",
+                      minWidth: "150px",
+                    }}
+                  >
+                    Portfolio
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      textAlign: "left",
+                      borderRight: "1px solid #dee2e6",
+                      minWidth: "120px",
+                    }}
+                  >
+                    File
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      textAlign: "center",
+                      borderRight: "1px solid #dee2e6",
+                      minWidth: "80px",
+                    }}
+                  >
+                    Records
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      textAlign: "center",
+                      borderRight: "1px solid #dee2e6",
+                      minWidth: "100px",
+                    }}
+                  >
+                    Uploaded
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      textAlign: "left",
+                      borderRight: "1px solid #dee2e6",
+                      minWidth: "150px",
+                    }}
+                  >
+                    Strategy
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 0.5rem",
+                      textAlign: "center",
+                      minWidth: "120px",
+                    }}
+                  >
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {portfolios.map((portfolio) => (
+                  <React.Fragment key={portfolio.id}>
+                    <tr
                       style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
+                        borderBottom: "1px solid #dee2e6",
+                        backgroundColor: selectedPortfolios.includes(
+                          portfolio.id
+                        )
+                          ? "#f0f8ff"
+                          : "#fff",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => {
+                        const newExpanded = [...expandedPortfolios];
+                        const index = newExpanded.indexOf(portfolio.id);
+                        if (index > -1) {
+                          newExpanded.splice(index, 1);
+                        } else {
+                          newExpanded.push(portfolio.id);
+                        }
+                        setExpandedPortfolios(newExpanded);
                       }}
                     >
-                      <input
-                        type="text"
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            saveRename(portfolio.id);
-                          } else if (e.key === "Escape") {
-                            cancelRenaming();
-                          }
-                        }}
+                      <td
                         style={{
-                          flex: 1,
-                          padding: "0.25rem 0.5rem",
-                          border: "1px solid #ccc",
-                          borderRadius: "4px",
-                          fontSize: "1.1rem",
-                          fontWeight: "bold",
+                          padding: "0.75rem 0.5rem",
+                          borderRight: "1px solid #dee2e6",
                         }}
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => saveRename(portfolio.id)}
-                        style={{
-                          padding: "0.25rem 0.5rem",
-                          background: "#28a745",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "0.8rem",
-                        }}
-                        title="Save (Enter)"
                       >
-                        ✓
-                      </button>
-                      <button
-                        onClick={cancelRenaming}
+                        <input
+                          type="checkbox"
+                          checked={selectedPortfolios.includes(portfolio.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            togglePortfolioSelection(portfolio.id);
+                          }}
+                          style={{ transform: "scale(1.2)" }}
+                        />
+                      </td>
+                      <td
                         style={{
-                          padding: "0.25rem 0.5rem",
-                          background: "#dc3545",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "0.8rem",
+                          padding: "0.75rem 0.5rem",
+                          borderRight: "1px solid #dee2e6",
                         }}
-                        title="Cancel (Escape)"
                       >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        flex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <h3 style={{ margin: 0 }}>{portfolio.name}</h3>
-                      <button
-                        onClick={() => startRenaming(portfolio)}
+                        {editingPortfolioId === portfolio.id ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  saveRename(portfolio.id);
+                                } else if (e.key === "Escape") {
+                                  cancelRenaming();
+                                }
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: "0.25rem",
+                                border: "1px solid #ccc",
+                                borderRadius: "4px",
+                                fontSize: "0.9rem",
+                              }}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveRename(portfolio.id);
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#28a745",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                              }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelRenaming();
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#dc3545",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <span style={{ fontWeight: "bold" }}>
+                              {portfolio.name}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startRenaming(portfolio);
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#007bff",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                                marginLeft: "0.5rem",
+                              }}
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td
                         style={{
-                          padding: "0.25rem 0.5rem",
-                          background: "#007bff",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "0.8rem",
-                          marginLeft: "0.5rem",
+                          padding: "0.75rem 0.5rem",
+                          borderRight: "1px solid #dee2e6",
                         }}
-                        title="Rename portfolio"
                       >
-                        ✏️
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <p>
-                  <strong>File:</strong> {portfolio.filename}
-                </p>
-                <p>
-                  <strong>Uploaded:</strong>{" "}
-                  {new Date(portfolio.upload_date).toLocaleDateString()}
-                </p>
-                <p>
-                  <strong>Records:</strong> {portfolio.row_count}
-                </p>
-                {portfolio.date_range_start && portfolio.date_range_end && (
-                  <p>
-                    <strong>Date Range:</strong>{" "}
-                    {new Date(portfolio.date_range_start).toLocaleDateString()}{" "}
-                    - {new Date(portfolio.date_range_end).toLocaleDateString()}
-                  </p>
-                )}
-
-                <div className="portfolio-actions">
-                  <button
-                    onClick={() =>
-                      window.open(`/portfolio/${portfolio.id}`, "_blank")
-                    }
-                    className="btn-primary"
-                  >
-                    View Data
-                  </button>
-                  <button
-                    onClick={() => deletePortfolio(portfolio.id)}
-                    className="btn-danger"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
+                        {portfolio.filename}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.75rem 0.5rem",
+                          textAlign: "center",
+                          borderRight: "1px solid #dee2e6",
+                        }}
+                      >
+                        {portfolio.row_count}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.75rem 0.5rem",
+                          textAlign: "center",
+                          borderRight: "1px solid #dee2e6",
+                        }}
+                      >
+                        {new Date(portfolio.upload_date).toLocaleDateString()}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.75rem 0.5rem",
+                          borderRight: "1px solid #dee2e6",
+                        }}
+                      >
+                        {editingStrategyId === portfolio.id ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={editingStrategy}
+                              onChange={(e) =>
+                                setEditingStrategy(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  saveStrategy(portfolio.id);
+                                } else if (e.key === "Escape") {
+                                  cancelEditingStrategy();
+                                }
+                              }}
+                              placeholder="Enter strategy..."
+                              style={{
+                                flex: 1,
+                                padding: "0.25rem",
+                                border: "1px solid #ccc",
+                                borderRadius: "4px",
+                                fontSize: "0.9rem",
+                              }}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveStrategy(portfolio.id);
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#28a745",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                              }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelEditingStrategy();
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#dc3545",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontStyle: portfolio.strategy
+                                  ? "normal"
+                                  : "italic",
+                                color: portfolio.strategy ? "#333" : "#999",
+                              }}
+                            >
+                              {portfolio.strategy || "No strategy set"}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingStrategy(portfolio);
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#007bff",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                                marginLeft: "0.5rem",
+                              }}
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.75rem 0.5rem",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(
+                                `/portfolio/${portfolio.id}`,
+                                "_blank"
+                              );
+                            }}
+                            style={{
+                              padding: "0.25rem 0.5rem",
+                              background: "#007bff",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "0.7rem",
+                            }}
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePortfolio(portfolio.id);
+                            }}
+                            style={{
+                              padding: "0.25rem 0.5rem",
+                              background: "#dc3545",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "0.7rem",
+                            }}
+                          >
+                            Delete
+                          </button>
+                          <span
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.8rem",
+                              color: "#6c757d",
+                            }}
+                          >
+                            {expandedPortfolios.includes(portfolio.id)
+                              ? "▼"
+                              : "▶"}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedPortfolios.includes(portfolio.id) && (
+                      <tr style={{ backgroundColor: "#f8f9fa" }}>
+                        <td colSpan={7} style={{ padding: "1rem" }}>
+                          <div style={{ fontSize: "0.85rem" }}>
+                            {portfolio.date_range_start &&
+                              portfolio.date_range_end && (
+                                <p style={{ margin: "0.5rem 0" }}>
+                                  <strong>Date Range:</strong>{" "}
+                                  {new Date(
+                                    portfolio.date_range_start
+                                  ).toLocaleDateString()}{" "}
+                                  -{" "}
+                                  {new Date(
+                                    portfolio.date_range_end
+                                  ).toLocaleDateString()}
+                                </p>
+                              )}
+                            <p
+                              style={{
+                                margin: "0.5rem 0",
+                                fontStyle: "italic",
+                                color: "#6c757d",
+                              }}
+                            >
+                              Click the arrow to expand/collapse portfolio
+                              details
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
         </>
       )}

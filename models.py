@@ -22,6 +22,7 @@ class Portfolio(Base):
     date_range_start = Column(DateTime)  # First date in the data
     date_range_end = Column(DateTime)    # Last date in the data
     file_hash = Column(String(64), index=True)  # SHA-256 hash for duplicate detection
+    strategy = Column(String(255), nullable=True)  # Trading strategy description
     
     # Relationships
     raw_data = relationship("PortfolioData", back_populates="portfolio", cascade="all, delete-orphan")

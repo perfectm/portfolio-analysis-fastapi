@@ -388,6 +388,14 @@ export const portfolioAPI = {
     });
   },
 
+  // Update portfolio strategy
+  updatePortfolioStrategy: async (portfolioId: number, newStrategy: string): Promise<{ success: boolean; message?: string; error?: string; portfolio_id?: number; old_strategy?: string; new_strategy?: string }> => {
+    return apiCall(`/api/portfolio/${portfolioId}/strategy`, {
+      method: 'PUT',
+      body: JSON.stringify({ strategy: newStrategy }),
+    });
+  },
+
   // Health check
   healthCheck: async (): Promise<{ status: string }> => {
     return apiCall('/');

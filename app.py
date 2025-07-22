@@ -255,6 +255,46 @@ async def update_portfolio_name(portfolio_id: int, request: Request, db: Session
         return {"success": False, "error": str(e)}
 
 
+@app.put("/api/portfolio/{portfolio_id}/strategy")
+async def update_portfolio_strategy(portfolio_id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    Update portfolio strategy
+    """
+    try:
+        # Get the new strategy from the request body
+        body = await request.json()
+        new_strategy = body.get("strategy", "").strip()
+        
+        if len(new_strategy) > 255:
+            return {"success": False, "error": "Strategy description too long (max 255 characters)"}
+        
+        # Check if portfolio exists
+        portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+        if not portfolio:
+            return {"success": False, "error": f"Portfolio with ID {portfolio_id} not found"}
+        
+        old_strategy = portfolio.strategy
+        
+        # Update the portfolio strategy
+        success = PortfolioService.update_portfolio_strategy(db, portfolio_id, new_strategy)
+        
+        if success:
+            logger.info(f"Portfolio {portfolio_id} strategy updated from '{old_strategy}' to '{new_strategy}'")
+            return {
+                "success": True, 
+                "message": f"Portfolio strategy updated",
+                "portfolio_id": portfolio_id,
+                "old_strategy": old_strategy,
+                "new_strategy": new_strategy
+            }
+        else:
+            return {"success": False, "error": "Failed to update portfolio strategy"}
+            
+    except Exception as e:
+        logger.error(f"Error updating portfolio {portfolio_id} strategy: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/strategies")
 async def get_strategies(
     limit: int = 100,

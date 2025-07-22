@@ -366,6 +366,28 @@ class PortfolioService:
             raise
     
     @staticmethod
+    def update_portfolio_strategy(db: Session, portfolio_id: int, new_strategy: str) -> bool:
+        """
+        Update portfolio strategy
+        """
+        try:
+            portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+            if not portfolio:
+                return False
+            
+            old_strategy = portfolio.strategy
+            portfolio.strategy = new_strategy.strip() if new_strategy else None
+            db.commit()
+            
+            logger.info(f"Updated portfolio {portfolio_id} strategy from '{old_strategy}' to '{new_strategy}'")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating portfolio strategy: {e}")
+            db.rollback()
+            raise
+    
+    @staticmethod
     def get_recent_analysis_results(
         db: Session,
         portfolio_id: Optional[int] = None,
