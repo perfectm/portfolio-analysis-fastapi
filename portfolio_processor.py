@@ -244,11 +244,13 @@ def _calculate_portfolio_metrics(
             # Calculate additional risk metrics
             sortino_ratio = _calculate_sortino_ratio(clean_df, rf_rate)
             ulcer_index = _calculate_ulcer_index(clean_df)
+            upi = _calculate_upi(clean_df, rf_rate)
             kelly_criterion = _calculate_kelly_criterion(clean_df)
             
             logger.info(f"  - Sharpe ratio: {sharpe_ratio:.4f}")
             logger.info(f"  - Sortino ratio: {sortino_ratio:.4f}")
             logger.info(f"  - Ulcer index: {ulcer_index:.4f}")
+            logger.info(f"  - UPI: {upi:.4f}")
             logger.info(f"  - Kelly criterion: {kelly_criterion:.4f}")
             logger.info(f"  - Annual volatility: {strategy_std:.4f}")
             
@@ -264,6 +266,7 @@ def _calculate_portfolio_metrics(
         'sharpe_ratio': float(sharpe_ratio),
         'sortino_ratio': float(sortino_ratio),
         'ulcer_index': float(ulcer_index),
+        'upi': float(upi),
         'kelly_criterion': float(kelly_criterion),
         'cagr': float(strategy_mean_return),  # Already as decimal
         'annual_volatility': float(strategy_std),  # Already as decimal
@@ -434,6 +437,45 @@ def _calculate_kelly_criterion(clean_df: pd.DataFrame) -> float:
     logger.info(f"Kelly Criterion: {kelly_percentage:.4f} ({kelly_percentage*100:.2f}%)")
     
     return kelly_percentage
+
+
+def _calculate_upi(clean_df: pd.DataFrame, rf_rate: float) -> float:
+    """Calculate UPI (Ulcer Performance Index) - risk-adjusted returns using Ulcer Index"""
+    # UPI = (Annualized Return - Risk Free Rate) / Ulcer Index
+    # This measures excess return per unit of downside risk
+    
+    # Calculate annualized return (CAGR)
+    total_return = (clean_df['Account Value'].iloc[-1] / clean_df['Account Value'].iloc[0]) - 1
+    num_years = _calculate_years_fraction(clean_df['Date'].min(), clean_df['Date'].max())
+    
+    if num_years > 0:
+        annualized_return = (1 + total_return) ** (1/num_years) - 1
+    else:
+        annualized_return = total_return
+    
+    # Calculate Ulcer Index
+    running_max = clean_df['Account Value'].expanding().max()
+    drawdown_pct = ((clean_df['Account Value'] - running_max) / running_max) * 100
+    ulcer_index = np.sqrt((drawdown_pct ** 2).mean())
+    
+    if ulcer_index == 0:
+        logger.info("UPI: Ulcer Index is zero, cannot calculate UPI")
+        return 0.0
+    
+    # Calculate excess return over risk-free rate
+    excess_return = annualized_return - rf_rate
+    
+    # Calculate UPI
+    upi = excess_return / (ulcer_index / 100)  # Convert ulcer_index back to decimal
+    
+    logger.info(f"UPI Calculation:")
+    logger.info(f"Annualized Return: {annualized_return:.4f} ({annualized_return*100:.2f}%)")
+    logger.info(f"Risk-Free Rate: {rf_rate:.4f} ({rf_rate*100:.2f}%)")
+    logger.info(f"Excess Return: {excess_return:.4f} ({excess_return*100:.2f}%)")
+    logger.info(f"Ulcer Index: {ulcer_index:.4f}")
+    logger.info(f"UPI: {upi:.4f}")
+    
+    return upi
 
 
 def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:

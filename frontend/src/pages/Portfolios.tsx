@@ -20,6 +20,7 @@ interface AnalysisResult {
     sharpe_ratio: number;
     sortino_ratio: number;
     ulcer_index: number;
+    upi: number;
     kelly_criterion: number;
     total_return: number;
     total_pl: number;
@@ -79,6 +80,7 @@ export default function Portfolios() {
 
   // Analysis parameters
   const [startingCapital, setStartingCapital] = useState<number>(100000);
+  const [riskFreeRate, setRiskFreeRate] = useState<number>(4.3);
 
   // Force a fresh deployment with checkboxes
 
@@ -419,6 +421,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
       let requestBody: any = {
         portfolio_ids: selectedPortfolios,
         starting_capital: startingCapital,
+        rf_rate: riskFreeRate / 100, // Convert percentage to decimal
       };
 
       // Add weighting parameters for multiple portfolios if using weighted endpoint
@@ -643,6 +646,52 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 >
                   The initial capital amount for portfolio analysis. Default is
                   $100,000.
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1rem" }}>
+                <label
+                  htmlFor="riskFreeRate"
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontWeight: "bold",
+                    color: "#495057",
+                  }}
+                >
+                  📈 Risk-Free Rate (%)
+                </label>
+                <input
+                  id="riskFreeRate"
+                  type="number"
+                  min="0"
+                  max="20"
+                  step="0.1"
+                  value={riskFreeRate}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value) && value >= 0) {
+                      setRiskFreeRate(value);
+                    }
+                  }}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #ced4da",
+                    borderRadius: "4px",
+                    width: "200px",
+                    fontSize: "1rem",
+                  }}
+                  placeholder="4.3"
+                />
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#6c757d",
+                    marginTop: "0.25rem",
+                  }}
+                >
+                  The risk-free rate used for Sharpe ratio and UPI calculations.
+                  Default is 4.3%.
                 </div>
               </div>
             </div>
@@ -1433,6 +1482,43 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             : "N/A"}
                         </div>
                       </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          UPI (Ulcer Performance Index)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics.upi >= 1.0
+                                ? "#28a745"
+                                : analysisResults.blended_result.metrics.upi >=
+                                  0.5
+                                ? "#ffc107"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.upi?.toFixed(
+                            3
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Blended Portfolio Plots */}
@@ -1845,6 +1931,32 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                         result.metrics.kelly_criterion * 100
                                       ).toFixed(1)}%`
                                     : "N/A"}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  UPI (Ulcer Performance Index)
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.upi >= 1.0
+                                        ? "#28a745"
+                                        : result.metrics.upi >= 0.5
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.upi?.toFixed(3)}
                                 </div>
                               </div>
 
