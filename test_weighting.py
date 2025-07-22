@@ -62,7 +62,8 @@ try:
     blended_df1, blended_metrics1, correlation_data1 = create_blended_portfolio(
         files_data,
         starting_capital=100000,
-        weights=None  # Should default to equal weighting
+        weights=None,  # Should default to equal weighting
+        use_capital_allocation=False  # Test strategy combination mode
     )
     
     if blended_metrics1:
@@ -93,7 +94,8 @@ try:
     blended_df2, blended_metrics2, correlation_data2 = create_blended_portfolio(
         files_data,
         starting_capital=100000,
-        weights=custom_weights
+        weights=custom_weights,
+        use_capital_allocation=True  # Test capital allocation mode
     )
     
     if blended_metrics2:
@@ -123,7 +125,8 @@ try:
     blended_df3, blended_metrics3, correlation_data3 = create_blended_portfolio(
         files_data,
         starting_capital=100000,
-        weights=aggressive_weights
+        weights=aggressive_weights,
+        use_capital_allocation=True  # Test capital allocation mode
     )
     
     if blended_metrics3:
@@ -156,7 +159,8 @@ try:
             blended_df4, blended_metrics4, correlation_data4 = create_blended_portfolio(
                 files_data,
                 starting_capital=100000,
-                weights=unnormalized_weights
+                weights=unnormalized_weights,
+                use_capital_allocation=True  # Test capital allocation mode
             )
             
             if blended_metrics4:

@@ -197,7 +197,8 @@ class PortfolioOptimizer:
                 sma_window=self.sma_window,
                 use_trading_filter=self.use_trading_filter,
                 starting_capital=self.starting_capital,
-                weights=weights.tolist()
+                weights=weights.tolist(),
+                use_capital_allocation=True  # For optimization, use capital allocation
             )
             
             if blended_df is None or blended_metrics is None:
@@ -396,7 +397,8 @@ class PortfolioOptimizer:
                 sma_window=self.sma_window,
                 use_trading_filter=self.use_trading_filter,
                 starting_capital=self.starting_capital,
-                weights=weights.tolist()
+                weights=weights.tolist(),
+                use_capital_allocation=True  # For optimization, use capital allocation
             )
             
             if blended_metrics is not None:
