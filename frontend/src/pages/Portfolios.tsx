@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { portfolioAPI, API_BASE_URL } from "../services/api";
+import { useTheme, Paper, Box } from "@mui/material";
 
 interface Portfolio {
   id: number;
@@ -53,6 +54,7 @@ interface AnalysisResults {
 }
 
 export default function Portfolios() {
+  const theme = useTheme();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -518,18 +520,19 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
       ) : (
         <>
           {/* Selection Controls */}
-          <div
+          <Paper
             className="selection-controls"
-            style={{
+            sx={{
               display: "flex",
               alignItems: "center",
               gap: "1rem",
-              marginBottom: "1.5rem",
-              padding: "1rem",
-              background: "#f8f9fa",
+              mb: "1.5rem",
+              p: "1rem",
               borderRadius: "8px",
-              border: "1px solid #e9ecef",
+              border: `1px solid ${theme.palette.divider}`,
+              background: theme.palette.background.paper,
             }}
+            elevation={theme.palette.mode === "dark" ? 2 : 0}
           >
             <div
               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
@@ -585,21 +588,75 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     selectedPortfolios.length !== 1 ? "s" : ""
                   }`}
             </button>
-          </div>
+          </Paper>
+          <button
+            onClick={selectAllPortfolios}
+            className="btn btn-secondary"
+            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
+          >
+            Select All
+          </button>
+          <button
+            onClick={clearSelection}
+            className="btn btn-secondary"
+            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
+          >
+            Clear Selection
+          </button>
+          {selectedPortfolios.length >= 2 && (
+            <button
+              onClick={optimizePortfolioWeights}
+              disabled={analyzing || selectedPortfolios.length > 6}
+              className="btn btn-success"
+              style={{
+                padding: "0.5rem 1.5rem",
+                fontSize: "0.9rem",
+                marginRight: "0.5rem",
+                opacity: analyzing || selectedPortfolios.length > 6 ? 0.5 : 1,
+              }}
+              title="Find optimal weights to maximize return while minimizing drawdown"
+            >
+              {analyzing ? "Optimizing..." : "🎯 Optimize Weights"}
+            </button>
+          )}
+          <button
+            onClick={analyzeSelectedPortfolios}
+            disabled={selectedPortfolios.length === 0 || analyzing}
+            className="btn btn-primary"
+            style={{
+              padding: "0.5rem 1.5rem",
+              fontSize: "0.9rem",
+              marginLeft: selectedPortfolios.length >= 2 ? "0" : "auto",
+              opacity: selectedPortfolios.length === 0 ? 0.5 : 1,
+            }}
+          >
+            {analyzing
+              ? "Analyzing..."
+              : `Analyze ${selectedPortfolios.length} Portfolio${
+                  selectedPortfolios.length !== 1 ? "s" : ""
+                }`}
+          </button>
+          {/* End Selection Controls */}
 
           {/* Analysis Parameters */}
           {selectedPortfolios.length > 0 && (
-            <div
+            <Paper
               className="analysis-parameters"
-              style={{
-                marginBottom: "1.5rem",
-                padding: "1.5rem",
-                background: "#f8f9fa",
+              sx={{
+                mb: "1.5rem",
+                p: "1.5rem",
                 borderRadius: "8px",
-                border: "1px solid #e9ecef",
+                border: `1px solid ${theme.palette.divider}`,
+                background: theme.palette.background.paper,
               }}
+              elevation={theme.palette.mode === "dark" ? 2 : 0}
             >
-              <h3 style={{ marginBottom: "1rem", color: "#495057" }}>
+              <h3
+                style={{
+                  marginBottom: "1rem",
+                  color: theme.palette.text.primary,
+                }}
+              >
                 ⚙️ Analysis Parameters
               </h3>
 
@@ -610,7 +667,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     display: "block",
                     marginBottom: "0.5rem",
                     fontWeight: "bold",
-                    color: "#495057",
+                    color: theme.palette.text.primary,
                   }}
                 >
                   💰 Starting Capital ($)
@@ -640,7 +697,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 <div
                   style={{
                     fontSize: "0.85rem",
-                    color: "#6c757d",
+                    color: theme.palette.text.secondary,
                     marginTop: "0.25rem",
                   }}
                 >
@@ -656,7 +713,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     display: "block",
                     marginBottom: "0.5rem",
                     fontWeight: "bold",
-                    color: "#495057",
+                    color: theme.palette.text.primary,
                   }}
                 >
                   📈 Risk-Free Rate (%)
@@ -686,7 +743,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 <div
                   style={{
                     fontSize: "0.85rem",
-                    color: "#6c757d",
+                    color: theme.palette.text.secondary,
                     marginTop: "0.25rem",
                   }}
                 >
@@ -694,22 +751,28 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   Default is 4.3%.
                 </div>
               </div>
-            </div>
+            </Paper>
           )}
 
           {/* Weighting Controls */}
           {selectedPortfolios.length > 1 && (
-            <div
+            <Paper
               className="weighting-controls"
-              style={{
-                marginBottom: "1.5rem",
-                padding: "1.5rem",
-                background: "#f8f9fa",
+              sx={{
+                mb: "1.5rem",
+                p: "1.5rem",
                 borderRadius: "8px",
-                border: "1px solid #e9ecef",
+                border: `1px solid ${theme.palette.divider}`,
+                background: theme.palette.background.paper,
               }}
+              elevation={theme.palette.mode === "dark" ? 2 : 0}
             >
-              <h3 style={{ marginBottom: "1rem", color: "#495057" }}>
+              <h3
+                style={{
+                  marginBottom: "1rem",
+                  color: theme.palette.text.primary,
+                }}
+              >
                 ⚖️ Portfolio Weighting
               </h3>
 
@@ -789,14 +852,15 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   );
                   const weight = portfolioWeights[portfolioId] || 0;
                   return (
-                    <div
+                    <Paper
                       key={portfolioId}
-                      style={{
-                        padding: "1rem",
-                        background: "#fff",
+                      sx={{
+                        p: "1rem",
+                        background: theme.palette.background.paper,
                         borderRadius: "6px",
-                        border: "1px solid #dee2e6",
+                        border: `1px solid ${theme.palette.divider}`,
                       }}
+                      elevation={theme.palette.mode === "dark" ? 1 : 0}
                     >
                       <div
                         style={{ fontWeight: "bold", marginBottom: "0.5rem" }}
@@ -837,7 +901,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           ({weight.toFixed(2)}x)
                         </span>
                       </div>
-                    </div>
+                    </Paper>
                   );
                 })}
               </div>
@@ -878,7 +942,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   </button>
                 )}
               </div>
-            </div>
+            </Paper>
           )}
 
           {/* Analysis Results */}
