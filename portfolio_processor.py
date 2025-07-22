@@ -241,7 +241,13 @@ def _calculate_portfolio_metrics(
                 clean_df, rf_rate, actual_starting_capital
             )
             
+            # Calculate additional risk metrics
+            sortino_ratio = _calculate_sortino_ratio(clean_df, rf_rate)
+            ulcer_index = _calculate_ulcer_index(clean_df)
+            
             logger.info(f"  - Sharpe ratio: {sharpe_ratio:.4f}")
+            logger.info(f"  - Sortino ratio: {sortino_ratio:.4f}")
+            logger.info(f"  - Ulcer index: {ulcer_index:.4f}")
             logger.info(f"  - Annual volatility: {strategy_std:.4f}")
             
         else:
@@ -254,6 +260,8 @@ def _calculate_portfolio_metrics(
     
     return {
         'sharpe_ratio': float(sharpe_ratio),
+        'sortino_ratio': float(sortino_ratio),
+        'ulcer_index': float(ulcer_index),
         'cagr': float(strategy_mean_return),  # Already as decimal
         'annual_volatility': float(strategy_std),  # Already as decimal
         'total_return': float(total_return),  # Already as decimal
@@ -326,6 +334,57 @@ def _calculate_sharpe_ratio(
     strategy_std = volatility * np.sqrt(252)
     
     return sharpe_ratio, strategy_std
+
+
+def _calculate_sortino_ratio(
+    clean_df: pd.DataFrame, 
+    rf_rate: float
+) -> float:
+    """Calculate Sortino ratio (risk-adjusted return using downside deviation)"""
+    # Calculate portfolio returns
+    portfolio_returns = clean_df['Account Value'].pct_change().dropna()
+    
+    # Convert annual risk-free rate to daily
+    daily_rf = (1 + rf_rate) ** (1/252) - 1
+    
+    # Calculate excess returns
+    excess_returns = portfolio_returns - daily_rf
+    
+    # Calculate downside deviation (only negative excess returns)
+    downside_returns = excess_returns[excess_returns < 0]
+    downside_deviation = downside_returns.std() if len(downside_returns) > 0 else 0
+    
+    # Annualized Sortino ratio
+    mean_excess_return = excess_returns.mean()
+    sortino_ratio = (mean_excess_return / downside_deviation) * np.sqrt(252) if downside_deviation != 0 else 0
+    
+    logger.info(f"Sortino Ratio Calculation:")
+    logger.info(f"Mean daily excess return: {mean_excess_return:.6f}")
+    logger.info(f"Downside deviation: {downside_deviation:.6f}")
+    logger.info(f"Annualized Sortino Ratio: {sortino_ratio:.4f}")
+    
+    return sortino_ratio
+
+
+def _calculate_ulcer_index(clean_df: pd.DataFrame) -> float:
+    """Calculate Ulcer Index (measure of downside risk)"""
+    # Ulcer Index measures the depth and duration of drawdowns
+    # UI = sqrt(mean(drawdown_percentage^2))
+    
+    # Calculate running maximum (peaks)
+    running_max = clean_df['Account Value'].expanding().max()
+    
+    # Calculate drawdown percentages
+    drawdown_pct = ((clean_df['Account Value'] - running_max) / running_max) * 100
+    
+    # Calculate Ulcer Index
+    ulcer_index = np.sqrt((drawdown_pct ** 2).mean())
+    
+    logger.info(f"Ulcer Index Calculation:")
+    logger.info(f"Mean squared drawdown: {(drawdown_pct ** 2).mean():.4f}")
+    logger.info(f"Ulcer Index: {ulcer_index:.4f}")
+    
+    return ulcer_index
 
 
 def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:

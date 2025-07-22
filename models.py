@@ -81,6 +81,8 @@ class AnalysisResult(Base):
     
     # Key metrics (for easy querying)
     sharpe_ratio = Column(Float)
+    sortino_ratio = Column(Float)
+    ulcer_index = Column(Float)
     mar_ratio = Column(Float)
     cagr = Column(Float)
     annual_volatility = Column(Float)
@@ -89,6 +91,7 @@ class AnalysisResult(Base):
     final_account_value = Column(Float)
     max_drawdown = Column(Float)
     max_drawdown_percent = Column(Float)
+    max_drawdown_date = Column(String(20))  # Date when max drawdown occurred
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

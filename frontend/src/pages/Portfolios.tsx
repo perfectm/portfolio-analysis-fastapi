@@ -18,11 +18,14 @@ interface AnalysisResult {
   portfolio_composition?: Record<string, number>;
   metrics: {
     sharpe_ratio: number;
+    sortino_ratio: number;
+    ulcer_index: number;
     total_return: number;
     total_pl: number;
     final_account_value: number;
     max_drawdown: number;
     max_drawdown_percent: number;
+    max_drawdown_date: string;
     cagr: number;
     annual_volatility: number;
     [key: string]: any;
@@ -1274,6 +1277,116 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           )}
                         </div>
                       </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Sortino Ratio
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics
+                                .sortino_ratio >= 1
+                                ? "#28a745"
+                                : analysisResults.blended_result.metrics
+                                    .sortino_ratio >= 0.5
+                                ? "#ffc107"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.sortino_ratio?.toFixed(
+                            2
+                          )}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Ulcer Index
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              analysisResults.blended_result.metrics
+                                .ulcer_index <= 5
+                                ? "#28a745"
+                                : analysisResults.blended_result.metrics
+                                    .ulcer_index <= 10
+                                ? "#ffc107"
+                                : "#dc3545",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.ulcer_index?.toFixed(
+                            2
+                          )}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: "#f8f9fa",
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Max Drawdown Date
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: "#6c757d",
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics
+                            .max_drawdown_date
+                            ? new Date(
+                                analysisResults.blended_result.metrics.max_drawdown_date
+                              ).toLocaleDateString()
+                            : "N/A"}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Blended Portfolio Plots */}
@@ -1602,6 +1715,83 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                   }}
                                 >
                                   {result.metrics.mar_ratio?.toFixed(2)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Sortino Ratio
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.sortino_ratio >= 1
+                                        ? "#28a745"
+                                        : result.metrics.sortino_ratio >= 0.5
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.sortino_ratio?.toFixed(2)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Ulcer Index
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color:
+                                      result.metrics.ulcer_index <= 5
+                                        ? "#28a745"
+                                        : result.metrics.ulcer_index <= 10
+                                        ? "#ffc107"
+                                        : "#dc3545",
+                                  }}
+                                >
+                                  {result.metrics.ulcer_index?.toFixed(2)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#666",
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Max Drawdown Date
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: "#6c757d",
+                                  }}
+                                >
+                                  {result.metrics.max_drawdown_date
+                                    ? new Date(
+                                        result.metrics.max_drawdown_date
+                                      ).toLocaleDateString()
+                                    : "N/A"}
                                 </div>
                               </div>
                             </div>
