@@ -378,12 +378,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
       if (useWeightedEndpoint) {
         endpoint = `${API_BASE_URL}/api/analyze-portfolios-weighted`;
         requestBody.weighting_method = weightingMethod;
-        if (weightingMethod === "custom") {
-          // Convert weights to array in the same order as portfolio_ids
-          requestBody.weights = selectedPortfolios.map(
-            (id) => portfolioWeights[id] || 0
-          );
-        }
+        // Always send the actual multiplier values, whether equal or custom
+        requestBody.weights = selectedPortfolios.map(
+          (id) => portfolioWeights[id] || 1.0
+        );
       }
 
       console.log("Calling endpoint:", endpoint);

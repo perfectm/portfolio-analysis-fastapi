@@ -1149,9 +1149,15 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         return {"success": False, "error": f"All multipliers must be positive. Multiplier {i+1}: {multiplier}"}
                 
                 portfolio_weights = weights
+            elif weighting_method == "equal":
+                # Equal scaling: 1.0x for each portfolio
+                portfolio_weights = [1.0] * len(portfolio_ids)
+            elif weights:
+                # Use provided weights regardless of method
+                portfolio_weights = weights
             else:
-                # Equal weighting
-                portfolio_weights = [1.0 / len(portfolio_ids)] * len(portfolio_ids)
+                # Fallback to equal scaling
+                portfolio_weights = [1.0] * len(portfolio_ids)
         
         # Get portfolio data from database
         portfolios_data = []
