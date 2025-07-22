@@ -181,28 +181,27 @@ export default function Portfolios() {
     setPortfolioWeights({});
   };
 
-  // Initialize weights for selected portfolios
+  // Initialize multipliers for selected portfolios
   const initializeWeights = (portfolioIds: number[]) => {
     if (weightingMethod === "equal") {
-      const equalWeight =
-        portfolioIds.length > 0 ? 1.0 / portfolioIds.length : 0;
+      // Equal weighting now means 1.0x (full scale) for each portfolio
+      const equalMultiplier = 1.0;
       const newWeights: Record<number, number> = {};
       portfolioIds.forEach((id) => {
-        newWeights[id] = equalWeight;
+        newWeights[id] = equalMultiplier;
       });
       setPortfolioWeights(newWeights);
     } else {
-      // For custom weights, initialize with equal weights if not already set
+      // For custom multipliers, initialize with 1.0x if not already set
       setPortfolioWeights((prev) => {
         const newWeights = { ...prev };
-        const equalWeight =
-          portfolioIds.length > 0 ? 1.0 / portfolioIds.length : 0;
+        const defaultMultiplier = 1.0; // Default to full scale
         portfolioIds.forEach((id) => {
           if (!(id in newWeights)) {
-            newWeights[id] = equalWeight;
+            newWeights[id] = defaultMultiplier;
           }
         });
-        // Remove weights for unselected portfolios
+        // Remove multipliers for unselected portfolios
         Object.keys(newWeights).forEach((key) => {
           const id = parseInt(key);
           if (!portfolioIds.includes(id)) {
@@ -222,32 +221,27 @@ export default function Portfolios() {
     }
   };
 
-  // Handle individual weight change
-  const handleWeightChange = (portfolioId: number, weight: number) => {
+  // Handle individual multiplier change
+  const handleWeightChange = (portfolioId: number, multiplier: number) => {
     setPortfolioWeights((prev) => ({
       ...prev,
-      [portfolioId]: weight,
+      [portfolioId]: multiplier,
     }));
   };
 
-  // Normalize weights to sum to 1.0
-  const normalizeWeights = () => {
-    const weightValues = Object.values(portfolioWeights);
-    const totalWeight = weightValues.reduce((sum, weight) => sum + weight, 0);
-
-    if (totalWeight > 0) {
-      const normalizedWeights: Record<number, number> = {};
-      Object.entries(portfolioWeights).forEach(([id, weight]) => {
-        normalizedWeights[parseInt(id)] = weight / totalWeight;
-      });
-      setPortfolioWeights(normalizedWeights);
-    }
+  // Reset all multipliers to 1.0x (full scale)
+  const resetMultipliers = () => {
+    const resetWeights: Record<number, number> = {};
+    Object.keys(portfolioWeights).forEach((key) => {
+      resetWeights[parseInt(key)] = 1.0;
+    });
+    setPortfolioWeights(resetWeights);
   };
 
-  // Get weight sum for validation
-  const getWeightSum = () => {
+  // Get total portfolio scale for display
+  const getTotalScale = () => {
     return Object.values(portfolioWeights).reduce(
-      (sum, weight) => sum + weight,
+      (sum, multiplier) => sum + multiplier,
       0
     );
   };
@@ -301,9 +295,9 @@ export default function Portfolios() {
           const message = `
 Optimization completed successfully!
 
-Optimal weights found:
+Optimal multipliers found:
 ${Object.entries(optimizationResult.optimal_weights)
-  .map(([name, weight]) => `• ${name}: ${(Number(weight) * 100).toFixed(1)}%`)
+  .map(([name, weight]) => `• ${name}: ${Number(weight).toFixed(2)}x`)
   .join("\n")}
 
 Expected Performance:
@@ -352,14 +346,14 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
       return;
     }
 
-    // Validate weights if using custom weighting
+    // Validate multipliers if using custom weighting
     if (weightingMethod === "custom" && selectedPortfolios.length > 1) {
-      const weightSum = getWeightSum();
-      if (Math.abs(weightSum - 1.0) > 0.001) {
+      const multipliers = Object.values(portfolioWeights);
+      // Check that all multipliers are positive
+      const hasInvalidMultipliers = multipliers.some((m) => m <= 0);
+      if (hasInvalidMultipliers) {
         alert(
-          `Portfolio weights must sum to 1.0 (100%). Current sum: ${(
-            weightSum * 100
-          ).toFixed(1)}%`
+          "All portfolio multipliers must be positive numbers (greater than 0)"
         );
         return;
       }
@@ -637,12 +631,12 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 }}
               >
                 💡 <strong>Tip:</strong> Use the "🎯 Optimize Weights" button
-                above to automatically find the best weights that maximize
+                above to automatically find the best multipliers that maximize
                 returns while minimizing drawdown. This uses advanced
                 optimization algorithms to balance risk and reward.
               </div>
 
-              {/* Weighting Method Selection */}
+              {/* Portfolio Scaling Method Selection */}
               <div style={{ marginBottom: "1rem" }}>
                 <label style={{ marginRight: "1rem" }}>
                   <input
@@ -653,7 +647,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     onChange={() => handleWeightingMethodChange("equal")}
                     style={{ marginRight: "0.5rem" }}
                   />
-                  Equal Weighting (Default)
+                  Equal Scaling (1.0x each)
                 </label>
                 <label>
                   <input
@@ -664,11 +658,29 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     onChange={() => handleWeightingMethodChange("custom")}
                     style={{ marginRight: "0.5rem" }}
                   />
-                  Custom Weighting
+                  Custom Multipliers
                 </label>
               </div>
 
-              {/* Weight Display */}
+              {/* Multiplier Help Text */}
+              {weightingMethod === "custom" && (
+                <div
+                  style={{
+                    background: "#e7f3ff",
+                    border: "1px solid #b3d7ff",
+                    borderRadius: "4px",
+                    padding: "0.75rem",
+                    marginBottom: "1rem",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <strong>Portfolio Multipliers:</strong>• 1.0 = Run portfolio
+                  at full scale • 2.0 = Run portfolio at double scale • 0.5 =
+                  Run portfolio at half scale • Any positive number works!
+                </div>
+              )}
+
+              {/* Multiplier Display */}
               <div
                 style={{
                   display: "grid",
@@ -704,14 +716,14 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           gap: "0.5rem",
                         }}
                       >
-                        <span style={{ minWidth: "60px" }}>Weight:</span>
+                        <span style={{ minWidth: "80px" }}>Multiplier:</span>
                         <input
                           type="number"
                           min="0"
-                          max="1"
-                          step="0.001"
-                          value={weight.toFixed(3)}
+                          step="0.1"
+                          value={weight.toFixed(2)}
                           disabled={weightingMethod === "equal"}
+                          placeholder="1.0"
                           onChange={(e) =>
                             handleWeightChange(
                               portfolioId,
@@ -728,7 +740,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           }}
                         />
                         <span style={{ color: "#6c757d" }}>
-                          ({(weight * 100).toFixed(1)}%)
+                          ({weight.toFixed(2)}x)
                         </span>
                       </div>
                     </div>
@@ -749,32 +761,26 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 }}
               >
                 <div>
-                  <span style={{ fontWeight: "bold" }}>Total Weight: </span>
+                  <span style={{ fontWeight: "bold" }}>Total Scale: </span>
                   <span
                     style={{
-                      color:
-                        Math.abs(getWeightSum() - 1.0) < 0.001
-                          ? "#28a745"
-                          : "#dc3545",
+                      color: "#28a745",
                       fontWeight: "bold",
                     }}
                   >
-                    {getWeightSum().toFixed(3)} (
-                    {(getWeightSum() * 100).toFixed(1)}%)
+                    {getTotalScale().toFixed(2)}x
                   </span>
-                  {Math.abs(getWeightSum() - 1.0) > 0.001 && (
-                    <span style={{ color: "#dc3545", marginLeft: "0.5rem" }}>
-                      ⚠️ Must equal 1.0 (100%)
-                    </span>
-                  )}
+                  <span style={{ color: "#6c757d", marginLeft: "0.5rem" }}>
+                    (Sum of all multipliers)
+                  </span>
                 </div>
                 {weightingMethod === "custom" && (
                   <button
-                    onClick={normalizeWeights}
+                    onClick={resetMultipliers}
                     className="btn btn-secondary"
                     style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
                   >
-                    Normalize to 100%
+                    Reset to 1.0x
                   </button>
                 )}
               </div>
@@ -868,14 +874,14 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 style={{ marginBottom: "0.25rem" }}
                               >
                                 <strong>{name}:</strong>{" "}
-                                {((weight as number) * 100).toFixed(1)}%
+                                {(weight as number).toFixed(2)}x
                                 <span
                                   style={{
                                     color: "#666",
                                     marginLeft: "0.5rem",
                                   }}
                                 >
-                                  (weight: {(weight as number).toFixed(3)})
+                                  (multiplier: {(weight as number).toFixed(3)})
                                 </span>
                               </div>
                             ))}
