@@ -983,11 +983,14 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   <div
                     className="blended-card"
                     style={{
-                      background: "#fff",
+                      background: theme.palette.background.paper,
                       padding: "1.5rem",
                       borderRadius: "8px",
-                      border: "2px solid #007bff",
-                      boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+                      border: `2px solid ${theme.palette.primary.main}`,
+                      boxShadow:
+                        theme.palette.mode === "dark"
+                          ? "0 4px 16px rgba(0,0,0,0.5)"
+                          : "0 4px 8px rgba(0,0,0,0.08)",
                       marginBottom: "2rem",
                     }}
                   >
@@ -1001,18 +1004,29 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           marginBottom: "1.5rem",
                           padding: "1rem",
-                          background: "#fff",
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : "#e3f2fd",
                           borderRadius: "6px",
-                          border: "1px solid #bbdefb",
+                          border: `1px solid ${theme.palette.divider}`,
+                          color: theme.palette.text.primary,
                         }}
                       >
                         <h5
-                          style={{ margin: "0 0 0.5rem 0", color: "#1976d2" }}
+                          style={{
+                            margin: "0 0 0.5rem 0",
+                            color: theme.palette.primary.main,
+                          }}
                         >
                           📊 Portfolio Composition
                         </h5>
                         <div
-                          style={{ fontSize: "0.9rem", marginBottom: "0.5rem" }}
+                          style={{
+                            fontSize: "0.9rem",
+                            marginBottom: "0.5rem",
+                            color: theme.palette.text.secondary,
+                          }}
                         >
                           <strong>Weighting Method:</strong>{" "}
                           {analysisResults.blended_result.weighting_method ===
@@ -1029,13 +1043,16 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             ).map(([name, weight]) => (
                               <div
                                 key={name}
-                                style={{ marginBottom: "0.25rem" }}
+                                style={{
+                                  marginBottom: "0.25rem",
+                                  color: theme.palette.text.primary,
+                                }}
                               >
                                 <strong>{name}:</strong>{" "}
                                 {(weight as number).toFixed(2)}x
                                 <span
                                   style={{
-                                    color: "#666",
+                                    color: theme.palette.text.secondary,
                                     marginLeft: "0.5rem",
                                   }}
                                 >
