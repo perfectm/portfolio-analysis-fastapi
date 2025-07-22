@@ -17,10 +17,11 @@ def create_blended_portfolio(
     sma_window: int = 20,
     use_trading_filter: bool = True,
     starting_capital: float = 100000.0,
-    weights: List[float] = None
+    weights: List[float] = None,
+    use_capital_allocation: bool = False
 ) -> Tuple[pd.DataFrame, Dict[str, Any], pd.DataFrame]:
     """
-    Create a blended portfolio from multiple portfolio files
+    Create a blended portfolio from multiple portfolio files using portfolio multipliers
     
     Args:
         files_data: List of (filename, dataframe) tuples
@@ -28,7 +29,8 @@ def create_blended_portfolio(
         sma_window: SMA window
         use_trading_filter: Whether to use trading filter
         starting_capital: Starting capital
-        weights: List of weights for each portfolio (must sum to 1.0)
+        weights: List of multipliers for each portfolio (e.g., 1.0 = full scale, 2.0 = double, 0.5 = half)
+        use_capital_allocation: Deprecated - multiplier system always applies scaling
         
     Returns:
         Tuple of (blended_df, blended_metrics, correlation_data)
@@ -37,23 +39,22 @@ def create_blended_portfolio(
     correlation_data = pd.DataFrame()
     portfolio_names = []
     
-    # Validate and set up weights
+    # Validate and set up weights (using multiplier system)
     if weights is None:
-        # Equal weighting if no weights provided
-        weights = [1.0 / len(files_data)] * len(files_data)
-        logger.info(f"Using equal weighting: {weights}")
+        # Default: Run each portfolio at full scale (1.0x)
+        weights = [1.0] * len(files_data)
+        logger.info(f"Using default multipliers (1.0x each): {weights}")
     else:
         # Validate weights
         if len(weights) != len(files_data):
-            raise ValueError(f"Number of weights ({len(weights)}) must match number of files ({len(files_data)})")
+            raise ValueError(f"Number of multipliers ({len(weights)}) must match number of files ({len(files_data)})")
         
-        # Normalize weights to sum to 1.0 if they don't already
-        weight_sum = sum(weights)
-        if abs(weight_sum - 1.0) > 0.001:  # Allow small floating point errors
-            weights = [w / weight_sum for w in weights]
-            logger.info(f"Normalized weights to sum to 1.0: {weights}")
-        else:
-            logger.info(f"Using provided weights: {weights}")
+        # Validate that all weights are positive
+        if any(w <= 0 for w in weights):
+            raise ValueError("All portfolio multipliers must be positive numbers")
+        
+        logger.info(f"Using custom multipliers: {weights}")
+        logger.info(f"Portfolio scaling: {[f'{w}x' for w in weights]}")
     
     # Store individual portfolio P/L data for weighted blending
     individual_portfolios_pl = []
@@ -62,7 +63,7 @@ def create_blended_portfolio(
     
     for i, (filename, df) in enumerate(files_data):
         try:
-            logger.info(f"Processing file for blended portfolio: {filename} (weight: {weights[i]:.3f})")
+            logger.info(f"Processing file for blended portfolio: {filename} (multiplier: {weights[i]:.1f}x)")
             logger.info(f"Input DataFrame shape for {filename}: {df.shape}")
             
             # Process individual file to get clean trade data
@@ -92,10 +93,13 @@ def create_blended_portfolio(
                 correlation_data = correlation_data.join(daily_returns.to_frame(portfolio_name), how='outer')
                 logger.info(f"Added {portfolio_name} to correlation_data: shape {correlation_data.shape}, columns: {list(correlation_data.columns)}")
             
-            # Store individual portfolio P/L data with weighting
-            # Group by date to get daily P/L and apply weight
+            # Store individual portfolio P/L data for blending
             daily_pl = clean_df.groupby('Date')['P/L'].sum().reset_index()
-            daily_pl['P/L'] = daily_pl['P/L'] * weights[i]  # Apply weight to P/L
+            
+            # Apply portfolio multiplier - scale P/L by the multiplier
+            daily_pl['P/L'] = daily_pl['P/L'] * weights[i]
+            logger.info(f"Applied {weights[i]:.1f}x multiplier to {filename} (P/L scaled by {weights[i]:.1f})")
+            
             individual_portfolios_pl.append(daily_pl)
             
             logger.info(f"Successfully processed {filename} for blended portfolio")
@@ -124,8 +128,8 @@ def create_blended_portfolio(
     # Process blended portfolio if we have data
     if not blended_trades.empty and len(files_data) > 1:
         try:
-            logger.info("Processing weighted blended portfolio")
-            logger.info(f"Portfolio weights: {dict(zip(portfolio_names, weights))}")
+            logger.info("Processing blended portfolio with multiplier system")
+            logger.info(f"Portfolio multipliers: {dict(zip(portfolio_names, weights))}")
             logger.info(f"Initial total P/L in blended trades: {blended_trades['P/L'].sum():.2f}")
             
             # Ensure Date is datetime type and normalize to midnight
@@ -146,9 +150,12 @@ def create_blended_portfolio(
                 is_blended=True  # Important flag to indicate this is a blended portfolio
             )
             
-            # Add weighting information to metrics
+            # Add multiplier information to metrics
             blended_metrics['Portfolio_Weights'] = dict(zip(portfolio_names, weights))
-            blended_metrics['Weighting_Method'] = 'Custom' if any(w != weights[0] for w in weights) else 'Equal'
+            blended_metrics['Weighting_Method'] = 'Multiplier'
+            total_multiplier = sum(weights)
+            blended_metrics['Total_Portfolio_Scale'] = total_multiplier
+            logger.info(f"Total portfolio scale: {total_multiplier:.1f}x")
             
             # Convert numpy types to Python native types for JSON serialization
             blended_metrics = _convert_numpy_types(blended_metrics)

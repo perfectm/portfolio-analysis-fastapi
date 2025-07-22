@@ -656,11 +656,12 @@ async def upload_files_api(
                         logger.error(f"[API Upload] Weight validation failed: {error_msg}")
                         return {"success": False, "error": error_msg}
                     
-                    weight_sum = sum(weight_list)
-                    if abs(weight_sum - 1.0) > 0.001:
-                        error_msg = f"Weights must sum to 1.0. Current sum: {weight_sum:.3f}"
-                        logger.error(f"[API Upload] Weight sum validation failed: {error_msg}")
-                        return {"success": False, "error": error_msg}
+                    # Validate multipliers are positive (no need to sum to 1.0 anymore)
+                    for i, multiplier in enumerate(weight_list):
+                        if multiplier <= 0:
+                            error_msg = f"All multipliers must be positive. Multiplier {i+1}: {multiplier}"
+                            logger.error(f"[API Upload] Multiplier validation failed: {error_msg}")
+                            return {"success": False, "error": error_msg}
                     
                     portfolio_weights = weight_list
                 except json.JSONDecodeError as e:
@@ -865,21 +866,21 @@ async def upload_files_deprecated():
                     }
                 )
             
-            # Check if weights sum to approximately 1.0
-            weight_sum = sum(weights)
-            if abs(weight_sum - 1.0) > 0.001:
-                return templates.TemplateResponse(
-                    "results.html",
-                    {
-                        "request": request,
-                        "results": [],
-                        "blended_result": None,
-                        "multiple_portfolios": False,
-                        "heatmap_url": None,
-                        "monte_carlo_url": None,
-                        "error": f"Weights must sum to 1.0. Current sum: {weight_sum:.3f}"
-                    }
-                )
+            # Check if all multipliers are positive
+            for i, multiplier in enumerate(weights):
+                if multiplier <= 0:
+                    return templates.TemplateResponse(
+                        "results.html",
+                        {
+                            "request": request,
+                            "results": [],
+                            "blended_result": None,
+                            "multiple_portfolios": False,
+                            "heatmap_url": None,
+                            "monte_carlo_url": None,
+                            "error": f"All multipliers must be positive. Multiplier {i+1}: {multiplier}"
+                        }
+                    )
             
             portfolio_weights = weights
             logger.info(f"Using custom weights: {portfolio_weights}")
@@ -1142,9 +1143,10 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 if len(weights) != len(portfolio_ids):
                     return {"success": False, "error": f"Number of weights ({len(weights)}) must match number of portfolios ({len(portfolio_ids)})"}
                 
-                weight_sum = sum(weights)
-                if abs(weight_sum - 1.0) > 0.001:
-                    return {"success": False, "error": f"Weights must sum to 1.0. Current sum: {weight_sum:.3f}"}
+                # Check if all multipliers are positive
+                for i, multiplier in enumerate(weights):
+                    if multiplier <= 0:
+                        return {"success": False, "error": f"All multipliers must be positive. Multiplier {i+1}: {multiplier}"}
                 
                 portfolio_weights = weights
             else:
@@ -1261,7 +1263,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     sma_window=20,
                     use_trading_filter=True,
                     starting_capital=starting_capital,
-                    weights=portfolio_weights  # Pass the weights to the blender
+                    weights=portfolio_weights  # Pass the multipliers to the blender
                 )
                 
                 if blended_df is not None and blended_metrics is not None:
