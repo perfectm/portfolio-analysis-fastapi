@@ -1173,8 +1173,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             return {"success": False, "error": "Starting capital must be greater than 0"}
         
         # Limit number of portfolios to prevent memory issues
-        if len(portfolio_ids) > 6:  # Reduced from 8 to 6
-            return {"success": False, "error": "Maximum 6 portfolios allowed for analysis to prevent memory issues"}
+        if len(portfolio_ids) > 20:
+            return {"success": False, "error": "Maximum 20 portfolios allowed for analysis to prevent memory issues"}
         
         logger.info(f"[Weighted Analysis] Analyzing portfolios: {portfolio_ids}")
         logger.info(f"[Weighted Analysis] Weighting method: {weighting_method}")
@@ -1368,7 +1368,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         logger.error(f"[Weighted Analysis] Error creating correlation heatmap: {str(heatmap_error)}")
                     
                     # Create Monte Carlo simulation for blended portfolio (only for 3 or fewer portfolios to save memory)
-                    if len(portfolios_data) <= 3:
+                    if len(portfolios_data) <= 20:
                         try:
                             logger.info(f"[Weighted Analysis] Creating Monte Carlo simulation for {len(portfolios_data)} portfolios")
                             mc_path = create_monte_carlo_simulation(blended_df, blended_metrics)
@@ -1478,8 +1478,8 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
         if len(portfolio_ids) < 2:
             return {"success": False, "error": "Need at least 2 portfolios for weight optimization"}
         
-        if len(portfolio_ids) > 6:
-            return {"success": False, "error": "Maximum 6 portfolios allowed for optimization to prevent performance issues"}
+        if len(portfolio_ids) > 20:
+            return {"success": False, "error": "Maximum 20 portfolios allowed for optimization to prevent performance issues"}
         
         logger.info(f"[Weight Optimization] Optimizing weights for portfolios: {portfolio_ids}")
         logger.info(f"[Weight Optimization] Using optimization method: {method}")
@@ -1497,7 +1497,7 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
         # Create optimizer with default settings
         optimizer = PortfolioOptimizer(
             objective=OptimizationObjective(),
-            rf_rate=0.05,
+            rf_rate=0.043,
             sma_window=20,
             use_trading_filter=True,
             starting_capital=100000.0
