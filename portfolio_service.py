@@ -243,6 +243,9 @@ class PortfolioService:
             # Rename column if needed for compatibility
             if 'Cumulative_PL' in df.columns:
                 df = df.rename(columns={'Cumulative_PL': 'Cumulative P/L'})
+            import logging
+            logging.error(f"[get_portfolio_dataframe] DEBUG: Returning DataFrame columns: {list(df.columns)}")
+            logging.error(f"[get_portfolio_dataframe] DEBUG: DataFrame head:\n{df.head()}")
             return df
         # Fallback to DB
         data = PortfolioService.get_portfolio_data(db, portfolio_id)
@@ -263,6 +266,9 @@ class PortfolioService:
         df = pd.DataFrame(df_data)
         if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'])
+        import logging
+        logging.error(f"[get_portfolio_dataframe] DEBUG: Returning DataFrame columns: {list(df.columns)}")
+        logging.error(f"[get_portfolio_dataframe] DEBUG: DataFrame head:\n{df.head()}")
         return df
     
     @staticmethod
