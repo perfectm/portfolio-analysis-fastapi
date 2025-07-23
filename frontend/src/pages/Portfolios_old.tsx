@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { portfolioAPI, API_BASE_URL } from "../services/api";
-import { useTheme, Paper, Box } from "@mui/material";
 
 interface Portfolio {
   id: number;
@@ -54,7 +53,6 @@ interface AnalysisResults {
 }
 
 export default function Portfolios() {
-  const theme = useTheme();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -303,9 +301,9 @@ export default function Portfolios() {
       return;
     }
 
-    if (selectedPortfolios.length > 20) {
+    if (selectedPortfolios.length > 6) {
       alert(
-        "Maximum 20 portfolios allowed for optimization to prevent performance issues"
+        "Maximum 6 portfolios allowed for optimization to prevent performance issues"
       );
       return;
     }
@@ -520,19 +518,18 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
       ) : (
         <>
           {/* Selection Controls */}
-          <Paper
+          <div
             className="selection-controls"
-            sx={{
+            style={{
               display: "flex",
               alignItems: "center",
               gap: "1rem",
-              mb: "1.5rem",
-              p: "1rem",
+              marginBottom: "1.5rem",
+              padding: "1rem",
+              background: "#f8f9fa",
               borderRadius: "8px",
-              border: `1px solid ${theme.palette.divider}`,
-              background: theme.palette.background.paper,
+              border: "1px solid #e9ecef",
             }}
-            elevation={theme.palette.mode === "dark" ? 2 : 0}
           >
             <div
               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
@@ -548,15 +545,6 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
             >
               Select All
             </button>
-            <span
-              style={{
-                marginLeft: "1rem",
-                color: theme.palette.text.secondary,
-                fontSize: "0.95rem",
-              }}
-            >
-              You can analyze up to <strong>20 portfolios</strong> at one time.
-            </span>
             <button
               onClick={clearSelection}
               className="btn btn-secondary"
@@ -567,14 +555,13 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
             {selectedPortfolios.length >= 2 && (
               <button
                 onClick={optimizePortfolioWeights}
-                disabled={analyzing || selectedPortfolios.length > 20}
+                disabled={analyzing || selectedPortfolios.length > 6}
                 className="btn btn-success"
                 style={{
                   padding: "0.5rem 1.5rem",
                   fontSize: "0.9rem",
                   marginRight: "0.5rem",
-                  opacity:
-                    analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
+                  opacity: analyzing || selectedPortfolios.length > 6 ? 0.5 : 1,
                 }}
                 title="Find optimal weights to maximize return while minimizing drawdown"
               >
@@ -598,75 +585,21 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     selectedPortfolios.length !== 1 ? "s" : ""
                   }`}
             </button>
-          </Paper>
-          <button
-            onClick={selectAllPortfolios}
-            className="btn btn-secondary"
-            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
-          >
-            Select All
-          </button>
-          <button
-            onClick={clearSelection}
-            className="btn btn-secondary"
-            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
-          >
-            Clear Selection
-          </button>
-          {selectedPortfolios.length >= 2 && (
-            <button
-              onClick={optimizePortfolioWeights}
-              disabled={analyzing || selectedPortfolios.length > 20}
-              className="btn btn-success"
-              style={{
-                padding: "0.5rem 1.5rem",
-                fontSize: "0.9rem",
-                marginRight: "0.5rem",
-                opacity: analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
-              }}
-              title="Find optimal weights to maximize return while minimizing drawdown"
-            >
-              {analyzing ? "Optimizing..." : "🎯 Optimize Weights"}
-            </button>
-          )}
-          <button
-            onClick={analyzeSelectedPortfolios}
-            disabled={selectedPortfolios.length === 0 || analyzing}
-            className="btn btn-primary"
-            style={{
-              padding: "0.5rem 1.5rem",
-              fontSize: "0.9rem",
-              marginLeft: selectedPortfolios.length >= 2 ? "0" : "auto",
-              opacity: selectedPortfolios.length === 0 ? 0.5 : 1,
-            }}
-          >
-            {analyzing
-              ? "Analyzing..."
-              : `Analyze ${selectedPortfolios.length} Portfolio${
-                  selectedPortfolios.length !== 1 ? "s" : ""
-                }`}
-          </button>
-          {/* End Selection Controls */}
+          </div>
 
           {/* Analysis Parameters */}
           {selectedPortfolios.length > 0 && (
-            <Paper
+            <div
               className="analysis-parameters"
-              sx={{
-                mb: "1.5rem",
-                p: "1.5rem",
+              style={{
+                marginBottom: "1.5rem",
+                padding: "1.5rem",
+                background: "#f8f9fa",
                 borderRadius: "8px",
-                border: `1px solid ${theme.palette.divider}`,
-                background: theme.palette.background.paper,
+                border: "1px solid #e9ecef",
               }}
-              elevation={theme.palette.mode === "dark" ? 2 : 0}
             >
-              <h3
-                style={{
-                  marginBottom: "1rem",
-                  color: theme.palette.text.primary,
-                }}
-              >
+              <h3 style={{ marginBottom: "1rem", color: "#495057" }}>
                 ⚙️ Analysis Parameters
               </h3>
 
@@ -677,7 +610,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     display: "block",
                     marginBottom: "0.5rem",
                     fontWeight: "bold",
-                    color: theme.palette.text.primary,
+                    color: "#495057",
                   }}
                 >
                   💰 Starting Capital ($)
@@ -707,7 +640,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 <div
                   style={{
                     fontSize: "0.85rem",
-                    color: theme.palette.text.secondary,
+                    color: "#6c757d",
                     marginTop: "0.25rem",
                   }}
                 >
@@ -723,7 +656,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     display: "block",
                     marginBottom: "0.5rem",
                     fontWeight: "bold",
-                    color: theme.palette.text.primary,
+                    color: "#495057",
                   }}
                 >
                   📈 Risk-Free Rate (%)
@@ -753,7 +686,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 <div
                   style={{
                     fontSize: "0.85rem",
-                    color: theme.palette.text.secondary,
+                    color: "#6c757d",
                     marginTop: "0.25rem",
                   }}
                 >
@@ -761,28 +694,22 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   Default is 4.3%.
                 </div>
               </div>
-            </Paper>
+            </div>
           )}
 
           {/* Weighting Controls */}
           {selectedPortfolios.length > 1 && (
-            <Paper
+            <div
               className="weighting-controls"
-              sx={{
-                mb: "1.5rem",
-                p: "1.5rem",
+              style={{
+                marginBottom: "1.5rem",
+                padding: "1.5rem",
+                background: "#f8f9fa",
                 borderRadius: "8px",
-                border: `1px solid ${theme.palette.divider}`,
-                background: theme.palette.background.paper,
+                border: "1px solid #e9ecef",
               }}
-              elevation={theme.palette.mode === "dark" ? 2 : 0}
             >
-              <h3
-                style={{
-                  marginBottom: "1rem",
-                  color: theme.palette.text.primary,
-                }}
-              >
+              <h3 style={{ marginBottom: "1rem", color: "#495057" }}>
                 ⚖️ Portfolio Weighting
               </h3>
 
@@ -790,11 +717,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 style={{
                   marginBottom: "1rem",
                   padding: "0.75rem",
-                  background: theme.palette.success.light,
+                  background: "#e8f5e8",
                   borderRadius: "6px",
-                  border: `1px solid ${theme.palette.success.main}`,
+                  border: "1px solid #c3e6cb",
                   fontSize: "0.9rem",
-                  color: theme.palette.success.main,
+                  color: "#155724",
                 }}
               >
                 💡 <strong>Tip:</strong> Use the "🎯 Optimize Weights" button
@@ -833,8 +760,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
               {weightingMethod === "custom" && (
                 <div
                   style={{
-                    background: theme.palette.info.light,
-                    border: `1px solid ${theme.palette.info.main}`,
+                    background: "#e7f3ff",
+                    border: "1px solid #b3d7ff",
                     borderRadius: "4px",
                     padding: "0.75rem",
                     marginBottom: "1rem",
@@ -862,15 +789,14 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   );
                   const weight = portfolioWeights[portfolioId] || 0;
                   return (
-                    <Paper
+                    <div
                       key={portfolioId}
-                      sx={{
-                        p: "1rem",
-                        background: theme.palette.background.paper,
+                      style={{
+                        padding: "1rem",
+                        background: "#fff",
                         borderRadius: "6px",
-                        border: `1px solid ${theme.palette.divider}`,
+                        border: "1px solid #dee2e6",
                       }}
-                      elevation={theme.palette.mode === "dark" ? 1 : 0}
                     >
                       <div
                         style={{ fontWeight: "bold", marginBottom: "0.5rem" }}
@@ -907,11 +833,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                               weightingMethod === "equal" ? "#e9ecef" : "#fff",
                           }}
                         />
-                        <span style={{ color: theme.palette.text.secondary }}>
+                        <span style={{ color: "#6c757d" }}>
                           ({weight.toFixed(2)}x)
                         </span>
                       </div>
-                    </Paper>
+                    </div>
                   );
                 })}
               </div>
@@ -923,27 +849,22 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "0.75rem",
-                  background: theme.palette.background.paper,
+                  background: "#fff",
                   borderRadius: "6px",
-                  border: `1px solid ${theme.palette.divider}`,
+                  border: "1px solid #dee2e6",
                 }}
               >
                 <div>
                   <span style={{ fontWeight: "bold" }}>Total Scale: </span>
                   <span
                     style={{
-                      color: theme.palette.success.main,
+                      color: "#28a745",
                       fontWeight: "bold",
                     }}
                   >
                     {getTotalScale().toFixed(2)}x
                   </span>
-                  <span
-                    style={{
-                      color: theme.palette.text.secondary,
-                      marginLeft: "0.5rem",
-                    }}
-                  >
+                  <span style={{ color: "#6c757d", marginLeft: "0.5rem" }}>
                     (Sum of all multipliers)
                   </span>
                 </div>
@@ -957,7 +878,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   </button>
                 )}
               </div>
-            </Paper>
+            </div>
           )}
 
           {/* Analysis Results */}
@@ -968,9 +889,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 marginTop: "1.5rem",
                 marginBottom: "2rem",
                 padding: "1.5rem",
-                background: theme.palette.background.paper,
+                background: "#f8f9fa",
                 borderRadius: "8px",
-                border: `1px solid ${theme.palette.divider}`,
+                border: "1px solid #e9ecef",
               }}
             >
               <div
@@ -998,14 +919,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   <div
                     className="blended-card"
                     style={{
-                      background: theme.palette.background.paper,
+                      background: "#fff",
                       padding: "1.5rem",
                       borderRadius: "8px",
-                      border: `2px solid ${theme.palette.primary.main}`,
-                      boxShadow:
-                        theme.palette.mode === "dark"
-                          ? "0 4px 16px rgba(0,0,0,0.5)"
-                          : "0 4px 8px rgba(0,0,0,0.08)",
+                      border: "2px solid #007bff",
+                      boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
                       marginBottom: "2rem",
                     }}
                   >
@@ -1019,29 +937,18 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           marginBottom: "1.5rem",
                           padding: "1rem",
-                          background:
-                            theme.palette.mode === "dark"
-                              ? theme.palette.action.selected
-                              : theme.palette.action.hover,
+                          background: "#e3f2fd",
                           borderRadius: "6px",
-                          border: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          border: "1px solid #bbdefb",
                         }}
                       >
                         <h5
-                          style={{
-                            margin: "0 0 0.5rem 0",
-                            color: theme.palette.primary.main,
-                          }}
+                          style={{ margin: "0 0 0.5rem 0", color: "#1976d2" }}
                         >
                           📊 Portfolio Composition
                         </h5>
                         <div
-                          style={{
-                            fontSize: "0.9rem",
-                            marginBottom: "0.5rem",
-                            color: theme.palette.text.secondary,
-                          }}
+                          style={{ fontSize: "0.9rem", marginBottom: "0.5rem" }}
                         >
                           <strong>Weighting Method:</strong>{" "}
                           {analysisResults.blended_result.weighting_method ===
@@ -1058,16 +965,13 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             ).map(([name, weight]) => (
                               <div
                                 key={name}
-                                style={{
-                                  marginBottom: "0.25rem",
-                                  color: theme.palette.text.primary,
-                                }}
+                                style={{ marginBottom: "0.25rem" }}
                               >
                                 <strong>{name}:</strong>{" "}
                                 {(weight as number).toFixed(2)}x
                                 <span
                                   style={{
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginLeft: "0.5rem",
                                   }}
                                 >
@@ -1095,7 +999,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1103,7 +1007,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1116,8 +1020,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               analysisResults.blended_result.metrics
                                 .total_return >= 0
-                                ? theme.palette.success.main
-                                : theme.palette.error.main,
+                                ? "#28a745"
+                                : "#dc3545",
                           }}
                         >
                           {(
@@ -1132,7 +1036,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1140,7 +1044,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1153,11 +1057,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               analysisResults.blended_result.metrics
                                 .sharpe_ratio >= 1
-                                ? theme.palette.success.main
+                                ? "#28a745"
                                 : analysisResults.blended_result.metrics
                                     .sharpe_ratio >= 0.5
-                                ? theme.palette.warning.main
-                                : theme.palette.error.main,
+                                ? "#ffc107"
+                                : "#dc3545",
                           }}
                         >
                           {analysisResults.blended_result.metrics.sharpe_ratio?.toFixed(
@@ -1170,7 +1074,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1178,7 +1082,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1188,7 +1092,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           style={{
                             fontSize: "1.4rem",
                             fontWeight: "bold",
-                            color: theme.palette.error.main,
+                            color: "#dc3545",
                           }}
                         >
                           {(
@@ -1203,7 +1107,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1211,7 +1115,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1223,8 +1127,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             fontWeight: "bold",
                             color:
                               analysisResults.blended_result.metrics.cagr >= 0
-                                ? theme.palette.success.main
-                                : theme.palette.error.main,
+                                ? "#28a745"
+                                : "#dc3545",
                           }}
                         >
                           {(
@@ -1238,7 +1142,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1246,7 +1150,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1259,8 +1163,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               analysisResults.blended_result.metrics.total_pl >=
                               0
-                                ? theme.palette.success.main
-                                : theme.palette.error.main,
+                                ? "#28a745"
+                                : "#dc3545",
                           }}
                         >
                           $
@@ -1278,7 +1182,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1286,7 +1190,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1296,7 +1200,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           style={{
                             fontSize: "1.4rem",
                             fontWeight: "bold",
-                            color: theme.palette.primary.main,
+                            color: "#007bff",
                           }}
                         >
                           $
@@ -1314,7 +1218,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1322,7 +1226,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1332,7 +1236,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           style={{
                             fontSize: "1.4rem",
                             fontWeight: "bold",
-                            color: theme.palette.error.main,
+                            color: "#dc3545",
                           }}
                         >
                           $
@@ -1350,7 +1254,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1358,7 +1262,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1371,11 +1275,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               (analysisResults.blended_result.metrics
                                 .annual_volatility * 100 || 0) <= 15
-                                ? theme.palette.success.main
+                                ? "#28a745"
                                 : (analysisResults.blended_result.metrics
                                     .annual_volatility * 100 || 0) <= 25
-                                ? theme.palette.warning.main
-                                : theme.palette.error.main,
+                                ? "#ffc107"
+                                : "#dc3545",
                           }}
                         >
                           {(
@@ -1390,7 +1294,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1398,7 +1302,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1411,11 +1315,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               (analysisResults.blended_result.metrics
                                 .mar_ratio || 0) >= 0.5
-                                ? theme.palette.success.main
+                                ? "#28a745"
                                 : (analysisResults.blended_result.metrics
                                     .mar_ratio || 0) >= 0.25
-                                ? theme.palette.warning.main
-                                : theme.palette.error.main,
+                                ? "#ffc107"
+                                : "#dc3545",
                           }}
                         >
                           {analysisResults.blended_result.metrics.mar_ratio?.toFixed(
@@ -1428,7 +1332,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1436,7 +1340,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1449,11 +1353,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               analysisResults.blended_result.metrics
                                 .sortino_ratio >= 1
-                                ? theme.palette.success.main
+                                ? "#28a745"
                                 : analysisResults.blended_result.metrics
                                     .sortino_ratio >= 0.5
-                                ? theme.palette.warning.main
-                                : theme.palette.error.main,
+                                ? "#ffc107"
+                                : "#dc3545",
                           }}
                         >
                           {analysisResults.blended_result.metrics.sortino_ratio?.toFixed(
@@ -1466,7 +1370,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1474,7 +1378,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1487,11 +1391,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               analysisResults.blended_result.metrics
                                 .ulcer_index <= 5
-                                ? theme.palette.success.main
+                                ? "#28a745"
                                 : analysisResults.blended_result.metrics
                                     .ulcer_index <= 10
-                                ? theme.palette.warning.main
-                                : theme.palette.error.main,
+                                ? "#ffc107"
+                                : "#dc3545",
                           }}
                         >
                           {analysisResults.blended_result.metrics.ulcer_index?.toFixed(
@@ -1504,7 +1408,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1512,7 +1416,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1522,7 +1426,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           style={{
                             fontSize: "1.4rem",
                             fontWeight: "bold",
-                            color: theme.palette.text.secondary,
+                            color: "#6c757d",
                           }}
                         >
                           {analysisResults.blended_result.metrics
@@ -1538,7 +1442,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1546,7 +1450,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1559,14 +1463,14 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             color:
                               analysisResults.blended_result.metrics
                                 .kelly_criterion > 0.25
-                                ? theme.palette.error.main
+                                ? "#dc3545"
                                 : analysisResults.blended_result.metrics
                                     .kelly_criterion > 0.1
-                                ? theme.palette.warning.main
+                                ? "#ffc107"
                                 : analysisResults.blended_result.metrics
                                     .kelly_criterion > 0
-                                ? theme.palette.success.main
-                                : theme.palette.text.secondary,
+                                ? "#28a745"
+                                : "#6c757d",
                           }}
                         >
                           {analysisResults.blended_result.metrics
@@ -1583,7 +1487,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         className="metric-card"
                         style={{
                           padding: "1rem",
-                          background: theme.palette.background.paper,
+                          background: "#f8f9fa",
                           borderRadius: "6px",
                           textAlign: "center",
                         }}
@@ -1591,7 +1495,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         <div
                           style={{
                             fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
+                            color: "#666",
                             marginBottom: "0.5rem",
                           }}
                         >
@@ -1603,11 +1507,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             fontWeight: "bold",
                             color:
                               analysisResults.blended_result.metrics.upi >= 1.0
-                                ? theme.palette.success.main
+                                ? "#28a745"
                                 : analysisResults.blended_result.metrics.upi >=
                                   0.5
-                                ? theme.palette.warning.main
-                                : theme.palette.error.main,
+                                ? "#ffc107"
+                                : "#dc3545",
                           }}
                         >
                           {analysisResults.blended_result.metrics.upi?.toFixed(
@@ -1643,7 +1547,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                       width: "100%",
                                       height: "auto",
                                       borderRadius: "4px",
-                                      border: `1px solid ${theme.palette.divider}`,
+                                      border: "1px solid #e9ecef",
                                     }}
                                     onError={(e) => {
                                       e.currentTarget.style.display = "none";
@@ -1680,10 +1584,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             key={index}
                             className="result-card"
                             style={{
-                              background: theme.palette.background.paper,
+                              background: "#fff",
                               padding: "1.5rem",
                               borderRadius: "8px",
-                              border: `1px solid ${theme.palette.divider}`,
+                              border: "1px solid #e9ecef",
                               boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                             }}
                           >
@@ -1705,7 +1609,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1717,8 +1621,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.total_return >= 0
-                                        ? theme.palette.success.main
-                                        : theme.palette.error.main,
+                                        ? "#28a745"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {(result.metrics.total_return * 100)?.toFixed(
@@ -1732,7 +1636,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1744,10 +1648,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.sharpe_ratio >= 1
-                                        ? theme.palette.success.main
+                                        ? "#28a745"
                                         : result.metrics.sharpe_ratio >= 0.5
-                                        ? theme.palette.warning.main
-                                        : theme.palette.error.main,
+                                        ? "#ffc107"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {result.metrics.sharpe_ratio?.toFixed(2)}
@@ -1758,7 +1662,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1768,7 +1672,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                   style={{
                                     fontSize: "1.1rem",
                                     fontWeight: "bold",
-                                    color: theme.palette.error.main,
+                                    color: "#dc3545",
                                   }}
                                 >
                                   {(
@@ -1782,7 +1686,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1794,8 +1698,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.cagr >= 0
-                                        ? theme.palette.success.main
-                                        : theme.palette.error.main,
+                                        ? "#28a745"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {(result.metrics.cagr * 100)?.toFixed(2)}%
@@ -1806,7 +1710,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1818,8 +1722,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.total_pl >= 0
-                                        ? theme.palette.success.main
-                                        : theme.palette.error.main,
+                                        ? "#28a745"
+                                        : "#dc3545",
                                   }}
                                 >
                                   $
@@ -1837,7 +1741,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1847,7 +1751,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                   style={{
                                     fontSize: "1.1rem",
                                     fontWeight: "bold",
-                                    color: theme.palette.primary.main,
+                                    color: "#007bff",
                                   }}
                                 >
                                   $
@@ -1865,7 +1769,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1875,7 +1779,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                   style={{
                                     fontSize: "1.1rem",
                                     fontWeight: "bold",
-                                    color: theme.palette.error.main,
+                                    color: "#dc3545",
                                   }}
                                 >
                                   $
@@ -1892,7 +1796,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1905,11 +1809,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     color:
                                       (result.metrics.annual_volatility * 100 ||
                                         0) <= 15
-                                        ? theme.palette.success.main
+                                        ? "#28a745"
                                         : (result.metrics.annual_volatility *
                                             100 || 0) <= 25
-                                        ? theme.palette.warning.main
-                                        : theme.palette.error.main,
+                                        ? "#ffc107"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {(
@@ -1923,7 +1827,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1935,11 +1839,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       (result.metrics.mar_ratio || 0) >= 0.5
-                                        ? theme.palette.success.main
+                                        ? "#28a745"
                                         : (result.metrics.mar_ratio || 0) >=
                                           0.25
-                                        ? theme.palette.warning.main
-                                        : theme.palette.error.main,
+                                        ? "#ffc107"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {result.metrics.mar_ratio?.toFixed(2)}
@@ -1950,7 +1854,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1962,10 +1866,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.sortino_ratio >= 1
-                                        ? theme.palette.success.main
+                                        ? "#28a745"
                                         : result.metrics.sortino_ratio >= 0.5
-                                        ? theme.palette.warning.main
-                                        : theme.palette.error.main,
+                                        ? "#ffc107"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {result.metrics.sortino_ratio?.toFixed(2)}
@@ -1976,7 +1880,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -1988,10 +1892,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.ulcer_index <= 5
-                                        ? theme.palette.success.main
+                                        ? "#28a745"
                                         : result.metrics.ulcer_index <= 10
-                                        ? theme.palette.warning.main
-                                        : theme.palette.error.main,
+                                        ? "#ffc107"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {result.metrics.ulcer_index?.toFixed(2)}
@@ -2002,7 +1906,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -2014,12 +1918,12 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.kelly_criterion > 0.25
-                                        ? theme.palette.error.main
+                                        ? "#dc3545"
                                         : result.metrics.kelly_criterion > 0.1
-                                        ? theme.palette.warning.main
+                                        ? "#ffc107"
                                         : result.metrics.kelly_criterion > 0
-                                        ? theme.palette.success.main
-                                        : theme.palette.text.secondary,
+                                        ? "#28a745"
+                                        : "#6c757d",
                                   }}
                                 >
                                   {result.metrics.kelly_criterion >= 0
@@ -2034,7 +1938,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -2046,10 +1950,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                     fontWeight: "bold",
                                     color:
                                       result.metrics.upi >= 1.0
-                                        ? theme.palette.success.main
+                                        ? "#28a745"
                                         : result.metrics.upi >= 0.5
-                                        ? theme.palette.warning.main
-                                        : theme.palette.error.main,
+                                        ? "#ffc107"
+                                        : "#dc3545",
                                   }}
                                 >
                                   {result.metrics.upi?.toFixed(3)}
@@ -2060,7 +1964,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 <div
                                   style={{
                                     fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
+                                    color: "#666",
                                     marginBottom: "0.25rem",
                                   }}
                                 >
@@ -2070,7 +1974,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                   style={{
                                     fontSize: "1.1rem",
                                     fontWeight: "bold",
-                                    color: theme.palette.text.secondary,
+                                    color: "#6c757d",
                                   }}
                                 >
                                   {result.metrics.max_drawdown_date
@@ -2105,7 +2009,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                           width: "100%",
                                           height: "auto",
                                           borderRadius: "4px",
-                                          border: `1px solid ${theme.palette.divider}`,
+                                          border: "1px solid #e9ecef",
                                         }}
                                         onError={(e) => {
                                           e.currentTarget.style.display =
@@ -2133,7 +2037,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     <h3>🔬 Advanced Portfolio Analysis</h3>
                     <p
                       style={{
-                        color: theme.palette.text.secondary,
+                        color: "#666",
                         fontSize: "0.95rem",
                         marginBottom: "1.5rem",
                       }}
@@ -2156,7 +2060,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           </h4>
                           <p
                             style={{
-                              color: theme.palette.text.secondary,
+                              color: "#666",
                               fontSize: "0.9rem",
                               marginBottom: "1rem",
                             }}
@@ -2177,7 +2081,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 width: "100%",
                                 height: "auto",
                                 borderRadius: "4px",
-                                border: `1px solid ${theme.palette.divider}`,
+                                border: "1px solid #e9ecef",
                               }}
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";
@@ -2195,7 +2099,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           </h4>
                           <p
                             style={{
-                              color: theme.palette.text.secondary,
+                              color: "#666",
                               fontSize: "0.9rem",
                               marginBottom: "1rem",
                             }}
@@ -2215,7 +2119,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 width: "100%",
                                 height: "auto",
                                 borderRadius: "4px",
-                                border: `1px solid ${theme.palette.divider}`,
+                                border: "1px solid #e9ecef",
                               }}
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";
@@ -2237,26 +2141,20 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 width: "100%",
                 borderCollapse: "collapse",
                 fontSize: "0.9rem",
-                background: theme.palette.background.paper,
-                color: theme.palette.text.primary,
               }}
             >
               <thead>
                 <tr
                   style={{
-                    backgroundColor:
-                      theme.palette.mode === "dark"
-                        ? theme.palette.background.default
-                        : theme.palette.grey[100],
-                    borderBottom: `2px solid ${theme.palette.divider}`,
+                    backgroundColor: "#f8f9fa",
+                    borderBottom: "2px solid #dee2e6",
                   }}
                 >
                   <th
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
-                      color: theme.palette.text.primary,
+                      borderRight: "1px solid #dee2e6",
                     }}
                   >
                     <input
@@ -2279,9 +2177,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid #dee2e6",
                       minWidth: "150px",
-                      color: theme.palette.text.primary,
                     }}
                   >
                     Portfolio
@@ -2290,9 +2187,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid #dee2e6",
                       minWidth: "120px",
-                      color: theme.palette.text.primary,
                     }}
                   >
                     File
@@ -2301,9 +2197,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid #dee2e6",
                       minWidth: "80px",
-                      color: theme.palette.text.primary,
                     }}
                   >
                     Records
@@ -2312,9 +2207,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid #dee2e6",
                       minWidth: "100px",
-                      color: theme.palette.text.primary,
                     }}
                   >
                     Uploaded
@@ -2323,9 +2217,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid #dee2e6",
                       minWidth: "150px",
-                      color: theme.palette.text.primary,
                     }}
                   >
                     Strategy
@@ -2335,7 +2228,6 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
                       minWidth: "120px",
-                      color: theme.palette.text.primary,
                     }}
                   >
                     Actions
@@ -2347,16 +2239,13 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   <React.Fragment key={portfolio.id}>
                     <tr
                       style={{
-                        borderBottom: `1px solid ${theme.palette.divider}`,
+                        borderBottom: "1px solid #dee2e6",
                         backgroundColor: selectedPortfolios.includes(
                           portfolio.id
                         )
-                          ? theme.palette.mode === "dark"
-                            ? theme.palette.action.selected
-                            : theme.palette.action.hover
-                          : theme.palette.background.paper,
+                          ? "#f0f8ff"
+                          : "#fff",
                         cursor: "pointer",
-                        color: theme.palette.text.primary,
                       }}
                       onClick={() => {
                         const newExpanded = [...expandedPortfolios];
@@ -2372,8 +2261,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid #dee2e6",
                         }}
                       >
                         <input
@@ -2389,8 +2277,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid #dee2e6",
                         }}
                       >
                         {editingPortfolioId === portfolio.id ? (
@@ -2492,8 +2379,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid #dee2e6",
                         }}
                       >
                         {portfolio.filename}
@@ -2502,8 +2388,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid #dee2e6",
                         }}
                       >
                         {portfolio.row_count}
@@ -2512,8 +2397,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid #dee2e6",
                         }}
                       >
                         {new Date(portfolio.upload_date).toLocaleDateString()}
@@ -2521,8 +2405,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid #dee2e6",
                         }}
                       >
                         {editingStrategyId === portfolio.id ? (
@@ -2635,7 +2518,6 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          color: theme.palette.text.primary,
                         }}
                       >
                         <div
@@ -2686,7 +2568,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             style={{
                               cursor: "pointer",
                               fontSize: "0.8rem",
-                              color: theme.palette.text.secondary,
+                              color: "#6c757d",
                             }}
                           >
                             {expandedPortfolios.includes(portfolio.id)
@@ -2697,21 +2579,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       </td>
                     </tr>
                     {expandedPortfolios.includes(portfolio.id) && (
-                      <tr
-                        style={{
-                          backgroundColor:
-                            theme.palette.mode === "dark"
-                              ? theme.palette.background.default
-                              : theme.palette.grey[100],
-                        }}
-                      >
-                        <td
-                          colSpan={7}
-                          style={{
-                            padding: "1rem",
-                            color: theme.palette.text.secondary,
-                          }}
-                        >
+                      <tr style={{ backgroundColor: "#f8f9fa" }}>
+                        <td colSpan={7} style={{ padding: "1rem" }}>
                           <div style={{ fontSize: "0.85rem" }}>
                             {portfolio.date_range_start &&
                               portfolio.date_range_end && (
@@ -2730,7 +2599,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                               style={{
                                 margin: "0.5rem 0",
                                 fontStyle: "italic",
-                                color: theme.palette.text.secondary,
+                                color: "#6c757d",
                               }}
                             >
                               Click the arrow to expand/collapse portfolio

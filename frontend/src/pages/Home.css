@@ -1,3 +1,4 @@
+/* Remove all hardcoded color values and gradients. Use only semantic class names and layout/spacing rules. All color/background styling should be handled in Home.tsx using the theme. */
 .home {
   max-width: 1200px;
   margin: 0 auto;
@@ -7,8 +8,6 @@
 .hero-section {
   text-align: center;
   padding: 4rem 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
   border-radius: 12px;
   margin-bottom: 4rem;
 }
@@ -44,33 +43,10 @@
   display: inline-block;
 }
 
-.btn-primary {
-  background-color: #3498db;
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #2980b9;
-  transform: translateY(-2px);
-}
-
-.btn-secondary {
-  background-color: transparent;
-  color: white;
-  border: 2px solid white;
-}
-
-.btn-secondary:hover {
-  background-color: white;
-  color: #667eea;
-  transform: translateY(-2px);
-}
-
 .features-section h2 {
   text-align: center;
   font-size: 2.5rem;
   margin-bottom: 3rem;
-  color: #2c3e50;
 }
 
 .features-grid {
@@ -81,12 +57,11 @@
 }
 
 .feature-card {
-  background: white;
   padding: 2rem;
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
-  border: 1px solid #e0e0e0;
+  border: 1px solid;
 }
 
 .feature-card:hover {
@@ -97,11 +72,9 @@
 .feature-card h3 {
   font-size: 1.5rem;
   margin-bottom: 1rem;
-  color: #2c3e50;
 }
 
 .feature-card p {
-  color: #7f8c8d;
   line-height: 1.6;
 }
 
