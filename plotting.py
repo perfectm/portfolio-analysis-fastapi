@@ -42,8 +42,6 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         logger.info(f"[create_plots] Starting plot creation for {filename_prefix}")
         logger.info(f"[create_plots] DataFrame shape: {df.shape}")
         logger.info(f"[create_plots] DataFrame columns: {list(df.columns)}")
-        logger.error(f"[create_plots] DEBUG: DataFrame columns: {list(df.columns)}")
-        logger.error(f"[create_plots] DEBUG: DataFrame head:\n{df.head()}")
         
         # Defensive column renaming for compatibility
         if 'Cumulative_PL' in df.columns and 'Cumulative P/L' not in df.columns:
