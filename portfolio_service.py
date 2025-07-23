@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
 import pandas as pd
 import logging
+import os
 
 from models import Portfolio, PortfolioData, AnalysisResult, AnalysisPlot, BlendedPortfolio, BlendedPortfolioMapping
 from config import DATE_COLUMNS, PL_COLUMNS
@@ -25,6 +26,29 @@ class PortfolioService:
         """Calculate SHA-256 hash of file content"""
         return hashlib.sha256(content).hexdigest()
     
+    @staticmethod
+    def get_parquet_path(portfolio_id: int) -> str:
+        return os.path.join('uploads', 'portfolios', f'{portfolio_id}.parquet')
+
+    @staticmethod
+    def save_portfolio_parquet(db: Session, portfolio_id: int, df: pd.DataFrame):
+        parquet_path = PortfolioService.get_parquet_path(portfolio_id)
+        os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
+        df.to_parquet(parquet_path, index=False)
+        # Update the portfolio record
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if portfolio:
+            portfolio.parquet_path = parquet_path
+            db.commit()
+
+    @staticmethod
+    def load_portfolio_parquet(db: Session, portfolio_id: int, columns: list = None) -> pd.DataFrame:
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        if portfolio and portfolio.parquet_path and os.path.exists(portfolio.parquet_path):
+            df = pd.read_parquet(portfolio.parquet_path, columns=columns)
+            return df
+        return None
+
     @staticmethod
     def create_portfolio(
         db: Session,
@@ -81,6 +105,8 @@ class PortfolioService:
             db.commit()
             db.refresh(portfolio)
             
+            # Save Parquet file
+            PortfolioService.save_portfolio_parquet(db, portfolio.id, df)
             logger.info(f"Created portfolio: {portfolio.name} (ID: {portfolio.id})")
             return portfolio
             
@@ -181,6 +207,8 @@ class PortfolioService:
             db.bulk_save_objects(data_records)
             db.commit()
             
+            # Save Parquet file after storing data
+            PortfolioService.save_portfolio_parquet(db, portfolio_id, df)
             logger.info(f"Stored {len(data_records)} data records for portfolio {portfolio_id}")
             return data_records
             
@@ -212,6 +240,11 @@ class PortfolioService:
         """
         Get portfolio data as pandas DataFrame. If columns is provided, only those columns are included.
         """
+        # Try to load from Parquet first
+        df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=columns)
+        if df is not None:
+            return df
+        # Fallback to DB
         data = PortfolioService.get_portfolio_data(db, portfolio_id)
         if not data:
             return pd.DataFrame()
