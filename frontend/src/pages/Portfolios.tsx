@@ -616,13 +616,13 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
           {selectedPortfolios.length >= 2 && (
             <button
               onClick={optimizePortfolioWeights}
-              disabled={analyzing || selectedPortfolios.length > 6}
+              disabled={analyzing || selectedPortfolios.length > 20}
               className="btn btn-success"
               style={{
                 padding: "0.5rem 1.5rem",
                 fontSize: "0.9rem",
                 marginRight: "0.5rem",
-                opacity: analyzing || selectedPortfolios.length > 6 ? 0.5 : 1,
+                opacity: analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
               }}
               title="Find optimal weights to maximize return while minimizing drawdown"
             >
