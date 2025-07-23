@@ -2,9 +2,9 @@ import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import AnalysisResult, Base
+from database import engine
+print("SQLAlchemy engine URL:", engine.url)
 
-DATABASE_URL = "sqlite:///portfolio_analysis.db"  # Update if using a different DB
-engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 if len(sys.argv) < 2:
