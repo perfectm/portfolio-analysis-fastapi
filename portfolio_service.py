@@ -13,6 +13,7 @@ import os
 
 from models import Portfolio, PortfolioData, AnalysisResult, AnalysisPlot, BlendedPortfolio, BlendedPortfolioMapping
 from config import DATE_COLUMNS, PL_COLUMNS
+from portfolio_processor import process_portfolio_data
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,17 @@ class PortfolioService:
 
     @staticmethod
     def save_portfolio_parquet(db: Session, portfolio_id: int, df: pd.DataFrame):
+        # Always save the fully processed DataFrame
+        processed_df, _ = process_portfolio_data(
+            df,
+            rf_rate=0.05,  # Use default or pass as needed
+            sma_window=20,
+            use_trading_filter=True,
+            starting_capital=100000.0
+        )
         parquet_path = PortfolioService.get_parquet_path(portfolio_id)
         os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
-        df.to_parquet(parquet_path, index=False)
+        processed_df.to_parquet(parquet_path, index=False)
         # Update the portfolio record
         portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
         if portfolio:
@@ -238,11 +247,23 @@ class PortfolioService:
     @staticmethod
     def get_portfolio_dataframe(db: Session, portfolio_id: int, columns: list = None) -> pd.DataFrame:
         # Try to load from Parquet first
-        df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=columns)
+        df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=None)  # Load all columns
         if df is not None:
-            # Rename column if needed for compatibility
+            # Defensive renaming
             if 'Cumulative_PL' in df.columns:
                 df = df.rename(columns={'Cumulative_PL': 'Cumulative P/L'})
+            # If only raw columns are present, process the DataFrame
+            required_cols = {'Cumulative P/L', 'Account_Value', 'Drawdown Pct'}
+            if not required_cols.issubset(df.columns):
+                df, _ = process_portfolio_data(
+                    df,
+                    rf_rate=0.05,  # Use default or pass as needed
+                    sma_window=20,
+                    use_trading_filter=True,
+                    starting_capital=100000.0
+                )
+            if columns:
+                df = df[[col for col in columns if col in df.columns]]
             import logging
             logging.error(f"[get_portfolio_dataframe] DEBUG: Returning DataFrame columns: {list(df.columns)}")
             logging.error(f"[get_portfolio_dataframe] DEBUG: DataFrame head:\n{df.head()}")
@@ -256,7 +277,7 @@ class PortfolioService:
             row = {
                 'Date': record.date,
                 'P/L': record.pl,
-                'Cumulative P/L': record.cumulative_pl,  # <-- use space
+                'Cumulative P/L': record.cumulative_pl,
                 'Account_Value': record.account_value,
                 'Daily_Return': record.daily_return
             }
@@ -266,6 +287,16 @@ class PortfolioService:
         df = pd.DataFrame(df_data)
         if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'])
+        # Process if needed
+        required_cols = {'Cumulative P/L', 'Account_Value', 'Drawdown Pct'}
+        if not required_cols.issubset(df.columns):
+            df, _ = process_portfolio_data(
+                df,
+                rf_rate=0.05,
+                sma_window=20,
+                use_trading_filter=True,
+                starting_capital=100000.0
+            )
         import logging
         logging.error(f"[get_portfolio_dataframe] DEBUG: Returning DataFrame columns: {list(df.columns)}")
         logging.error(f"[get_portfolio_dataframe] DEBUG: DataFrame head:\n{df.head()}")
