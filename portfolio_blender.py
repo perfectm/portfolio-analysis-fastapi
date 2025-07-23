@@ -65,6 +65,7 @@ def create_blended_portfolio(
         try:
             logger.info(f"Processing file for blended portfolio: {filename} (multiplier: {weights[i]:.1f}x)")
             logger.info(f"Input DataFrame shape for {filename}: {df.shape}")
+            logger.info(f"[MEMORY] {filename} DataFrame memory usage: {df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
             
             # Process individual file to get clean trade data
             clean_df, individual_metrics = process_portfolio_data(
@@ -74,7 +75,7 @@ def create_blended_portfolio(
                 use_trading_filter=use_trading_filter,
                 starting_capital=starting_capital
             )
-            
+            logger.info(f"[MEMORY] {filename} clean_df memory usage: {clean_df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
             logger.info(f"Processed DataFrame shape for {filename}: {clean_df.shape}")
             
             # Store daily returns for correlation analysis
@@ -117,13 +118,14 @@ def create_blended_portfolio(
     if individual_portfolios_pl:
         # Start with the first portfolio
         blended_trades = individual_portfolios_pl[0].copy()
-        
+        logger.info(f"[MEMORY] Initial blended_trades memory usage: {blended_trades.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
         # Add subsequent portfolios
         for daily_pl in individual_portfolios_pl[1:]:
             blended_trades = pd.merge(blended_trades, daily_pl, on='Date', how='outer', suffixes=('', '_new'))
             # Sum P/L columns, treating NaN as 0
             blended_trades['P/L'] = blended_trades['P/L'].fillna(0) + blended_trades['P/L_new'].fillna(0)
             blended_trades = blended_trades.drop('P/L_new', axis=1)
+            logger.info(f"[MEMORY] Blended_trades after merge memory usage: {blended_trades.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
     
     # Process blended portfolio if we have data
     if not blended_trades.empty and len(files_data) > 1:
@@ -131,6 +133,7 @@ def create_blended_portfolio(
             logger.info("Processing blended portfolio with multiplier system")
             logger.info(f"Portfolio multipliers: {dict(zip(portfolio_names, weights))}")
             logger.info(f"Initial total P/L in blended trades: {blended_trades['P/L'].sum():.2f}")
+            logger.info(f"[MEMORY] Final blended_trades before process_portfolio_data: {blended_trades.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
             
             # Ensure Date is datetime type and normalize to midnight
             blended_trades['Date'] = pd.to_datetime(blended_trades['Date']).dt.normalize()
@@ -149,6 +152,7 @@ def create_blended_portfolio(
                 starting_capital=starting_capital,
                 is_blended=True  # Important flag to indicate this is a blended portfolio
             )
+            logger.info(f"[MEMORY] blended_df after process_portfolio_data: {blended_df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
             
             # Add multiplier information to metrics
             blended_metrics['Portfolio_Weights'] = dict(zip(portfolio_names, weights))

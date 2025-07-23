@@ -120,12 +120,6 @@ def process_portfolio_data(
     metrics = _calculate_portfolio_metrics(
         clean_df, rf_rate, daily_rf_rate, starting_capital, actual_starting_capital
     )
-    # Debug logs for DataFrame stats and metrics
-    logger.error(f"[metrics debug] DataFrame describe:\n{clean_df.describe(include='all')}")
-    logger.error(f"[metrics debug] Any NaN? {clean_df.isna().any()}")
-    logger.error(f"[metrics debug] Any Inf? {((clean_df == float('inf')).any().any() or (clean_df == float('-inf')).any().any())}")
-    logger.error(f"[metrics debug] Calculated metrics: {metrics}")
-    
     # Calculate drawdown
     clean_df = _calculate_drawdown(clean_df)
     
