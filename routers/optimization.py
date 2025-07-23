@@ -80,11 +80,21 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
+                df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
+                # Check for missing/zero metrics
+                if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
+                    result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                    metrics = result['metrics']
+                    clean_df = result['clean_df']
+                else:
+                    clean_df = df
                 individual_results.append({
                     'filename': name,
                     'metrics': metrics,
                     'type': 'file',
-                    'plots': []
+                    'plots': [],
+                    'clean_df': clean_df
                 })
             else:
                 # Run process_individual_portfolios for this portfolio only
@@ -375,11 +385,21 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
+                df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
+                # Check for missing/zero metrics
+                if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
+                    result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                    metrics = result['metrics']
+                    clean_df = result['clean_df']
+                else:
+                    clean_df = df
                 individual_results.append({
                     'filename': name,
                     'metrics': metrics,
                     'type': 'file',
-                    'plots': []
+                    'plots': [],
+                    'clean_df': clean_df
                 })
             else:
                 # Run process_individual_portfolios for this portfolio only
