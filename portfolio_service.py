@@ -247,7 +247,7 @@ class PortfolioService:
     @staticmethod
     def get_portfolio_dataframe(db: Session, portfolio_id: int, columns: list = None) -> pd.DataFrame:
         # Try to load from Parquet first
-        df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=None)  # Load all columns
+        df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=columns)  # Load only requested columns
         if df is not None:
             # Defensive renaming
             if 'Cumulative_PL' in df.columns:

@@ -12,6 +12,8 @@ import seaborn as sns
 import logging
 import warnings
 from typing import List, Optional, Dict, Any
+import gc
+import psutil
 
 from config import UPLOAD_FOLDER
 
@@ -23,6 +25,12 @@ warnings.filterwarnings('ignore', message='Format strings passed to MaskedConsta
 warnings.filterwarnings('ignore', category=FutureWarning, module='seaborn.matrix')
 
 logger = logging.getLogger(__name__)
+
+
+def log_memory_usage(context: str):
+    process = psutil.Process()
+    mem_mb = process.memory_info().rss / 1024 ** 2
+    logger.info(f"[MEMORY] {context}: {mem_mb:.2f} MB RSS")
 
 
 def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str, sma_window: int = 20) -> List[str]:
@@ -38,6 +46,7 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
     Returns:
         List of plot file paths
     """
+    log_memory_usage(f"[create_plots] BEFORE plotting {filename_prefix}")
     try:
         logger.info(f"[create_plots] Starting plot creation for {filename_prefix}")
         logger.info(f"[create_plots] DataFrame shape: {df.shape}")
@@ -144,15 +153,24 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         if os.path.exists(plot_path):
             file_size = os.path.getsize(plot_path)
             logger.info(f"[create_plots] Plot saved successfully: {plot_path} (size: {file_size} bytes)")
+            del df
+            gc.collect()
+            log_memory_usage(f"[create_plots] AFTER cleanup {filename_prefix}")
             return [plot_path]
         else:
             logger.error(f"[create_plots] Plot file was not created: {plot_path}")
+            del df
+            gc.collect()
+            log_memory_usage(f"[create_plots] AFTER cleanup {filename_prefix}")
             return []
             
     except Exception as plot_error:
         logger.error(f"[create_plots] Error creating plots: {str(plot_error)}")
         # Close any open figures to prevent memory leaks
         plt.close('all')
+        del df
+        gc.collect()
+        log_memory_usage(f"[create_plots] AFTER EXCEPTION cleanup {filename_prefix}")
         return []
 
 
@@ -167,6 +185,7 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
     Returns:
         Path to saved heatmap file or None if failed
     """
+    log_memory_usage("[create_correlation_heatmap] BEFORE plotting")
     try:
         logger.info(f"[Correlation Heatmap] Input data shape: {correlation_data.shape}")
         logger.info(f"[Correlation Heatmap] Input columns: {list(correlation_data.columns)}")
@@ -241,10 +260,16 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         plt.close()  # Explicitly close figure to free memory
         
         logger.info(f"[Correlation Heatmap] Successfully created heatmap: {heatmap_path}")
+        del correlation_data, correlation_data_filled, correlation_matrix, correlation_matrix_clean, correlation_matrix_display, annotations, mask
+        gc.collect()
+        log_memory_usage("[create_correlation_heatmap] AFTER plotting")
         return heatmap_path
         
     except Exception as e:
         logger.error(f"[Correlation Heatmap] Error creating correlation heatmap: {str(e)}", exc_info=True)
+        del correlation_data
+        gc.collect()
+        log_memory_usage("[create_correlation_heatmap] AFTER EXCEPTION cleanup")
         return None
 
 
@@ -266,6 +291,7 @@ def create_monte_carlo_simulation(
     Returns:
         Path to saved Monte Carlo plot or None if failed
     """
+    log_memory_usage("[create_monte_carlo_simulation] BEFORE plotting")
     try:
         # Create plots directory if it doesn't exist
         plots_dir = os.path.join(UPLOAD_FOLDER, 'plots')
@@ -349,8 +375,15 @@ Probability of Loss: {(final_values < current_value).mean() * 100:.1f}%"""
         plt.savefig(mc_path, dpi=150, bbox_inches='tight')  # Reduced from 300 DPI
         plt.close()  # Explicitly close figure to free memory
         
+        logger.info(f"Monte Carlo simulation plot saved: {mc_path}")
+        del blended_df, daily_returns, random_returns, portfolio_paths, percentile_paths, percentiles, colors, labels, time_axis, final_values, stats_text
+        gc.collect()
+        log_memory_usage("[create_monte_carlo_simulation] AFTER plotting")
         return mc_path
         
     except Exception as e:
         logger.error(f"Error creating Monte Carlo simulation: {str(e)}")
+        del blended_df
+        gc.collect()
+        log_memory_usage("[create_monte_carlo_simulation] AFTER EXCEPTION cleanup")
         return None
