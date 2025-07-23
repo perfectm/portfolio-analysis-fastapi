@@ -314,6 +314,9 @@ class PortfolioService:
         Store analysis results in database
         """
         try:
+            logger.error(f"[store_analysis_result] DEBUG: Attempting to store analysis result for portfolio_id={portfolio_id}, analysis_type={analysis_type}")
+            logger.error(f"[store_analysis_result] DEBUG: Metrics to save: {metrics}")
+            logger.error(f"[store_analysis_result] DEBUG: Analysis params: {analysis_params}")
             analysis_result = AnalysisResult(
                 portfolio_id=portfolio_id,
                 analysis_type=analysis_type,
@@ -347,7 +350,10 @@ class PortfolioService:
             return analysis_result
             
         except Exception as e:
-            logger.error(f"Error storing analysis result: {e}")
+            logger.error(f"[store_analysis_result] ERROR: Exception occurred while storing analysis result for portfolio_id={portfolio_id}, analysis_type={analysis_type}")
+            logger.error(f"[store_analysis_result] ERROR: Metrics: {metrics}")
+            logger.error(f"[store_analysis_result] ERROR: Analysis params: {analysis_params}")
+            logger.error(f"[store_analysis_result] ERROR: Exception: {e}", exc_info=True)
             db.rollback()
             raise
     
