@@ -43,6 +43,10 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         logger.info(f"[create_plots] DataFrame shape: {df.shape}")
         logger.info(f"[create_plots] DataFrame columns: {list(df.columns)}")
         
+        # Defensive column renaming for compatibility
+        if 'Cumulative_PL' in df.columns and 'Cumulative P/L' not in df.columns:
+            df = df.rename(columns={'Cumulative_PL': 'Cumulative P/L'})
+        
         # Create plots directory if it doesn't exist
         plots_dir = os.path.join(UPLOAD_FOLDER, 'plots')
         logger.info(f"[create_plots] Creating plots directory: {plots_dir}")
