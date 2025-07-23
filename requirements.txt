@@ -24,3 +24,5 @@ python-dotenv>=1.0.0
 
 # Optimization dependencies
 scipy>=1.10.0
+
+psutil
