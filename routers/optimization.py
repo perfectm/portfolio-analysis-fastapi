@@ -13,6 +13,18 @@ import os
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Add a helper function to check for a matching AnalysisResult for a portfolio and parameters.
+def get_cached_analysis_result(db, portfolio_id, rf_rate, sma_window, use_trading_filter, starting_capital):
+    from sqlalchemy import and_
+    from models import AnalysisResult
+    return db.query(AnalysisResult).filter(
+        AnalysisResult.portfolio_id == portfolio_id,
+        AnalysisResult.rf_rate == rf_rate,
+        AnalysisResult.sma_window == sma_window,
+        AnalysisResult.use_trading_filter == use_trading_filter,
+        AnalysisResult.starting_capital == starting_capital
+    ).order_by(AnalysisResult.created_at.desc()).first()
+
 @router.post("/analyze-portfolios-weighted")
 async def analyze_selected_portfolios_weighted(request: Request, db: Session = Depends(get_db)):
     try:
@@ -53,7 +65,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             if not portfolio:
                 logger.warning(f"Portfolio {portfolio_id} not found")
                 continue
-            df = PortfolioService.get_portfolio_dataframe(db, portfolio_id)
+            df = PortfolioService.get_portfolio_dataframe(db, portfolio_id, columns=["Date", "P/L", "Daily_Return"])
             if df.empty:
                 logger.warning(f"No data found for portfolio {portfolio_id}")
                 continue
@@ -62,14 +74,23 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         if not portfolios_data:
             return {"success": False, "error": "No valid portfolio data found"}
         logger.info(f"[Weighted Analysis] Processing {len(portfolios_data)} portfolios")
-        individual_results = process_individual_portfolios(
-            portfolios_data,
-            rf_rate=0.05,
-            sma_window=20,
-            use_trading_filter=True,
-            starting_capital=starting_capital
-        )
-        logger.info(f"[Weighted Analysis] Individual analysis completed for {len(individual_results)} portfolios")
+        individual_results = []
+        for i, (name, df) in enumerate(portfolios_data):
+            cached = get_cached_analysis_result(db, portfolio_ids[i], 0.05, 20, True, starting_capital)
+            if cached:
+                import json
+                metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
+                individual_results.append({
+                    'filename': name,
+                    'metrics': metrics,
+                    'type': 'file',
+                    'plots': []
+                })
+            else:
+                # Run process_individual_portfolios for this portfolio only
+                result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
             if 'metrics' in result:
@@ -339,7 +360,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             if not portfolio:
                 logger.warning(f"Portfolio {portfolio_id} not found")
                 continue
-            df = PortfolioService.get_portfolio_dataframe(db, portfolio_id)
+            df = PortfolioService.get_portfolio_dataframe(db, portfolio_id, columns=["Date", "P/L", "Daily_Return"])
             if df.empty:
                 logger.warning(f"No data found for portfolio {portfolio_id}")
                 continue
@@ -348,14 +369,23 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         if not portfolios_data:
             return {"success": False, "error": "No valid portfolio data found"}
         logger.info(f"[Analyze Portfolios] Processing {len(portfolios_data)} portfolios")
-        individual_results = process_individual_portfolios(
-            portfolios_data,
-            rf_rate=0.05,
-            sma_window=20,
-            use_trading_filter=True,
-            starting_capital=starting_capital
-        )
-        logger.info(f"[Analyze Portfolios] Individual analysis completed for {len(individual_results)} portfolios")
+        individual_results = []
+        for i, (name, df) in enumerate(portfolios_data):
+            cached = get_cached_analysis_result(db, portfolio_ids[i], 0.05, 20, True, starting_capital)
+            if cached:
+                import json
+                metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
+                individual_results.append({
+                    'filename': name,
+                    'metrics': metrics,
+                    'type': 'file',
+                    'plots': []
+                })
+            else:
+                # Run process_individual_portfolios for this portfolio only
+                result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
             if 'metrics' in result:

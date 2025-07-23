@@ -208,28 +208,29 @@ class PortfolioService:
         return query.all()
     
     @staticmethod
-    def get_portfolio_dataframe(db: Session, portfolio_id: int) -> pd.DataFrame:
+    def get_portfolio_dataframe(db: Session, portfolio_id: int, columns: list = None) -> pd.DataFrame:
         """
-        Get portfolio data as pandas DataFrame
+        Get portfolio data as pandas DataFrame. If columns is provided, only those columns are included.
         """
         data = PortfolioService.get_portfolio_data(db, portfolio_id)
-        
         if not data:
             return pd.DataFrame()
-        
         # Convert to DataFrame
         df_data = []
         for record in data:
-            df_data.append({
+            row = {
                 'Date': record.date,
                 'P/L': record.pl,
                 'Cumulative_PL': record.cumulative_pl,
                 'Account_Value': record.account_value,
                 'Daily_Return': record.daily_return
-            })
-        
+            }
+            if columns:
+                row = {k: v for k, v in row.items() if k in columns}
+            df_data.append(row)
         df = pd.DataFrame(df_data)
-        df['Date'] = pd.to_datetime(df['Date'])
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'])
         return df
     
     @staticmethod
