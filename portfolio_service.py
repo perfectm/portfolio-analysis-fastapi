@@ -237,24 +237,23 @@ class PortfolioService:
     
     @staticmethod
     def get_portfolio_dataframe(db: Session, portfolio_id: int, columns: list = None) -> pd.DataFrame:
-        """
-        Get portfolio data as pandas DataFrame. If columns is provided, only those columns are included.
-        """
         # Try to load from Parquet first
         df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=columns)
         if df is not None:
+            # Rename column if needed for compatibility
+            if 'Cumulative_PL' in df.columns:
+                df = df.rename(columns={'Cumulative_PL': 'Cumulative P/L'})
             return df
         # Fallback to DB
         data = PortfolioService.get_portfolio_data(db, portfolio_id)
         if not data:
             return pd.DataFrame()
-        # Convert to DataFrame
         df_data = []
         for record in data:
             row = {
                 'Date': record.date,
                 'P/L': record.pl,
-                'Cumulative_PL': record.cumulative_pl,
+                'Cumulative P/L': record.cumulative_pl,  # <-- use space
                 'Account_Value': record.account_value,
                 'Daily_Return': record.daily_return
             }
