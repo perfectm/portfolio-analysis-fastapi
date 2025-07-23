@@ -23,7 +23,7 @@ class Portfolio(Base):
     date_range_end = Column(DateTime)    # Last date in the data
     file_hash = Column(String(64), index=True)  # SHA-256 hash for duplicate detection
     strategy = Column(String(255), nullable=True)  # Trading strategy description
-    
+    parquet_path = Column(String(500), nullable=True)  # Path to Parquet file
     # Relationships
     raw_data = relationship("PortfolioData", back_populates="portfolio", cascade="all, delete-orphan")
     analysis_results = relationship("AnalysisResult", back_populates="portfolio", cascade="all, delete-orphan")
