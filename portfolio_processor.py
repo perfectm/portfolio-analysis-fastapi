@@ -79,7 +79,8 @@ def process_portfolio_data(
     
     # Calculate returns based on account value inplace
     clean_df['Daily Return'] = clean_df['Account Value'].pct_change()
-    clean_df['Daily Return'].replace([np.inf, -np.inf], np.nan, inplace=True)
+    # Replace inf values without using inplace
+    clean_df['Daily Return'] = clean_df['Daily Return'].replace([np.inf, -np.inf], np.nan)
     
     # Calculate SMA if using trading filter
     if use_trading_filter:
