@@ -204,14 +204,14 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         portfolio_names = []
                         
                         # Only use individual portfolio data for correlation
-                        for i, (name, _) in enumerate(portfolios_data):
-                            if i < len(individual_results) and 'clean_df' in individual_results[i]:
-                                df = individual_results[i]['clean_df']
-                                if 'Daily Return' in df.columns:
-                                    correlation_data[name] = df['Daily Return']
-                                    portfolio_names.append(name)
+                        for i, (name, df) in enumerate(portfolios_data):
+                            # Calculate daily returns for each portfolio
+                            df['Daily Return'] = df['P/L'] / starting_capital
+                            correlation_data[name] = df['Daily Return']
+                            portfolio_names.append(name)
                         
                         if not correlation_data.empty and len(correlation_data.columns) >= 2:
+                            logger.info(f"[Weighted Analysis] Creating correlation heatmap with {len(portfolio_names)} portfolios")
                             heatmap_path = create_correlation_heatmap(correlation_data, portfolio_names)
                             if heatmap_path:
                                 heatmap_filename = os.path.basename(heatmap_path)
