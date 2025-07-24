@@ -475,7 +475,7 @@ def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
     clean_df['Drawdown Pct'] = clean_df['Drawdown Amount'] / clean_df['Rolling Peak']
     
     # Free memory from intermediate columns after calculations
-    clean_df.drop(['Rolling Peak', 'Drawdown Amount'], axis=1, inplace=True)
+    clean_df.drop(['Rolling Peak'], axis=1, inplace=True)  # Keep Drawdown Amount for metrics
     return clean_df
 
 
@@ -489,19 +489,20 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     # Get detailed drawdown information
     max_drawdown_date = clean_df.loc[max_drawdown_idx, 'Date']
     max_drawdown_account_value = clean_df.loc[max_drawdown_idx, 'Account Value']
-    drawdown_peak_value = clean_df.loc[max_drawdown_idx, 'Rolling Peak']
+    
+    # Calculate peak value at time of max drawdown
+    peak_value = max_drawdown_account_value - max_drawdown
     
     # Find the date when the drawdown began
     pre_drawdown_data = clean_df.loc[:max_drawdown_idx]
-    drawdown_peak_idx = pre_drawdown_data[pre_drawdown_data['Account Value'] == drawdown_peak_value].index[-1]
+    drawdown_peak_idx = pre_drawdown_data[pre_drawdown_data['Account Value'] == peak_value].index[-1]
     drawdown_start_date = clean_df.loc[drawdown_peak_idx, 'Date']
     
     # Calculate recovery info
     recovery_days = None
     if max_drawdown_idx < len(clean_df) - 1:
         recovery_series = clean_df.loc[max_drawdown_idx:, 'Account Value']
-        drawdown_peak_value = clean_df.loc[max_drawdown_idx, 'Rolling Peak']
-        recovered_points = recovery_series[recovery_series >= drawdown_peak_value]
+        recovered_points = recovery_series[recovery_series >= peak_value]
         if not recovered_points.empty:
             recovery_idx = recovered_points.index[0]
             recovery_days = (clean_df.loc[recovery_idx, 'Date'] - clean_df.loc[max_drawdown_idx, 'Date']).days
@@ -510,13 +511,16 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     cagr = _calculate_cagr_from_df(clean_df)
     mar_ratio = abs(cagr / abs(max_drawdown_pct)) if max_drawdown_pct != 0 else 0
 
+    # Clean up the Drawdown Amount column after metrics calculation
+    clean_df.drop(['Drawdown Amount'], axis=1, inplace=True)
+
     return {
         'mar_ratio': float(mar_ratio),
         'max_drawdown': float(max_drawdown),
         'max_drawdown_percent': float(abs(max_drawdown_pct)),  # Already as decimal
         'max_drawdown_date': max_drawdown_date.strftime('%Y-%m-%d'),
         'drawdown_start_date': drawdown_start_date.strftime('%Y-%m-%d'),
-        'account_value_at_drawdown_start': float(drawdown_peak_value),
+        'account_value_at_drawdown_start': float(peak_value),
         'account_value_at_max_drawdown': float(max_drawdown_account_value),
         'recovery_days': float(recovery_days) if recovery_days is not None else 0.0,
         'has_recovered': recovery_days is not None
