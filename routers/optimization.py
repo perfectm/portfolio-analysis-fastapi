@@ -54,16 +54,13 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         return {"success": False, "error": f"All multipliers must be positive. Multiplier {i+1}: {multiplier}"}
                 portfolio_weights = weights
             elif weighting_method == "equal":
-                portfolio_weights = [1.0] * len(portfolio_ids)
+                portfolio_weights = [1.0] * len(portfolio_ids)  # Each portfolio at 1x
             elif weights:
                 portfolio_weights = weights
             else:
-                portfolio_weights = [1.0] * len(portfolio_ids)
-                
-            # Normalize weights to sum to 1.0
-            weight_sum = sum(portfolio_weights)
-            portfolio_weights = [w / weight_sum for w in portfolio_weights]
-            logger.info(f"[Weighted Analysis] Normalized weights (sum={sum(portfolio_weights):.6f}): {portfolio_weights}")
+                portfolio_weights = [1.0] * len(portfolio_ids)  # Default to 1x for each portfolio
+            
+            logger.info(f"[Weighted Analysis] Using portfolio multipliers: {portfolio_weights}")
         portfolios_data = []
         for portfolio_id in portfolio_ids:
             portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
@@ -477,12 +474,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         if len(portfolios_data) > 1:
             try:
                 logger.info("[Analyze Portfolios] Creating blended portfolio analysis")
-                # Calculate equal weights for all portfolios
-                equal_weights = [1.0/len(portfolio_ids)] * len(portfolio_ids)
-                # Ensure weights sum to exactly 1.0 (handle floating point precision)
-                weight_sum = sum(equal_weights)
-                equal_weights = [w / weight_sum for w in equal_weights]
-                logger.info(f"[Analyze Portfolios] Using equal weights (sum={sum(equal_weights):.6f}): {equal_weights}")
+                # Use 1x multiplier for each portfolio
+                equal_weights = [1.0] * len(portfolio_ids)
+                logger.info(f"[Analyze Portfolios] Using equal weights (1x each): {equal_weights}")
                 
                 blended_df, blended_metrics = create_blended_portfolio(
                     db=db,

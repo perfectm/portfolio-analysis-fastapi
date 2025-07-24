@@ -30,15 +30,16 @@ def create_blended_portfolio(
     if len(portfolio_ids) != len(weights):
         raise ValueError("Number of portfolios must match number of weights")
         
-    if not np.isclose(sum(weights), 1.0, rtol=1e-5):
-        raise ValueError("Weights must sum to 1.0")
+    # Validate that all weights are positive
+    if any(w <= 0 for w in weights):
+        raise ValueError("All weights must be positive numbers")
     
     individual_portfolios_pl = []
     portfolio_names = []
     
     # Process each portfolio with minimal memory footprint
     for idx, (portfolio_id, weight) in enumerate(zip(portfolio_ids, weights)):
-        logger.info(f"Processing portfolio {portfolio_id} with weight {weight}")
+        logger.info(f"Processing portfolio {portfolio_id} with weight {weight}x")
         
         # Load only necessary columns
         df = PortfolioService.get_portfolio_dataframe(
@@ -57,12 +58,12 @@ def create_blended_portfolio(
         # Aggregate P/L by date in case of duplicates
         df = df.groupby('Date')['P/L'].sum().reset_index()
         
-        # Scale P/L by weight
+        # Scale P/L by weight (multiplier)
         df['P/L'] = df['P/L'] * weight
         
         # Get portfolio name for reference
         portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
-        portfolio_name = f"{portfolio.name} (ID: {portfolio_id})"
+        portfolio_name = f"{portfolio.name} ({weight}x)"
         portfolio_names.append(portfolio_name)
         
         # Set unique column name for this portfolio's P/L
