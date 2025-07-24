@@ -225,8 +225,13 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         # Fill NaN values in correlation matrix with 0 for display
         correlation_matrix_display = correlation_matrix_clean.fillna(0)
         
-        # Create custom annotation array to handle NaN values properly
-        annotations = correlation_matrix_display.round(3).astype(str)
+        # Create custom annotation array with better number formatting
+        def format_correlation(x):
+            if abs(x) < 0.001:  # Very small correlations show as 0
+                return "0.00"
+            return f"{x:.2f}"  # Show 2 decimal places for all other values
+        
+        annotations = np.vectorize(format_correlation)(correlation_matrix_display)
         
         # Generate the heatmap without automatic annotations first
         sns.heatmap(correlation_matrix_display, 
@@ -238,15 +243,17 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
                    center=0,
                    square=True, 
                    cbar_kws={"shrink": .8},
-                   mask=mask)
+                   mask=mask,
+                   annot_kws={'size': 10, 'weight': 'bold'},  # Increase font size and make bold
+                   )
         
         plt.title('Portfolio Correlation Matrix\n(Daily Returns)', fontsize=16, pad=20)
         plt.xlabel('Portfolios', fontsize=12)
         plt.ylabel('Portfolios', fontsize=12)
-        plt.xticks(rotation=45, ha='right')
-        plt.yticks(rotation=0)
+        plt.xticks(rotation=45, ha='right', fontsize=10)  # Increase tick label size
+        plt.yticks(rotation=0, fontsize=10)  # Increase tick label size
         
-        # Adjust layout
+        # Adjust layout to ensure all labels are visible
         plt.tight_layout()
         
         # Create unique filename based on portfolio names and timestamp
