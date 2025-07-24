@@ -7,170 +7,124 @@ import logging
 from typing import List, Dict, Any, Tuple
 
 from portfolio_processor import process_portfolio_data, _convert_numpy_types
+from database.models import Portfolio, BlendedPortfolio, BlendedPortfolioMapping
+from database.services import PortfolioService
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
 
 def create_blended_portfolio(
-    files_data: List[Tuple[str, pd.DataFrame]], 
-    rf_rate: float = 0.043,
-    sma_window: int = 20,
-    use_trading_filter: bool = True,
-    starting_capital: float = 100000.0,
-    weights: List[float] = None,
-    use_capital_allocation: bool = False
-) -> Tuple[pd.DataFrame, Dict[str, Any], pd.DataFrame]:
-    """
-    Create a blended portfolio from multiple portfolio files using portfolio multipliers
+    db: Session,
+    portfolio_ids: List[int],
+    weights: List[float],
+    name: str = None,
+    description: str = None
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Create a blended portfolio with memory optimization"""
+    import psutil
+    process = psutil.Process()
+    logger.info(f"[MEMORY] Start blending - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
     
-    Args:
-        files_data: List of (filename, dataframe) tuples
-        rf_rate: Annual risk-free rate
-        sma_window: SMA window
-        use_trading_filter: Whether to use trading filter
-        starting_capital: Starting capital
-        weights: List of multipliers for each portfolio (e.g., 1.0 = full scale, 2.0 = double, 0.5 = half)
-        use_capital_allocation: Deprecated - multiplier system always applies scaling
+    if len(portfolio_ids) != len(weights):
+        raise ValueError("Number of portfolios must match number of weights")
         
-    Returns:
-        Tuple of (blended_df, blended_metrics, correlation_data)
-    """
-    blended_trades = pd.DataFrame()
-    correlation_data = pd.DataFrame()
+    if not np.isclose(sum(weights), 1.0, rtol=1e-5):
+        raise ValueError("Weights must sum to 1.0")
+    
+    individual_portfolios_pl = []
     portfolio_names = []
     
-    # Validate and set up weights (using multiplier system)
-    if weights is None:
-        # Default: Run each portfolio at full scale (1.0x)
-        weights = [1.0] * len(files_data)
-        logger.info(f"Using default multipliers (1.0x each): {weights}")
-    else:
-        # Validate weights
-        if len(weights) != len(files_data):
-            raise ValueError(f"Number of multipliers ({len(weights)}) must match number of files ({len(files_data)})")
+    # Process each portfolio with minimal memory footprint
+    for idx, (portfolio_id, weight) in enumerate(zip(portfolio_ids, weights)):
+        logger.info(f"Processing portfolio {portfolio_id} with weight {weight}")
         
-        # Validate that all weights are positive
-        if any(w <= 0 for w in weights):
-            raise ValueError("All portfolio multipliers must be positive numbers")
+        # Load only necessary columns
+        df = PortfolioService.get_portfolio_dataframe(
+            db, 
+            portfolio_id,
+            columns=['Date', 'P/L']
+        )
         
-        logger.info(f"Using custom multipliers: {weights}")
-        logger.info(f"Portfolio scaling: {[f'{w}x' for w in weights]}")
-    
-    # Store individual portfolio P/L data for weighted blending
-    individual_portfolios_pl = []
-    
-    successfully_processed_portfolios = []
-    
-    for i, (filename, df) in enumerate(files_data):
-        try:
-            logger.info(f"Processing file for blended portfolio: {filename} (multiplier: {weights[i]:.1f}x)")
-            logger.info(f"Input DataFrame shape for {filename}: {df.shape}")
-            logger.info(f"[MEMORY] {filename} DataFrame memory usage: {df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
-            
-            # Process individual file to get clean trade data
-            clean_df, individual_metrics = process_portfolio_data(
-                df,
-                rf_rate=rf_rate,
-                sma_window=sma_window,
-                use_trading_filter=use_trading_filter,
-                starting_capital=starting_capital
-            )
-            logger.info(f"[MEMORY] {filename} clean_df memory usage: {clean_df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
-            logger.info(f"Processed DataFrame shape for {filename}: {clean_df.shape}")
-            
-            # Store daily returns for correlation analysis
-            portfolio_name = filename.replace('.csv', '')
-            portfolio_names.append(portfolio_name)
-            successfully_processed_portfolios.append((filename, portfolio_name, i))
-            
-            # Get daily account returns for correlation
-            daily_returns = clean_df.set_index('Date')['Daily Return'].fillna(0)
-            logger.info(f"Daily returns shape for {filename}: {daily_returns.shape}")
-            
-            if correlation_data.empty:
-                correlation_data = daily_returns.to_frame(portfolio_name)
-                logger.info(f"Initialized correlation_data with {portfolio_name}: shape {correlation_data.shape}")
-            else:
-                correlation_data = correlation_data.join(daily_returns.to_frame(portfolio_name), how='outer')
-                logger.info(f"Added {portfolio_name} to correlation_data: shape {correlation_data.shape}, columns: {list(correlation_data.columns)}")
-            
-            # Store individual portfolio P/L data for blending
-            daily_pl = clean_df.groupby('Date')['P/L'].sum().reset_index()
-            
-            # Apply portfolio multiplier - scale P/L by the multiplier
-            daily_pl['P/L'] = daily_pl['P/L'] * weights[i]
-            logger.info(f"Applied {weights[i]:.1f}x multiplier to {filename} (P/L scaled by {weights[i]:.1f})")
-            
-            individual_portfolios_pl.append(daily_pl)
-            
-            logger.info(f"Successfully processed {filename} for blended portfolio")
-            
-        except Exception as e:
-            logger.error(f"Error processing {filename} for blended portfolio: {str(e)}", exc_info=True)
-            logger.warning(f"Skipping {filename} - will not be included in correlation analysis or blended portfolio")
+        if df.empty:
+            logger.warning(f"No data found for portfolio {portfolio_id}")
             continue
+            
+        # Scale P/L by weight
+        df['P/L'] = df['P/L'] * weight
+        
+        # Get portfolio name for reference
+        portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+        portfolio_name = f"{portfolio.name} (ID: {portfolio_id})"
+        portfolio_names.append(portfolio_name)
+        
+        # Set unique column name for this portfolio's P/L
+        df = df.rename(columns={'P/L': f'P/L_{portfolio_id}'})
+        individual_portfolios_pl.append(df)
+        
+        logger.info(f"[MEMORY] After portfolio {idx+1} - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
     
-    logger.info(f"Successfully processed {len(successfully_processed_portfolios)} out of {len(files_data)} portfolios")
-    logger.info(f"Final correlation_data shape: {correlation_data.shape}, columns: {list(correlation_data.columns)}")
-    logger.info(f"Successfully processed portfolios: {[name for _, name, _ in successfully_processed_portfolios]}")
+    if not individual_portfolios_pl:
+        raise ValueError("No valid portfolios to blend")
     
-    # Combine all weighted portfolios
-    if individual_portfolios_pl:
-        # Set index to Date for all DataFrames
-        for idx in range(len(individual_portfolios_pl)):
-            individual_portfolios_pl[idx] = individual_portfolios_pl[idx].set_index('Date')
-        # Concatenate all on columns, fill NaN with 0, then sum across columns
-        blended_trades = pd.concat(individual_portfolios_pl, axis=1).fillna(0)
-        # Sum across all columns to get total P/L per day
-        blended_trades['P/L'] = blended_trades.sum(axis=1)
-        # Keep only the total P/L and reset index
-        blended_trades = blended_trades[['P/L']].reset_index()
-        logger.info(f"[MEMORY] Blended_trades after concat+sum memory usage: {blended_trades.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
+    # Combine all weighted portfolios efficiently
+    logger.info("Combining portfolios...")
     
-    # Process blended portfolio if we have data
-    if not blended_trades.empty and len(files_data) > 1:
-        try:
-            logger.info("Processing blended portfolio with multiplier system")
-            logger.info(f"Portfolio multipliers: {dict(zip(portfolio_names, weights))}")
-            logger.info(f"Initial total P/L in blended trades: {blended_trades['P/L'].sum():.2f}")
-            logger.info(f"[MEMORY] Final blended_trades before process_portfolio_data: {blended_trades.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
-            
-            # Ensure Date is datetime type and normalize to midnight
-            blended_trades['Date'] = pd.to_datetime(blended_trades['Date']).dt.normalize()
-            
-            # Sort by date (no need to group since we've already done daily aggregation)
-            blended_trades = blended_trades.sort_values('Date').reset_index(drop=True)
-            
-            logger.info(f"Total P/L after processing: {blended_trades['P/L'].sum():.2f}")
-            
-            # Process the blended portfolio using the existing function
-            blended_df, blended_metrics = process_portfolio_data(
-                blended_trades,
-                rf_rate=rf_rate,
-                sma_window=sma_window,
-                use_trading_filter=use_trading_filter,
-                starting_capital=starting_capital,
-                is_blended=True  # Important flag to indicate this is a blended portfolio
-            )
-            logger.info(f"[MEMORY] blended_df after process_portfolio_data: {blended_df.memory_usage(deep=True).sum() / 1024 ** 2:.2f} MB")
-            
-            # Add multiplier information to metrics
-            blended_metrics['Portfolio_Weights'] = dict(zip(portfolio_names, weights))
-            blended_metrics['Weighting_Method'] = 'Multiplier'
-            total_multiplier = sum(weights)
-            blended_metrics['Total_Portfolio_Scale'] = total_multiplier
-            logger.info(f"Total portfolio scale: {total_multiplier:.1f}x")
-            
-            # Convert numpy types to Python native types for JSON serialization
-            blended_metrics = _convert_numpy_types(blended_metrics)
-            
-            return blended_df, blended_metrics, correlation_data
-            
-        except Exception as e:
-            logger.error(f"Error processing blended portfolio: {str(e)}")
-            return None, None, correlation_data
+    # Set index to Date for all DataFrames
+    for idx in range(len(individual_portfolios_pl)):
+        individual_portfolios_pl[idx] = individual_portfolios_pl[idx].set_index('Date')
     
-    return None, None, correlation_data
+    # Concatenate all on columns, fill NaN with 0, then sum across columns
+    blended_trades = pd.concat(individual_portfolios_pl, axis=1).fillna(0)
+    
+    # Sum across all P/L columns to get total P/L per day
+    pl_columns = [col for col in blended_trades.columns if col.startswith('P/L_')]
+    blended_trades['P/L'] = blended_trades[pl_columns].sum(axis=1)
+    
+    # Keep only the total P/L and reset index
+    blended_trades = blended_trades[['P/L']].reset_index()
+    
+    # Free memory from individual portfolio DataFrames
+    del individual_portfolios_pl
+    
+    logger.info(f"[MEMORY] After combining - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+    
+    # Process the blended portfolio
+    processed_df, metrics = process_portfolio_data(
+        blended_trades,
+        rf_rate=0.05,
+        sma_window=20,
+        use_trading_filter=True,
+        starting_capital=100000.0,
+        is_blended=True
+    )
+    
+    # Create blended portfolio record
+    if name is None:
+        name = f"Blended Portfolio ({', '.join(portfolio_names)})"
+        
+    blended_portfolio = BlendedPortfolio(
+        name=name,
+        description=description or f"Blend of portfolios: {', '.join(portfolio_names)}"
+    )
+    
+    db.add(blended_portfolio)
+    db.commit()
+    db.refresh(blended_portfolio)
+    
+    # Create mappings
+    for portfolio_id, weight in zip(portfolio_ids, weights):
+        mapping = BlendedPortfolioMapping(
+            blended_portfolio_id=blended_portfolio.id,
+            component_portfolio_id=portfolio_id,
+            weight=weight
+        )
+        db.add(mapping)
+    
+    db.commit()
+    
+    logger.info(f"[MEMORY] End blending - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+    return processed_df, metrics
 
 
 def process_individual_portfolios(

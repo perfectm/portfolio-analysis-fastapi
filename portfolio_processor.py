@@ -48,79 +48,68 @@ def process_portfolio_data(
     is_blended: bool = False
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
-    Process portfolio data and calculate performance metrics
-    
-    Args:
-        df: Input DataFrame with portfolio data
-        rf_rate: Annual risk-free rate
-        daily_rf_rate: Daily risk-free rate
-        sma_window: Simple moving average window
-        use_trading_filter: Whether to apply SMA trading filter
-        starting_capital: Starting capital amount
-        is_blended: Whether this is a blended portfolio
-        
-    Returns:
-        Tuple of processed DataFrame and metrics dictionary
+    Process portfolio data and calculate performance metrics with memory optimization
     """
-    logger.info(f"Original columns in CSV: {df.columns.tolist()}")
+    import psutil
+    process = psutil.Process()
+    logger.info(f"[MEMORY] Start processing - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
     
     # For blended portfolio, we already have the correct columns
     if is_blended:
-        clean_df = df.copy()
+        clean_df = df
         logger.info("Processing as blended portfolio with pre-cleaned data")
     else:
         clean_df = _clean_portfolio_data(df)
+        del df  # Free up memory from original DataFrame
     
-    # Sort by date
-    clean_df = clean_df.sort_values('Date')
+    # Optimize memory usage for numeric columns
+    for col in clean_df.select_dtypes(include=['float64']).columns:
+        clean_df[col] = pd.to_numeric(clean_df[col], downcast='float')
+    for col in clean_df.select_dtypes(include=['int64']).columns:
+        clean_df[col] = pd.to_numeric(clean_df[col], downcast='integer')
     
-    # Show sample of data after cleaning
-    logger.info("\nSample of cleaned data:")
-    logger.info(clean_df.head().to_string())
-    logger.info(f"\nData shape after cleaning: {clean_df.shape}")
-    logger.info(f"Date range: {clean_df['Date'].min()} to {clean_df['Date'].max()}")
-    logger.info(f"Total P/L sum: ${clean_df['P/L'].sum():,.2f}")
+    # Sort by date inplace
+    clean_df.sort_values('Date', inplace=True)
     
-    # Calculate cumulative P/L and account value
+    logger.info(f"[MEMORY] After cleaning - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+    
+    # Calculate cumulative P/L and account value inplace
     clean_df['Cumulative P/L'] = clean_df['P/L'].cumsum()
     clean_df['Account Value'] = starting_capital + clean_df['Cumulative P/L']
     
-    # Calculate returns based on account value
+    # Calculate returns based on account value inplace
     clean_df['Daily Return'] = clean_df['Account Value'].pct_change()
-    
-    # Replace infinite values with NaN
-    clean_df['Daily Return'] = clean_df['Daily Return'].replace([np.inf, -np.inf], np.nan)
+    clean_df['Daily Return'].replace([np.inf, -np.inf], np.nan, inplace=True)
     
     # Calculate SMA if using trading filter
     if use_trading_filter:
         clean_df['SMA'] = clean_df['Account Value'].rolling(window=sma_window, min_periods=1).mean()
         clean_df['Position'] = np.where(clean_df['Account Value'] > clean_df['SMA'], 1, 0)
         clean_df['Strategy Return'] = clean_df['Daily Return'] * clean_df['Position'].shift(1).fillna(0)
+        # Free memory from intermediate columns
+        clean_df.drop(['SMA', 'Position'], axis=1, inplace=True)
     else:
         clean_df['Strategy Return'] = clean_df['Daily Return']
     
     # Keep track of only days with actual trades
     clean_df['Has_Trade'] = clean_df['P/L'] != 0
+    clean_df.loc[~clean_df['Has_Trade'], 'Strategy Return'] = np.nan
     
-    # For Sharpe calculation, we'll only use days with trades
-    clean_df['Strategy Return'] = clean_df['Strategy Return'].where(clean_df['Has_Trade'])
+    logger.info(f"[MEMORY] After calculations - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
     
-    # Dynamic starting capital calculation - adjust for existing cumulative P/L
+    # Dynamic starting capital calculation
     if not clean_df.empty:
-        clean_df_sorted = clean_df.sort_values('Date')
-        first_cumulative_pl = clean_df_sorted['Cumulative P/L'].iloc[0]
+        first_cumulative_pl = clean_df['Cumulative P/L'].iloc[0]
         actual_starting_capital = starting_capital - first_cumulative_pl
-        logger.info(f"Original starting capital: ${starting_capital:,.2f}")
-        logger.info(f"First cumulative P/L: ${first_cumulative_pl:,.2f}")
-        logger.info(f"Calculated actual starting capital: ${actual_starting_capital:,.2f}")
     else:
         actual_starting_capital = starting_capital
     
-    # Calculate metrics with both original and actual starting capital
+    # Calculate metrics
     metrics = _calculate_portfolio_metrics(
         clean_df, rf_rate, daily_rf_rate, starting_capital, actual_starting_capital
     )
-    # Calculate drawdown
+    
+    # Calculate drawdown inplace
     clean_df = _calculate_drawdown(clean_df)
     
     # Update metrics with drawdown information
@@ -129,8 +118,10 @@ def process_portfolio_data(
     
     _log_portfolio_summary(clean_df, metrics, actual_starting_capital)
     
-    # Convert numpy types to Python native types for JSON serialization
+    # Convert numpy types to Python native types
     metrics = _convert_numpy_types(metrics)
+    
+    logger.info(f"[MEMORY] End processing - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
     
     return clean_df, metrics
 
@@ -478,10 +469,13 @@ def _calculate_upi(clean_df: pd.DataFrame, rf_rate: float) -> float:
 
 
 def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculate drawdown metrics"""
+    """Calculate drawdown metrics with memory optimization"""
     clean_df['Rolling Peak'] = clean_df['Account Value'].expanding().max()
     clean_df['Drawdown Amount'] = clean_df['Account Value'] - clean_df['Rolling Peak']
     clean_df['Drawdown Pct'] = clean_df['Drawdown Amount'] / clean_df['Rolling Peak']
+    
+    # Free memory from intermediate columns after calculations
+    clean_df.drop(['Rolling Peak', 'Drawdown Amount'], axis=1, inplace=True)
     return clean_df
 
 

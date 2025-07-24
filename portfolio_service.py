@@ -10,6 +10,7 @@ from sqlalchemy import desc, asc
 import pandas as pd
 import logging
 import os
+import psutil
 
 from models import Portfolio, PortfolioData, AnalysisResult, AnalysisPlot, BlendedPortfolio, BlendedPortfolioMapping
 from config import DATE_COLUMNS, PL_COLUMNS
@@ -246,47 +247,87 @@ class PortfolioService:
     
     @staticmethod
     def get_portfolio_dataframe(db: Session, portfolio_id: int, columns: list = None) -> pd.DataFrame:
-        # Try to load from Parquet first
-        df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=columns)  # Load only requested columns
+        """Get portfolio data as DataFrame with memory-efficient processing"""
+        import psutil
+        process = psutil.Process()
+        logger.info(f"[MEMORY] Before loading portfolio - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+        
+        # Try to load from Parquet first with specific columns
+        if columns:
+            required_cols = {'Date'} | set(columns)  # Ensure we have Date column
+        else:
+            required_cols = None
+        
+        df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=required_cols)
+        
         if df is not None:
+            logger.info(f"[MEMORY] After parquet load - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+            logger.info(f"[MEMORY] DataFrame size: {df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
+            
+            # Optimize memory usage
+            for col in df.select_dtypes(include=['float64']).columns:
+                df[col] = pd.to_numeric(df[col], downcast='float')
+            for col in df.select_dtypes(include=['int64']).columns:
+                df[col] = pd.to_numeric(df[col], downcast='integer')
+                
             # Defensive renaming
             if 'Cumulative_PL' in df.columns:
                 df = df.rename(columns={'Cumulative_PL': 'Cumulative P/L'})
-            # If only raw columns are present, process the DataFrame
-            required_cols = {'Cumulative P/L', 'Account_Value', 'Drawdown Pct'}
-            if not required_cols.issubset(df.columns):
+                
+            # Check if processing is needed
+            required_metrics = {'Cumulative P/L', 'Account_Value', 'Drawdown Pct'}
+            if not required_metrics.issubset(df.columns):
+                logger.info("Processing DataFrame for required metrics")
                 df, _ = process_portfolio_data(
                     df,
-                    rf_rate=0.05,  # Use default or pass as needed
+                    rf_rate=0.05,
                     sma_window=20,
                     use_trading_filter=True,
                     starting_capital=100000.0
                 )
+                
             if columns:
                 df = df[[col for col in columns if col in df.columns]]
-            import logging
-            logging.error(f"[get_portfolio_dataframe] DEBUG: Returning DataFrame columns: {list(df.columns)}")
-            logging.error(f"[get_portfolio_dataframe] DEBUG: DataFrame head:\n{df.head()}")
+                
+            logger.info(f"[MEMORY] Final DataFrame - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
             return df
-        # Fallback to DB
-        data = PortfolioService.get_portfolio_data(db, portfolio_id)
-        if not data:
-            return pd.DataFrame()
-        df_data = []
-        for record in data:
-            row = {
+            
+        # Fallback to DB with chunked processing
+        logger.info("Falling back to database with chunked processing")
+        chunk_size = 10000
+        chunks = []
+        
+        # Get total count
+        total_count = db.query(PortfolioData).filter(
+            PortfolioData.portfolio_id == portfolio_id
+        ).count()
+        
+        for offset in range(0, total_count, chunk_size):
+            chunk_data = db.query(PortfolioData).filter(
+                PortfolioData.portfolio_id == portfolio_id
+            ).order_by(PortfolioData.date).offset(offset).limit(chunk_size).all()
+            
+            chunk_df = pd.DataFrame([{
                 'Date': record.date,
                 'P/L': record.pl,
                 'Cumulative P/L': record.cumulative_pl,
                 'Account_Value': record.account_value,
                 'Daily_Return': record.daily_return
-            }
+            } for record in chunk_data])
+            
             if columns:
-                row = {k: v for k, v in row.items() if k in columns}
-            df_data.append(row)
-        df = pd.DataFrame(df_data)
+                chunk_df = chunk_df[[col for col in columns if col in chunk_df.columns]]
+                
+            chunks.append(chunk_df)
+            logger.info(f"[MEMORY] Processed chunk {offset//chunk_size + 1} - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+        
+        if not chunks:
+            return pd.DataFrame()
+            
+        df = pd.concat(chunks, ignore_index=True)
         if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'])
+            
         # Process if needed
         required_cols = {'Cumulative P/L', 'Account_Value', 'Drawdown Pct'}
         if not required_cols.issubset(df.columns):
@@ -297,9 +338,8 @@ class PortfolioService:
                 use_trading_filter=True,
                 starting_capital=100000.0
             )
-        import logging
-        logging.error(f"[get_portfolio_dataframe] DEBUG: Returning DataFrame columns: {list(df.columns)}")
-        logging.error(f"[get_portfolio_dataframe] DEBUG: DataFrame head:\n{df.head()}")
+            
+        logger.info(f"[MEMORY] Final DataFrame from DB - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
         return df
     
     @staticmethod
