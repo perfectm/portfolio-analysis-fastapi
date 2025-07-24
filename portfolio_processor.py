@@ -68,18 +68,17 @@ def process_portfolio_data(
     for col in clean_df.select_dtypes(include=['int64']).columns:
         clean_df[col] = pd.to_numeric(clean_df[col], downcast='integer')
     
-    # Sort by date inplace
-    clean_df.sort_values('Date', inplace=True)
+    # Sort by date without inplace
+    clean_df = clean_df.sort_values('Date')
     
     logger.info(f"[MEMORY] After cleaning - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
     
-    # Calculate cumulative P/L and account value inplace
+    # Calculate cumulative P/L and account value
     clean_df['Cumulative P/L'] = clean_df['P/L'].cumsum()
     clean_df['Account Value'] = starting_capital + clean_df['Cumulative P/L']
     
-    # Calculate returns based on account value inplace
+    # Calculate returns based on account value
     clean_df['Daily Return'] = clean_df['Account Value'].pct_change()
-    # Replace inf values without using inplace
     clean_df['Daily Return'] = clean_df['Daily Return'].replace([np.inf, -np.inf], np.nan)
     
     # Calculate SMA if using trading filter
@@ -87,8 +86,8 @@ def process_portfolio_data(
         clean_df['SMA'] = clean_df['Account Value'].rolling(window=sma_window, min_periods=1).mean()
         clean_df['Position'] = np.where(clean_df['Account Value'] > clean_df['SMA'], 1, 0)
         clean_df['Strategy Return'] = clean_df['Daily Return'] * clean_df['Position'].shift(1).fillna(0)
-        # Free memory from intermediate columns
-        clean_df.drop(['SMA', 'Position'], axis=1, inplace=True)
+        # Free memory from intermediate columns without inplace
+        clean_df = clean_df.drop(['SMA', 'Position'], axis=1)
     else:
         clean_df['Strategy Return'] = clean_df['Daily Return']
     
@@ -475,8 +474,8 @@ def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
     clean_df['Drawdown Amount'] = clean_df['Account Value'] - clean_df['Rolling Peak']
     clean_df['Drawdown Pct'] = clean_df['Drawdown Amount'] / clean_df['Rolling Peak']
     
-    # Free memory from intermediate columns after calculations
-    clean_df.drop(['Rolling Peak'], axis=1, inplace=True)  # Keep Drawdown Amount for metrics
+    # Free memory from intermediate columns without inplace
+    clean_df = clean_df.drop(['Rolling Peak'], axis=1)  # Keep Drawdown Amount for metrics
     return clean_df
 
 
@@ -512,8 +511,8 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     cagr = _calculate_cagr_from_df(clean_df)
     mar_ratio = abs(cagr / abs(max_drawdown_pct)) if max_drawdown_pct != 0 else 0
 
-    # Clean up the Drawdown Amount column after metrics calculation
-    clean_df.drop(['Drawdown Amount'], axis=1, inplace=True)
+    # Clean up the Drawdown Amount column after metrics calculation without inplace
+    clean_df = clean_df.drop(['Drawdown Amount'], axis=1)
 
     return {
         'mar_ratio': float(mar_ratio),
