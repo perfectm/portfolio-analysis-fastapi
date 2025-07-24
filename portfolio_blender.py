@@ -6,9 +6,9 @@ import numpy as np
 import logging
 from typing import List, Dict, Any, Tuple
 
+from models import Portfolio, BlendedPortfolio, BlendedPortfolioMapping
+from portfolio_service import PortfolioService
 from portfolio_processor import process_portfolio_data, _convert_numpy_types
-from database.models import Portfolio, BlendedPortfolio, BlendedPortfolioMapping
-from database.services import PortfolioService
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
