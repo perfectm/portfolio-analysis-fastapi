@@ -164,13 +164,12 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         if len(portfolios_data) > 1:
             try:
                 logger.info("[Weighted Analysis] Creating weighted blended portfolio analysis")
-                blended_df, blended_metrics, correlation_data = create_blended_portfolio(
-                    portfolios_data,
-                    rf_rate=0.05,
-                    sma_window=20,
-                    use_trading_filter=True,
-                    starting_capital=starting_capital,
-                    weights=portfolio_weights
+                blended_df, blended_metrics = create_blended_portfolio(
+                    db=db,
+                    portfolio_ids=portfolio_ids,
+                    weights=portfolio_weights,
+                    name=f"Weighted Blended Portfolio ({len(portfolios_data)} strategies)",
+                    description=f"Weighted blend of {len(portfolios_data)} portfolios"
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []
@@ -467,12 +466,14 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         if len(portfolios_data) > 1:
             try:
                 logger.info("[Analyze Portfolios] Creating blended portfolio analysis")
-                blended_df, blended_metrics, _ = create_blended_portfolio(
-                    portfolios_data,
-                    rf_rate=0.05,
-                    sma_window=20,
-                    use_trading_filter=True,
-                    starting_capital=starting_capital
+                # Calculate equal weights for all portfolios
+                equal_weights = [1.0/len(portfolio_ids)] * len(portfolio_ids)
+                blended_df, blended_metrics = create_blended_portfolio(
+                    db=db,
+                    portfolio_ids=portfolio_ids,
+                    weights=equal_weights,
+                    name=f"Equal-Weight Blended Portfolio ({len(portfolios_data)} strategies)",
+                    description=f"Equal-weight blend of {len(portfolios_data)} portfolios"
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []
