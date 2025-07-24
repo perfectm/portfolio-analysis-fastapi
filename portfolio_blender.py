@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import logging
 from typing import List, Dict, Any, Tuple
+import json
 
 from models import Portfolio, BlendedPortfolio, BlendedPortfolioMapping
 from portfolio_service import PortfolioService
@@ -114,7 +115,13 @@ def create_blended_portfolio(
         
     blended_portfolio = BlendedPortfolio(
         name=name,
-        description=description or f"Blend of portfolios: {', '.join(portfolio_names)}"
+        weighting_method='custom',
+        weights_json=json.dumps(dict(zip(portfolio_names, weights))),
+        rf_rate=0.05,
+        daily_rf_rate=0.000171,
+        sma_window=20,
+        use_trading_filter=True,
+        starting_capital=100000.0
     )
     
     db.add(blended_portfolio)
@@ -125,7 +132,7 @@ def create_blended_portfolio(
     for portfolio_id, weight in zip(portfolio_ids, weights):
         mapping = BlendedPortfolioMapping(
             blended_portfolio_id=blended_portfolio.id,
-            component_portfolio_id=portfolio_id,
+            portfolio_id=portfolio_id,
             weight=weight
         )
         db.add(mapping)
