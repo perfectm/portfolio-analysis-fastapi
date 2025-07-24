@@ -199,16 +199,19 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         logger.error(f"[Weighted Analysis] Error creating plots for weighted blended portfolio: {str(plot_error)}")
                     try:
                         logger.info("[Weighted Analysis] Creating correlation heatmap")
-                        # Create correlation data from individual portfolios
+                        # Create correlation data from individual portfolios only
                         correlation_data = pd.DataFrame()
+                        portfolio_names = []
+                        
+                        # Only use individual portfolio data for correlation
                         for i, (name, _) in enumerate(portfolios_data):
                             if i < len(individual_results) and 'clean_df' in individual_results[i]:
                                 df = individual_results[i]['clean_df']
                                 if 'Daily Return' in df.columns:
                                     correlation_data[name] = df['Daily Return']
+                                    portfolio_names.append(name)
                         
                         if not correlation_data.empty and len(correlation_data.columns) >= 2:
-                            portfolio_names = list(correlation_data.columns)
                             heatmap_path = create_correlation_heatmap(correlation_data, portfolio_names)
                             if heatmap_path:
                                 heatmap_filename = os.path.basename(heatmap_path)
