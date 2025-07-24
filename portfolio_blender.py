@@ -50,6 +50,12 @@ def create_blended_portfolio(
             logger.warning(f"No data found for portfolio {portfolio_id}")
             continue
             
+        # Ensure Date is datetime and normalize to midnight
+        df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
+        
+        # Aggregate P/L by date in case of duplicates
+        df = df.groupby('Date')['P/L'].sum().reset_index()
+        
         # Scale P/L by weight
         df['P/L'] = df['P/L'] * weight
         
@@ -83,6 +89,9 @@ def create_blended_portfolio(
     
     # Keep only the total P/L and reset index
     blended_trades = blended_trades[['P/L']].reset_index()
+    
+    # Sort by date
+    blended_trades = blended_trades.sort_values('Date')
     
     # Free memory from individual portfolio DataFrames
     del individual_portfolios_pl
