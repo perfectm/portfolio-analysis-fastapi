@@ -63,7 +63,7 @@ def create_blended_portfolio(
         
         # Get portfolio name for reference
         portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
-        portfolio_name = f"{portfolio.name} ({weight}x)"
+        portfolio_name = f"{portfolio.name} ({weight:.2f}x)"
         portfolio_names.append(portfolio_name)
         
         # Set unique column name for this portfolio's P/L

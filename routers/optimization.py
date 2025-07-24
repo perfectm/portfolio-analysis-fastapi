@@ -51,7 +51,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     return {"success": False, "error": f"Number of weights ({len(weights)}) must match number of portfolios ({len(portfolio_ids)})"}
                 for i, multiplier in enumerate(weights):
                     if multiplier <= 0:
-                        return {"success": False, "error": f"All multipliers must be positive. Multiplier {i+1}: {multiplier}"}
+                        return {"success": False, "error": f"All multipliers must be positive numbers (e.g., 1.0, 1.5, 2.0). Multiplier {i+1}: {multiplier}"}
                 portfolio_weights = weights
             elif weighting_method == "equal":
                 portfolio_weights = [1.0] * len(portfolio_ids)  # Each portfolio at 1x
@@ -60,7 +60,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             else:
                 portfolio_weights = [1.0] * len(portfolio_ids)  # Default to 1x for each portfolio
             
-            logger.info(f"[Weighted Analysis] Using portfolio multipliers: {portfolio_weights}")
+            # Log total portfolio scale
+            total_scale = sum(portfolio_weights)
+            logger.info(f"[Weighted Analysis] Using portfolio multipliers: {[f'{w:.2f}x' for w in portfolio_weights]} (total scale: {total_scale:.2f}x)")
         portfolios_data = []
         for portfolio_id in portfolio_ids:
             portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
