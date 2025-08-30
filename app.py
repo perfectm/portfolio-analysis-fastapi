@@ -31,6 +31,9 @@ from routers.portfolio import router as portfolio_router
 from routers.strategies import router as strategies_router
 from routers.upload import router as upload_router
 from routers.optimization import router as optimization_router
+from routers.regime import router as regime_router
+from routers.auth import router as auth_router
+from routers.margin import router as margin_router
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -118,10 +121,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(portfolio_router, prefix="/api/portfolio")
 app.include_router(strategies_router, prefix="/api/strategies")
 app.include_router(upload_router, prefix="/api/upload")
 app.include_router(optimization_router, prefix="/api")
+app.include_router(regime_router)
+app.include_router(margin_router, prefix="/api/margin")
+
+# Legacy upload endpoint for backward compatibility
+@app.post("/upload")
+async def legacy_upload(
+    files: List[UploadFile] = File(...),
+    rf_rate: float = Form(DEFAULT_RF_RATE),
+    daily_rf_rate: float = Form(DEFAULT_DAILY_RF_RATE),
+    sma_window: int = Form(DEFAULT_SMA_WINDOW),
+    use_trading_filter: bool = Form(True),
+    starting_capital: float = Form(DEFAULT_STARTING_CAPITAL),
+    weighting_method: str = Form("equal"),
+    weights: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    """Legacy upload endpoint - redirects to the upload router"""
+    from routers.upload import upload_files_api
+    
+    return await upload_files_api(
+        files=files,
+        rf_rate=rf_rate,
+        daily_rf_rate=daily_rf_rate,
+        sma_window=sma_window,
+        use_trading_filter=use_trading_filter,
+        starting_capital=starting_capital,
+        weighting_method=weighting_method,
+        weights=weights,
+        db=db
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def main(request: Request):

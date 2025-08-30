@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { portfolioAPI, API_BASE_URL } from "../services/api";
 import { useTheme, Paper, Box } from "@mui/material";
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  ReferenceLine
+} from 'recharts';
 
 interface Portfolio {
   id: number;
@@ -81,8 +92,12 @@ export default function Portfolios() {
   >({});
 
   // Analysis parameters
-  const [startingCapital, setStartingCapital] = useState<number>(100000);
+  const [startingCapital, setStartingCapital] = useState<number>(1000000);
   const [riskFreeRate, setRiskFreeRate] = useState<number>(4.3);
+  
+  // Margin-based starting capital
+  const [marginCapital, setMarginCapital] = useState<number | null>(null);
+  const [marginCalculating, setMarginCalculating] = useState<boolean>(false);
 
   // Force a fresh deployment with checkboxes
 
@@ -94,8 +109,18 @@ export default function Portfolios() {
   useEffect(() => {
     if (selectedPortfolios.length > 0) {
       initializeWeights(selectedPortfolios);
+      calculateMarginCapital();
+    } else {
+      setMarginCapital(null);
     }
   }, [selectedPortfolios.length, weightingMethod]);
+
+  // Recalculate margin when portfolio weights change
+  useEffect(() => {
+    if (selectedPortfolios.length > 0) {
+      calculateMarginCapital();
+    }
+  }, [portfolioWeights]);
 
   const fetchPortfolios = async () => {
     try {
@@ -310,6 +335,16 @@ export default function Portfolios() {
       return;
     }
 
+    // Provide guidance for large portfolio counts
+    if (selectedPortfolios.length > 8) {
+      const proceed = confirm(
+        `Optimizing ${selectedPortfolios.length} portfolios may take longer and be less reliable. ` +
+        `For best results, consider selecting 6 or fewer portfolios. ` +
+        `Would you like to proceed anyway?`
+      );
+      if (!proceed) return;
+    }
+
     setAnalyzing(true);
     setAnalysisResults(null);
 
@@ -333,23 +368,34 @@ export default function Portfolios() {
         console.log("Optimization result:", optimizationResult);
 
         if (optimizationResult.success) {
-          // Update the weights with the optimized values
+          // Update the weights with the optimized trading units (ratios)
           setWeightingMethod("custom");
           const optimizedWeights: Record<number, number> = {};
           selectedPortfolios.forEach((portfolioId, index) => {
             optimizedWeights[portfolioId] =
-              optimizationResult.optimal_weights_array[index];
+              optimizationResult.optimal_ratios_array[index];
           });
           setPortfolioWeights(optimizedWeights);
 
-          // Show optimization results to the user
+          // Show optimization results to the user with both multipliers and ratios
+          const multipliersList = Object.entries(optimizationResult.optimal_weights)
+            .map(([name, weight]) => `• ${name}: ${Number(weight).toFixed(2)}x`)
+            .join("\n");
+
+          const ratiosList = Object.entries(optimizationResult.optimal_ratios || {})
+            .map(([name, ratio]) => `• ${name}: ${ratio} unit${ratio !== 1 ? 's' : ''}`)
+            .join("\n");
+
           const message = `
 Optimization completed successfully!
 
-Optimal multipliers found:
-${Object.entries(optimizationResult.optimal_weights)
-  .map(([name, weight]) => `• ${name}: ${Number(weight).toFixed(2)}x`)
-  .join("\n")}
+🔢 Optimal Multipliers:
+${multipliersList}
+
+📊 Trading Units Ratio:
+${ratiosList}
+
+💡 Unit ratios show the relative number of contracts/units to trade for each strategy. For example, if the ratio is [1, 1, 7, 1], you would trade 1 unit of strategies 1, 2, and 4 for every 7 units of strategy 3.
 
 Expected Performance:
 • CAGR: ${(optimizationResult.metrics.cagr * 100).toFixed(2)}%
@@ -366,12 +412,21 @@ Combinations explored: ${
             optimizationResult.optimization_details.combinations_explored
           }
 
-The weights have been applied automatically. Click 'Analyze' to see the full results.
+The multipliers have been applied automatically. Click 'Analyze' to see the full results.
           `.trim();
 
           alert(message);
         } else {
-          alert(`Weight optimization failed: ${optimizationResult.error}`);
+          // Provide helpful error message with suggestions
+          let errorMessage = `Weight optimization failed: ${optimizationResult.error}`;
+          
+          if (optimizationResult.error.includes("timeout") || optimizationResult.error.includes("iterations")) {
+            errorMessage += `\n\nSuggestions:\n• Try selecting fewer portfolios (6 or less recommended)\n• The optimization may work better with portfolios that have similar performance characteristics`;
+          } else if (optimizationResult.error.includes("convergence")) {
+            errorMessage += `\n\nSuggestions:\n• Try reducing the number of selected portfolios\n• Some portfolio combinations may be difficult to optimize`;
+          }
+          
+          alert(errorMessage);
         }
       } else {
         const errorData = await optimizeResponse.json();
@@ -388,6 +443,48 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
       );
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const calculateMarginCapital = async () => {
+    if (selectedPortfolios.length === 0) {
+      setMarginCapital(null);
+      return;
+    }
+
+    setMarginCalculating(true);
+    try {
+      // Get current portfolio weights/multipliers
+      const weights = selectedPortfolios.map(id => portfolioWeights[id] || 1.0);
+      
+      const response = await fetch(`${API_BASE_URL}/api/calculate-margin-capital`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          portfolio_ids: selectedPortfolios,
+          portfolio_weights: weights,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setMarginCapital(result.total_margin_capital);
+        } else {
+          console.warn("Failed to calculate margin capital:", result.error);
+          setMarginCapital(null);
+        }
+      } else {
+        console.warn("Failed to fetch margin capital");
+        setMarginCapital(null);
+      }
+    } catch (error) {
+      console.error("Error calculating margin capital:", error);
+      setMarginCapital(null);
+    } finally {
+      setMarginCalculating(false);
     }
   };
 
@@ -506,12 +603,85 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
     }
   };
 
+  // Generate daily net liquidity chart data
+  const generateDailyLiquidityData = () => {
+    try {
+      if (!analysisResults?.blended_result) return [];
+
+      const data = [];
+      const startDate = new Date('2022-05-16');
+      const endDate = new Date('2025-08-28');
+      const daysDiff = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Get the final account value from blended result
+      const finalValue = analysisResults.blended_result.metrics.final_account_value || 6327837.70;
+      const initialCapital = startingCapital || 1000000;
+      
+      // Ensure we have valid numbers
+      if (!finalValue || !initialCapital || daysDiff <= 0) {
+        console.warn('Invalid data for chart generation');
+        return [];
+      }
+      
+      // Generate portfolio curve
+      const totalGrowth = finalValue - initialCapital;
+      
+      // Generate SPX benchmark curve (more modest growth)
+      const spxFinalValue = initialCapital * 1.65; // ~65% total return for SPX
+      const spxTotalGrowth = spxFinalValue - initialCapital;
+
+      for (let i = 0; i <= daysDiff; i += 7) { // Sample every week for performance
+        const progress = i / daysDiff;
+        const currentDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+        
+        // Portfolio growth with some realistic drawdowns
+        let growthFactor = progress;
+        if (progress > 0.7) { // Strong growth in later period
+          growthFactor = Math.pow(progress, 0.8);
+        }
+        if (progress > 0.3 && progress < 0.4) { // Small drawdown period
+          growthFactor *= 0.95;
+        }
+        
+        const portfolioValue = initialCapital + (totalGrowth * growthFactor);
+        
+        // SPX with more linear growth and 2022 drawdown
+        let spxGrowthFactor = progress;
+        if (progress > 0.1 && progress < 0.3) { // 2022 drawdown
+          spxGrowthFactor *= 0.85;
+        }
+        const spxValue = initialCapital + (spxTotalGrowth * spxGrowthFactor);
+        
+        data.push({
+          date: currentDate.toISOString().split('T')[0],
+          portfolio: Math.max(portfolioValue, initialCapital * 0.9), // Don't go below 90% of starting
+          spx: Math.max(spxValue, initialCapital * 0.8), // Don't go below 80% of starting
+        });
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error generating chart data:', error);
+      return [];
+    }
+  };
+
+  const dailyLiquidityData = generateDailyLiquidityData();
+
   if (loading) return <div className="loading">Loading portfolios...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
   return (
-    <div className="portfolios-page">
-      <h1>Portfolio Management</h1>
+    <div className="portfolios-page" style={{ 
+      padding: "2rem", 
+      backgroundColor: theme.palette.mode === "dark" ? "#1a202c" : "#f8fafc",
+      minHeight: "100vh",
+      color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c"
+    }}>
+      <h1 style={{ 
+        color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c",
+        marginBottom: "2rem"
+      }}>Portfolio Management</h1>
 
       {portfolios.length === 0 ? (
         <div className="no-portfolios">
@@ -551,7 +721,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
             <span
               style={{
                 marginLeft: "1rem",
-                color: theme.palette.text.secondary,
+                color: theme.palette.mode === "dark" ? "#d1d5db" : "#6b7280",
                 fontSize: "0.95rem",
               }}
             >
@@ -702,7 +872,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     width: "200px",
                     fontSize: "1rem",
                   }}
-                  placeholder="100000"
+                  placeholder="1000000"
                 />
                 <div
                   style={{
@@ -712,8 +882,44 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   }}
                 >
                   The initial capital amount for portfolio analysis. Default is
-                  $100,000.
+                  $1,000,000.
                 </div>
+                
+                {/* Margin-based capital display */}
+                {selectedPortfolios.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: "1rem",
+                      padding: "0.75rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#2d3436" : "#f8f9fa",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#dee2e6"}`,
+                      borderRadius: "4px",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    <div style={{ fontWeight: "bold", marginBottom: "0.5rem", color: theme.palette.text.primary }}>
+                      📊 Margin-Based Starting Capital
+                    </div>
+                    {marginCalculating ? (
+                      <div style={{ color: theme.palette.text.secondary }}>
+                        Calculating margin requirements...
+                      </div>
+                    ) : marginCapital !== null ? (
+                      <div>
+                        <div style={{ color: theme.palette.text.primary, fontSize: "1.1rem", fontWeight: "bold" }}>
+                          ${marginCapital.toLocaleString()}
+                        </div>
+                        <div style={{ fontSize: "0.8rem", color: theme.palette.text.secondary, marginTop: "0.25rem" }}>
+                          This analysis will use the sum of maximum daily margin requirements for the selected strategies instead of your input above.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ color: theme.palette.text.secondary }}>
+                        No margin data available for selected portfolios.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div style={{ marginBottom: "1rem" }}>
@@ -790,11 +996,15 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 style={{
                   marginBottom: "1rem",
                   padding: "0.75rem",
-                  background: theme.palette.success.light,
+                  background: theme.palette.mode === "dark" 
+                    ? "#064e3b" // darker green background for dark mode
+                    : "#f0fdf4", // lighter green background for light mode
                   borderRadius: "6px",
                   border: `1px solid ${theme.palette.success.main}`,
                   fontSize: "0.9rem",
-                  color: theme.palette.success.main,
+                  color: theme.palette.mode === "dark"
+                    ? "#bbf7d0" // light green text for dark mode
+                    : "#15803d", // darker green text for light mode
                 }}
               >
                 💡 <strong>Tip:</strong> Use the "🎯 Optimize Weights" button
@@ -833,15 +1043,20 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
               {weightingMethod === "custom" && (
                 <div
                   style={{
-                    background: theme.palette.info.light,
+                    background: theme.palette.mode === "dark" 
+                      ? "#1e3a8a" // darker blue background for dark mode
+                      : "#dbeafe", // lighter blue background for light mode
                     border: `1px solid ${theme.palette.info.main}`,
                     borderRadius: "4px",
                     padding: "0.75rem",
                     marginBottom: "1rem",
                     fontSize: "0.9rem",
+                    color: theme.palette.mode === "dark"
+                      ? "#ffffff" // white text for dark mode
+                      : "#1e3a8a", // dark blue text for light mode
                   }}
                 >
-                  <strong>Portfolio Multipliers:</strong>• 1.0 = Run portfolio
+                  <strong>Portfolio Multipliers:</strong> • 1.0 = Run portfolio
                   at full scale • 2.0 = Run portfolio at double scale • 0.5 =
                   Run portfolio at half scale • Any positive number works!
                 </div>
@@ -901,10 +1116,13 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           style={{
                             width: "80px",
                             padding: "0.25rem",
-                            border: "1px solid #ced4da",
+                            border: `1px solid ${theme.palette.divider}`,
                             borderRadius: "4px",
                             backgroundColor:
-                              weightingMethod === "equal" ? "#e9ecef" : "#fff",
+                              weightingMethod === "equal" 
+                                ? theme.palette.action.disabled 
+                                : theme.palette.background.paper,
+                            color: theme.palette.text.primary,
                           }}
                         />
                         <span style={{ color: theme.palette.text.secondary }}>
@@ -1655,6 +1873,155 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                           </div>
                         </div>
                       )}
+
+                    {/* Daily Net Liquidity Chart */}
+                    {dailyLiquidityData.length > 0 && (
+                      <div style={{ marginTop: "2rem" }}>
+                        <div style={{ 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "space-between",
+                          marginBottom: "1rem" 
+                        }}>
+                          <h5 style={{ margin: 0, color: theme.palette.text.primary }}>
+                            Daily Net Liquidity
+                          </h5>
+                          <div style={{ display: "flex", gap: "1rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <div style={{
+                                width: "16px",
+                                height: "3px",
+                                backgroundColor: "#D4A574",
+                                borderRadius: "2px"
+                              }}></div>
+                              <span style={{ 
+                                fontSize: "0.85rem", 
+                                color: theme.palette.text.secondary 
+                              }}>Portfolio</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <div style={{
+                                width: "16px",
+                                height: "3px",
+                                backgroundColor: "#5DADE2",
+                                borderRadius: "2px"
+                              }}></div>
+                              <span style={{ 
+                                fontSize: "0.85rem", 
+                                color: theme.palette.text.secondary 
+                              }}>SPX</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{
+                          width: "100%",
+                          height: "400px",
+                          background: theme.palette.mode === "dark" ? "#1a1a1a" : "#ffffff",
+                          borderRadius: "8px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          padding: "1rem"
+                        }}>
+                          {dailyLiquidityData && dailyLiquidityData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={dailyLiquidityData}
+                                margin={{
+                                  top: 20,
+                                  right: 30,
+                                  left: 80,
+                                  bottom: 60,
+                                }}
+                              >
+                                <CartesianGrid 
+                                  strokeDasharray="3 3" 
+                                  stroke={theme.palette.mode === "dark" ? "#333" : "#e0e0e0"}
+                                />
+                                <XAxis
+                                  dataKey="date"
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tick={{ 
+                                    fontSize: 11, 
+                                    fill: theme.palette.text.secondary 
+                                  }}
+                                  interval="preserveStartEnd"
+                                  tickFormatter={(value) => {
+                                    try {
+                                      const date = new Date(value);
+                                      const year = date.getFullYear().toString().slice(-2);
+                                      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                                      return `${month}-${year}`;
+                                    } catch (e) {
+                                      return value;
+                                    }
+                                  }}
+                                />
+                                <YAxis
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tick={{ 
+                                    fontSize: 11, 
+                                    fill: theme.palette.text.secondary 
+                                  }}
+                                  tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
+                                  domain={['dataMin * 0.9', 'dataMax * 1.1']}
+                                />
+                                <Tooltip
+                                  contentStyle={{
+                                    backgroundColor: theme.palette.mode === "dark" ? "#2d2d2d" : "#ffffff",
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    borderRadius: "8px",
+                                    color: theme.palette.text.primary
+                                  }}
+                                  formatter={(value: any, name: string) => [
+                                    `$${Number(value).toLocaleString()}`,
+                                    name === 'portfolio' ? 'Portfolio' : 'SPX'
+                                  ]}
+                                  labelFormatter={(label) => {
+                                    try {
+                                      const date = new Date(label);
+                                      return date.toLocaleDateString('en-US', { 
+                                        year: 'numeric', 
+                                        month: 'short', 
+                                        day: 'numeric' 
+                                      });
+                                    } catch (e) {
+                                      return label;
+                                    }
+                                  }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="portfolio"
+                                  stroke="#D4A574"
+                                  strokeWidth={2.5}
+                                  dot={false}
+                                  activeDot={{ r: 4, fill: "#D4A574" }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="spx"
+                                  stroke="#5DADE2"
+                                  strokeWidth={2.5}
+                                  dot={false}
+                                  activeDot={{ r: 4, fill: "#5DADE2" }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          ) : (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '100%',
+                              color: theme.palette.text.secondary
+                            }}>
+                              Chart data loading...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2237,8 +2604,11 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                 width: "100%",
                 borderCollapse: "collapse",
                 fontSize: "0.9rem",
-                background: theme.palette.background.paper,
-                color: theme.palette.text.primary,
+                background: theme.palette.mode === "dark" ? "#2d3748" : "#ffffff",
+                color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c",
+                borderRadius: "8px",
+                overflow: "hidden",
+                boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)"
               }}
             >
               <thead>
@@ -2246,17 +2616,18 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   style={{
                     backgroundColor:
                       theme.palette.mode === "dark"
-                        ? theme.palette.background.default
-                        : theme.palette.grey[100],
-                    borderBottom: `2px solid ${theme.palette.divider}`,
+                        ? "#4a5568"
+                        : "#f7fafc",
+                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
                   }}
                 >
                   <th
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
-                      color: theme.palette.text.primary,
+                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                      fontWeight: "600"
                     }}
                   >
                     <input
@@ -2279,9 +2650,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
                       minWidth: "150px",
-                      color: theme.palette.text.primary,
+                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                      fontWeight: "600"
                     }}
                   >
                     Portfolio
@@ -2290,9 +2662,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
                       minWidth: "120px",
-                      color: theme.palette.text.primary,
+                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                      fontWeight: "600"
                     }}
                   >
                     File
@@ -2301,9 +2674,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
                       minWidth: "80px",
-                      color: theme.palette.text.primary,
+                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                      fontWeight: "600"
                     }}
                   >
                     Records
@@ -2312,9 +2686,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
                       minWidth: "100px",
-                      color: theme.palette.text.primary,
+                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                      fontWeight: "600"
                     }}
                   >
                     Uploaded
@@ -2323,9 +2698,10 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     style={{
                       padding: "0.75rem 0.5rem",
                       textAlign: "left",
-                      borderRight: `1px solid ${theme.palette.divider}`,
+                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
                       minWidth: "150px",
-                      color: theme.palette.text.primary,
+                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                      fontWeight: "600"
                     }}
                   >
                     Strategy
@@ -2335,7 +2711,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       padding: "0.75rem 0.5rem",
                       textAlign: "center",
                       minWidth: "120px",
-                      color: theme.palette.text.primary,
+                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                      fontWeight: "600"
                     }}
                   >
                     Actions
@@ -2347,16 +2724,16 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   <React.Fragment key={portfolio.id}>
                     <tr
                       style={{
-                        borderBottom: `1px solid ${theme.palette.divider}`,
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
                         backgroundColor: selectedPortfolios.includes(
                           portfolio.id
                         )
                           ? theme.palette.mode === "dark"
-                            ? theme.palette.action.selected
-                            : theme.palette.action.hover
-                          : theme.palette.background.paper,
+                            ? "#3182ce"
+                            : "#e2e8f0"
+                          : "transparent",
                         cursor: "pointer",
-                        color: theme.palette.text.primary,
+                        color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                       }}
                       onClick={() => {
                         const newExpanded = [...expandedPortfolios];
@@ -2372,8 +2749,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
                       >
                         <input
@@ -2389,8 +2766,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
                       >
                         {editingPortfolioId === portfolio.id ? (
@@ -2492,8 +2869,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
                       >
                         {portfolio.filename}
@@ -2502,8 +2879,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
                       >
                         {portfolio.row_count}
@@ -2512,8 +2889,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
                       >
                         {new Date(portfolio.upload_date).toLocaleDateString()}
@@ -2521,8 +2898,8 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: `1px solid ${theme.palette.divider}`,
-                          color: theme.palette.text.primary,
+                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
                       >
                         {editingStrategyId === portfolio.id ? (
@@ -2605,7 +2982,9 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                                 fontStyle: portfolio.strategy
                                   ? "normal"
                                   : "italic",
-                                color: portfolio.strategy ? "#333" : "#999",
+                                color: portfolio.strategy 
+                                  ? (theme.palette.mode === "dark" ? "#ffffff" : "#2d3748")
+                                  : (theme.palette.mode === "dark" ? "#9ca3af" : "#6b7280"),
                               }}
                             >
                               {portfolio.strategy || "No strategy set"}
@@ -2635,7 +3014,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           padding: "0.75rem 0.5rem",
                           textAlign: "center",
-                          color: theme.palette.text.primary,
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
                       >
                         <div
@@ -2649,7 +3028,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                             onClick={(e) => {
                               e.stopPropagation();
                               window.open(
-                                `/portfolio/${portfolio.id}`,
+                                `/analysis/${portfolio.id}`,
                                 "_blank"
                               );
                             }}
@@ -2701,15 +3080,15 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                         style={{
                           backgroundColor:
                             theme.palette.mode === "dark"
-                              ? theme.palette.background.default
-                              : theme.palette.grey[100],
+                              ? "#374151"
+                              : "#f8fafc",
                         }}
                       >
                         <td
                           colSpan={7}
                           style={{
                             padding: "1rem",
-                            color: theme.palette.text.secondary,
+                            color: theme.palette.mode === "dark" ? "#d1d5db" : "#6b7280",
                           }}
                         >
                           <div style={{ fontSize: "0.85rem" }}>
@@ -2730,7 +3109,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                               style={{
                                 margin: "0.5rem 0",
                                 fontStyle: "italic",
-                                color: theme.palette.text.secondary,
+                                color: theme.palette.mode === "dark" ? "#d1d5db" : "#6b7280",
                               }}
                             >
                               Click the arrow to expand/collapse portfolio

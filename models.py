@@ -7,6 +7,24 @@ from sqlalchemy.sql import func
 from database import Base
 import uuid
 
+class User(Base):
+    """
+    Model for storing user authentication information
+    """
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_login = Column(DateTime(timezone=True), nullable=True)
+    
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
+
 class Portfolio(Base):
     """
     Model for storing portfolio metadata
@@ -179,3 +197,229 @@ class BlendedPortfolioMapping(Base):
     
     def __repr__(self):
         return f"<BlendedPortfolioMapping(blended_id={self.blended_portfolio_id}, portfolio_id={self.portfolio_id}, weight={self.weight})>"
+
+
+class MarketRegimeHistory(Base):
+    """
+    Model for storing historical market regime classifications
+    """
+    __tablename__ = "market_regime_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(DateTime, nullable=False, index=True)
+    regime = Column(String(20), nullable=False)  # bull, bear, volatile, transitioning
+    confidence = Column(Float, nullable=False)  # 0-1 confidence score
+    
+    # Regime indicators (stored for analysis)
+    volatility_percentile = Column(Float)
+    trend_strength = Column(Float)
+    momentum_score = Column(Float)
+    drawdown_severity = Column(Float)
+    volume_anomaly = Column(Float)
+    
+    # Market data used
+    market_symbol = Column(String(10), nullable=False, default="^GSPC")
+    
+    # Metadata
+    regime_start_date = Column(DateTime)  # When this regime began
+    description = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    def __repr__(self):
+        return f"<MarketRegimeHistory(date='{self.date}', regime='{self.regime}', confidence={self.confidence})>"
+
+
+class RegimePerformance(Base):
+    """
+    Model for storing strategy performance by market regime
+    """
+    __tablename__ = "regime_performance"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    regime = Column(String(20), nullable=False)  # bull, bear, volatile, transitioning
+    
+    # Performance metrics for this regime
+    total_return = Column(Float)
+    avg_daily_return = Column(Float)  
+    volatility = Column(Float)
+    sharpe_ratio = Column(Float)
+    max_drawdown = Column(Float)
+    win_rate = Column(Float)
+    
+    # Analysis parameters
+    analysis_period_start = Column(DateTime)
+    analysis_period_end = Column(DateTime)
+    total_trading_days = Column(Integer)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    portfolio = relationship("Portfolio")
+    
+    # Unique constraint per portfolio/regime combination
+    __table_args__ = (
+        Index('idx_portfolio_regime', 'portfolio_id', 'regime', unique=True),
+    )
+    
+    def __repr__(self):
+        return f"<RegimePerformance(portfolio_id={self.portfolio_id}, regime='{self.regime}', return={self.total_return})>"
+
+
+class RegimeAlert(Base):
+    """
+    Model for storing regime change alerts and recommendations
+    """
+    __tablename__ = "regime_alerts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    alert_type = Column(String(30), nullable=False)  # regime_change, rebalance_recommendation
+    
+    # Regime information
+    previous_regime = Column(String(20))
+    new_regime = Column(String(20), nullable=False)
+    confidence = Column(Float, nullable=False)
+    
+    # Alert details
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    severity = Column(String(20), nullable=False, default="info")  # info, warning, critical
+    
+    # Recommendations (JSON format)
+    recommended_allocations = Column(Text)  # JSON string of allocation recommendations
+    projected_impact = Column(Text)  # JSON string of projected impact metrics
+    
+    # Status tracking
+    is_active = Column(Boolean, default=True)
+    acknowledged_at = Column(DateTime)
+    dismissed_at = Column(DateTime)
+    
+    # Timestamps  
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime)  # When alert becomes inactive
+    
+    def __repr__(self):
+        return f"<RegimeAlert(type='{self.alert_type}', regime='{self.new_regime}', active={self.is_active})>"
+
+
+class OptimizationCache(Base):
+    """
+    Model for caching portfolio weight optimization results
+    """
+    __tablename__ = "optimization_cache"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Portfolio combination identifier (sorted portfolio IDs as comma-separated string)
+    portfolio_ids_hash = Column(String(64), nullable=False, index=True)  # SHA-256 hash of sorted portfolio IDs
+    portfolio_ids = Column(String(500), nullable=False)  # Comma-separated sorted portfolio IDs (e.g., "1,3,5")
+    portfolio_count = Column(Integer, nullable=False, index=True)  # Number of portfolios in this optimization
+    
+    # Optimization parameters (for cache invalidation)
+    rf_rate = Column(Float, nullable=False)
+    sma_window = Column(Integer, nullable=False)
+    use_trading_filter = Column(Boolean, nullable=False)
+    starting_capital = Column(Float, nullable=False)
+    min_weight = Column(Float, nullable=False)
+    max_weight = Column(Float, nullable=False)
+    
+    # Optimization results
+    optimization_method = Column(String(50), nullable=False)
+    optimal_weights = Column(Text, nullable=False)  # JSON string of optimal weights
+    optimal_ratios = Column(Text, nullable=False)   # JSON string of optimal ratios
+    iterations = Column(Integer, nullable=False)
+    success = Column(Boolean, nullable=False)
+    
+    # Performance metrics
+    optimal_cagr = Column(Float, nullable=False)
+    optimal_max_drawdown = Column(Float, nullable=False)
+    optimal_return_drawdown_ratio = Column(Float, nullable=False)
+    optimal_sharpe_ratio = Column(Float, nullable=False)
+    
+    # Additional metadata
+    execution_time_seconds = Column(Float)  # How long optimization took
+    explored_combinations_count = Column(Integer)  # Number of combinations explored
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_accessed_at = Column(DateTime(timezone=True), server_default=func.now())
+    access_count = Column(Integer, default=1)  # Track cache hit frequency
+    
+    # Indexes for efficient querying
+    __table_args__ = (
+        Index('idx_portfolio_hash_params', 'portfolio_ids_hash', 'rf_rate', 'sma_window', 'use_trading_filter'),
+        Index('idx_portfolio_count', 'portfolio_count'),
+        Index('idx_created_at', 'created_at'),
+    )
+    
+    def __repr__(self):
+        return f"<OptimizationCache(id={self.id}, portfolio_ids='{self.portfolio_ids}', method='{self.optimization_method}')>"
+
+
+class PortfolioMarginData(Base):
+    """
+    Model for storing raw margin requirement data from uploaded files
+    """
+    __tablename__ = "portfolio_margin_data"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    date = Column(DateTime, nullable=False, index=True)
+    margin_requirement = Column(Float, nullable=False)  # Margin required for this date/trade
+    margin_type = Column(String(50), nullable=True)  # Optional: type of margin (initial, maintenance, etc.)
+    row_number = Column(Integer)  # Original row number from CSV
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    portfolio = relationship("Portfolio")
+    
+    # Create composite index for efficient querying
+    __table_args__ = (
+        Index('idx_portfolio_margin_date', 'portfolio_id', 'date'),
+        Index('idx_portfolio_margin_row', 'portfolio_id', 'row_number'),
+    )
+    
+    def __repr__(self):
+        return f"<PortfolioMarginData(id={self.id}, portfolio_id={self.portfolio_id}, date='{self.date}', margin={self.margin_requirement})>"
+
+
+class DailyMarginAggregate(Base):
+    """
+    Model for storing daily aggregated margin requirements across all portfolios
+    """
+    __tablename__ = "daily_margin_aggregate"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(DateTime, nullable=False, index=True, unique=True)
+    total_margin_required = Column(Float, nullable=False)  # Total margin across all active portfolios
+    portfolio_count = Column(Integer, nullable=False)  # Number of portfolios with margin requirements on this date
+    starting_capital = Column(Float, nullable=False)  # Starting capital used for validation
+    margin_utilization_percent = Column(Float, nullable=False)  # Percentage of starting capital used for margin
+    is_valid = Column(Boolean, nullable=False, default=True)  # Whether this date's margin is within acceptable limits
+    validation_message = Column(Text)  # Optional validation message
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<DailyMarginAggregate(date='{self.date}', total_margin={self.total_margin_required}, valid={self.is_valid})>"
+
+
+class MarginValidationRule(Base):
+    """
+    Model for storing margin validation rules and thresholds
+    """
+    __tablename__ = "margin_validation_rules"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    rule_name = Column(String(100), nullable=False, unique=True)
+    rule_type = Column(String(50), nullable=False)  # 'percentage_threshold', 'absolute_limit', etc.
+    threshold_value = Column(Float, nullable=False)
+    is_active = Column(Boolean, default=True)
+    description = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<MarginValidationRule(name='{self.rule_name}', type='{self.rule_type}', threshold={self.threshold_value})>"

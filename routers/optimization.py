@@ -1,17 +1,73 @@
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
-from typing import Any
+from typing import Any, List
 import logging
 from database import get_db
 from portfolio_service import PortfolioService
 from portfolio_blender import create_blended_portfolio, process_individual_portfolios
 from plotting import create_plots, create_correlation_heatmap, create_monte_carlo_simulation
+from models import PortfolioMarginData
+from sqlalchemy import func
 import gc
 import pandas as pd
 import os
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+def calculate_starting_capital_from_margins(db: Session, portfolio_ids: List[int], portfolio_weights: List[float] = None) -> float:
+    """
+    Calculate starting capital based on the maximum daily margin requirements
+    for the selected portfolios. Returns the sum of maximum daily margins.
+    Applies portfolio weights/multipliers if provided.
+    """
+    try:
+        if not portfolio_ids:
+            logger.warning("[MARGIN CAPITAL] No portfolio IDs provided, using default starting capital")
+            return 1000000.0
+        
+        # Default to 1x multiplier for all portfolios if no weights provided
+        if portfolio_weights is None:
+            portfolio_weights = [1.0] * len(portfolio_ids)
+        
+        logger.info(f"[MARGIN CAPITAL] Calculating margin-based starting capital for portfolios: {portfolio_ids}")
+        logger.info(f"[MARGIN CAPITAL] Using portfolio multipliers: {[f'{w:.2f}x' for w in portfolio_weights]}")
+        
+        total_max_margin = 0.0
+        
+        for i, portfolio_id in enumerate(portfolio_ids):
+            # Get the maximum daily total margin requirement for this portfolio
+            # First aggregate by date to get daily totals, then find the maximum
+            daily_totals_subquery = db.query(
+                PortfolioMarginData.date,
+                func.sum(PortfolioMarginData.margin_requirement).label('daily_total')
+            ).filter(
+                PortfolioMarginData.portfolio_id == portfolio_id
+            ).group_by(PortfolioMarginData.date).subquery()
+            
+            max_daily_total = db.query(
+                func.max(daily_totals_subquery.c.daily_total)
+            ).scalar()
+            
+            if max_daily_total:
+                max_daily_margin = float(max_daily_total)
+                weight = portfolio_weights[i] if i < len(portfolio_weights) else 1.0
+                weighted_margin = max_daily_margin * weight
+                total_max_margin += weighted_margin
+                logger.info(f"[MARGIN CAPITAL] Portfolio {portfolio_id} max daily margin: ${max_daily_margin:,.2f} x {weight:.2f} = ${weighted_margin:,.2f}")
+            else:
+                logger.warning(f"[MARGIN CAPITAL] No margin data found for portfolio {portfolio_id}")
+        
+        if total_max_margin > 0:
+            logger.info(f"[MARGIN CAPITAL] Total margin-based starting capital: ${total_max_margin:,.2f}")
+            return total_max_margin
+        else:
+            logger.warning("[MARGIN CAPITAL] No margin data found for any portfolio, using default starting capital")
+            return 1000000.0
+            
+    except Exception as e:
+        logger.error(f"[MARGIN CAPITAL] Error calculating margin-based starting capital: {e}")
+        return 1000000.0
 
 # Add a helper function to check for a matching AnalysisResult for a portfolio and parameters.
 def get_cached_analysis_result(db, portfolio_id, rf_rate, sma_window, use_trading_filter, starting_capital):
@@ -33,17 +89,34 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         portfolio_ids = body.get("portfolio_ids", [])
         weighting_method = body.get("weighting_method", "equal")
         weights = body.get("weights", None)
-        starting_capital = body.get("starting_capital", 100000.0)
+        user_starting_capital = body.get("starting_capital", 1000000.0)
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
-        if starting_capital <= 0:
+        if user_starting_capital <= 0:
             return {"success": False, "error": "Starting capital must be greater than 0"}
         if len(portfolio_ids) > 20:
             return {"success": False, "error": "Maximum 20 portfolios allowed for analysis to prevent memory issues"}
+        
+        # Calculate starting capital based on maximum daily margin requirements
+        # For weighted analysis, we need to determine the weights first to calculate proper margin requirements
+        if weighting_method == "custom" and weights:
+            portfolio_weights = weights
+        elif weighting_method == "equal":
+            portfolio_weights = [1.0] * len(portfolio_ids)
+        elif weights:
+            portfolio_weights = weights
+        else:
+            portfolio_weights = [1.0] * len(portfolio_ids)
+        
+        starting_capital = calculate_starting_capital_from_margins(db, portfolio_ids, portfolio_weights)
+        
         logger.info(f"[Weighted Analysis] Analyzing portfolios: {portfolio_ids}")
         logger.info(f"[Weighted Analysis] Weighting method: {weighting_method}")
         logger.info(f"[Weighted Analysis] Weights: {weights}")
-        logger.info(f"[Weighted Analysis] Starting capital: ${starting_capital:,.2f}")
+        logger.info(f"[Weighted Analysis] User provided starting capital: ${user_starting_capital:,.2f}")
+        logger.info(f"[Weighted Analysis] Margin-based starting capital: ${starting_capital:,.2f}")
+        
+        # Re-determine portfolio_weights for the actual analysis (this logic was duplicated)
         portfolio_weights = None
         if len(portfolio_ids) > 1:
             if weighting_method == "custom" and weights:
@@ -290,7 +363,10 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             "advanced_plots": {
                 "correlation_heatmap": heatmap_url,
                 "monte_carlo_simulation": monte_carlo_url
-            }
+            },
+            "starting_capital_used": starting_capital,
+            "user_starting_capital": user_starting_capital,
+            "margin_based_calculation": True
         }
     except Exception as e:
         logger.error(f"[Weighted Analysis] Error analyzing portfolios: {str(e)}", exc_info=True)
@@ -324,7 +400,7 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
             rf_rate=0.043,
             sma_window=20,
             use_trading_filter=True,
-            starting_capital=100000.0
+            starting_capital=1000000.0
         )
         result = optimizer.optimize_weights_from_ids(db, portfolio_ids, method)
         if not result.success:
@@ -343,11 +419,16 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
         logger.info(f"[Weight Optimization] Optimal weights: {weight_mapping}")
         logger.info(f"[Weight Optimization] CAGR: {result.optimal_cagr:.4f}, Max Drawdown: {result.optimal_max_drawdown:.4f}")
         logger.info(f"[Weight Optimization] Return/Drawdown Ratio: {result.optimal_return_drawdown_ratio:.4f}")
+        # Create ratio mapping
+        ratio_mapping = dict(zip(portfolio_names, result.optimal_ratios))
+        
         return {
             "success": True,
             "message": f"Weight optimization completed using {result.optimization_method}",
             "optimal_weights": weight_mapping,
             "optimal_weights_array": result.optimal_weights,
+            "optimal_ratios": ratio_mapping,
+            "optimal_ratios_array": result.optimal_ratios,
             "metrics": {
                 "cagr": result.optimal_cagr,
                 "max_drawdown_percent": result.optimal_max_drawdown,
@@ -366,18 +447,86 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
         logger.error(f"[Weight Optimization] Error optimizing weights: {str(e)}", exc_info=True)
         return {"success": False, "error": f"Weight optimization failed: {str(e)}"}
 
+@router.post("/calculate-margin-capital")
+async def calculate_margin_based_capital(request: Request, db: Session = Depends(get_db)):
+    """
+    Preview the margin-based starting capital calculation for selected portfolios
+    """
+    try:
+        body = await request.json()
+        portfolio_ids = body.get("portfolio_ids", [])
+        portfolio_weights = body.get("portfolio_weights", None)
+        
+        if not portfolio_ids:
+            return {"success": False, "error": "No portfolio IDs provided"}
+        
+        # Use equal weights if not provided
+        if portfolio_weights is None:
+            portfolio_weights = [1.0] * len(portfolio_ids)
+        
+        # Calculate starting capital based on maximum daily margin requirements
+        margin_capital = calculate_starting_capital_from_margins(db, portfolio_ids, portfolio_weights)
+        
+        # Get individual portfolio margin details
+        portfolio_details = []
+        for i, portfolio_id in enumerate(portfolio_ids):
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+            if not portfolio:
+                continue
+                
+            # Get the maximum daily total margin requirement for this portfolio
+            daily_totals_subquery = db.query(
+                PortfolioMarginData.date,
+                func.sum(PortfolioMarginData.margin_requirement).label('daily_total')
+            ).filter(
+                PortfolioMarginData.portfolio_id == portfolio_id
+            ).group_by(PortfolioMarginData.date).subquery()
+            
+            max_daily_total = db.query(
+                func.max(daily_totals_subquery.c.daily_total)
+            ).scalar()
+            
+            max_margin = float(max_daily_total) if max_daily_total else 0.0
+            weight = portfolio_weights[i] if i < len(portfolio_weights) else 1.0
+            weighted_margin = max_margin * weight
+            
+            portfolio_details.append({
+                "portfolio_id": portfolio_id,
+                "portfolio_name": portfolio.name,
+                "max_daily_margin": max_margin,
+                "weight": weight,
+                "weighted_margin": weighted_margin
+            })
+        
+        return {
+            "success": True,
+            "total_margin_capital": margin_capital,
+            "portfolio_details": portfolio_details,
+            "portfolio_count": len(portfolio_details)
+        }
+        
+    except Exception as e:
+        logger.error(f"[MARGIN PREVIEW] Error calculating margin capital: {e}")
+        return {"success": False, "error": f"Failed to calculate margin capital: {str(e)}"}
+
 @router.post("/analyze-portfolios")
 async def analyze_selected_portfolios(request: Request, db: Session = Depends(get_db)):
     try:
         body = await request.json()
         portfolio_ids = body.get("portfolio_ids", [])
-        starting_capital = body.get("starting_capital", 100000.0)
+        user_starting_capital = body.get("starting_capital", 1000000.0)
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
-        if starting_capital <= 0:
+        if user_starting_capital <= 0:
             return {"success": False, "error": "Starting capital must be greater than 0"}
+        
+        # Calculate starting capital based on maximum daily margin requirements (equal weights for basic analysis)
+        equal_weights = [1.0] * len(portfolio_ids)
+        starting_capital = calculate_starting_capital_from_margins(db, portfolio_ids, equal_weights)
+        
         logger.info(f"[Analyze Portfolios] Analyzing portfolios: {portfolio_ids}")
-        logger.info(f"[Analyze Portfolios] Starting capital: ${starting_capital:,.2f}")
+        logger.info(f"[Analyze Portfolios] User provided starting capital: ${user_starting_capital:,.2f}")
+        logger.info(f"[Analyze Portfolios] Margin-based starting capital: ${starting_capital:,.2f}")
         portfolios_data = []
         for portfolio_id in portfolio_ids:
             portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
@@ -578,7 +727,10 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             "advanced_plots": {
                 "correlation_heatmap": heatmap_url,
                 "monte_carlo_simulation": monte_carlo_url
-            }
+            },
+            "starting_capital_used": starting_capital,
+            "user_starting_capital": user_starting_capital,
+            "margin_based_calculation": True
         }
     except Exception as e:
         logger.error(f"[Analyze Portfolios] Error analyzing portfolios: {str(e)}", exc_info=True)

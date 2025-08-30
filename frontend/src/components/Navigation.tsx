@@ -8,13 +8,20 @@ import {
   Box,
   Container,
   useTheme,
+  Menu,
+  MenuItem,
+  Avatar,
+  IconButton,
 } from "@mui/material";
-import { Assessment } from "@mui/icons-material";
+import { Assessment, AccountCircle, ExitToApp } from "@mui/icons-material";
 import { ThemeToggle } from "./ThemeToggle";
+import { useAuth } from "../contexts/AuthContext";
 
 const Navigation: React.FC = () => {
   const location = useLocation();
   const theme = useTheme();
+  const { user, isAuthenticated, logout } = useAuth();
+  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -24,7 +31,22 @@ const Navigation: React.FC = () => {
     { path: "/", label: "Home" },
     { path: "/upload", label: "Upload" },
     { path: "/portfolios", label: "Portfolios" },
+    { path: "/margin", label: "Margin Management" },
+    { path: "/regime", label: "Regime Analysis" },
   ];
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    logout();
+    handleMenuClose();
+  };
 
   return (
     <AppBar
@@ -72,7 +94,8 @@ const Navigation: React.FC = () => {
 
           {/* Navigation Items */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {navItems.map((item) => (
+            {/* Main Navigation - only show if authenticated */}
+            {isAuthenticated && navItems.map((item) => (
               <Button
                 key={item.path}
                 component={Link}
@@ -109,6 +132,58 @@ const Navigation: React.FC = () => {
 
             {/* Theme Toggle */}
             <ThemeToggle size="medium" />
+
+            {/* User Menu - only show if authenticated */}
+            {isAuthenticated && user && (
+              <>
+                <IconButton
+                  onClick={handleMenuOpen}
+                  sx={{
+                    ml: 1,
+                    color: theme.palette.text.primary,
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      bgcolor: theme.palette.primary.main,
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    {user.username.charAt(0).toUpperCase()}
+                  </Avatar>
+                </IconButton>
+                <Menu
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleMenuClose}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
+                >
+                  <MenuItem disabled>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {user.full_name || user.username}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {user.email}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                  <MenuItem onClick={handleLogout}>
+                    <ExitToApp sx={{ mr: 1, fontSize: 20 }} />
+                    Logout
+                  </MenuItem>
+                </Menu>
+              </>
+            )}
           </Box>
         </Toolbar>
       </Container>
