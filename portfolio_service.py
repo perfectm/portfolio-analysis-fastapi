@@ -40,11 +40,23 @@ class PortfolioService:
             rf_rate=0.05,  # Use default or pass as needed
             sma_window=20,
             use_trading_filter=True,
-            starting_capital=100000.0
+            starting_capital=1000000.0
         )
         parquet_path = PortfolioService.get_parquet_path(portfolio_id)
         os.makedirs(os.path.dirname(parquet_path), exist_ok=True)
-        processed_df.to_parquet(parquet_path, index=False)
+        
+        # Try parquet first, fallback to pickle if parquet fails
+        try:
+            processed_df.to_parquet(parquet_path, index=False)
+            logger.info(f"Saved portfolio {portfolio_id} as parquet file")
+        except Exception as parquet_error:
+            logger.warning(f"Parquet save failed for portfolio {portfolio_id}: {parquet_error}")
+            # Use pickle as fallback
+            pickle_path = parquet_path.replace('.parquet', '.pkl')
+            processed_df.to_pickle(pickle_path)
+            parquet_path = pickle_path
+            logger.info(f"Saved portfolio {portfolio_id} as pickle file instead")
+        
         # Update the portfolio record
         portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
         if portfolio:
@@ -55,8 +67,26 @@ class PortfolioService:
     def load_portfolio_parquet(db: Session, portfolio_id: int, columns: list = None) -> pd.DataFrame:
         portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
         if portfolio and portfolio.parquet_path and os.path.exists(portfolio.parquet_path):
-            df = pd.read_parquet(portfolio.parquet_path, columns=columns)
-            return df
+            try:
+                # Try to load as parquet first
+                if portfolio.parquet_path.endswith('.parquet'):
+                    df = pd.read_parquet(portfolio.parquet_path, columns=columns)
+                elif portfolio.parquet_path.endswith('.pkl'):
+                    df = pd.read_pickle(portfolio.parquet_path)
+                    if columns:
+                        df = df[columns]
+                else:
+                    # Fallback: try both formats
+                    try:
+                        df = pd.read_parquet(portfolio.parquet_path, columns=columns)
+                    except:
+                        df = pd.read_pickle(portfolio.parquet_path)
+                        if columns:
+                            df = df[columns]
+                return df
+            except Exception as e:
+                logger.error(f"Failed to load portfolio data for {portfolio_id}: {e}")
+                return None
         return None
 
     @staticmethod
@@ -175,7 +205,7 @@ class PortfolioService:
             # Prepare data for bulk insert
             data_records = []
             cumulative_pl = 0
-            starting_capital = 100000  # Default starting capital
+            starting_capital = 1000000  # Default starting capital
             
             for idx, row in df.iterrows():
                 # Clean P/L data - remove any currency symbols and convert to float
@@ -283,7 +313,7 @@ class PortfolioService:
                     rf_rate=0.05,
                     sma_window=20,
                     use_trading_filter=True,
-                    starting_capital=100000.0
+                    starting_capital=1000000.0
                 )
                 
             if columns:
@@ -336,7 +366,7 @@ class PortfolioService:
                 rf_rate=0.05,
                 sma_window=20,
                 use_trading_filter=True,
-                starting_capital=100000.0
+                starting_capital=1000000.0
             )
             
         logger.info(f"[MEMORY] Final DataFrame from DB - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")

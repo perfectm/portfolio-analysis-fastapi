@@ -94,11 +94,13 @@ const Upload: React.FC = () => {
         // Check if we got analysis results
         if (result.individual_results || result.blended_result) {
           setAnalysisResults(result as UploadResult);
+          const portfolioId = result.portfolio_ids?.[0] || result.portfolio_id;
           setMessage(
-            `Upload and analysis completed! Portfolio ID: ${result.portfolio_id}`
+            `Upload and analysis completed! Portfolio ID: ${portfolioId}`
           );
         } else {
-          setMessage(`Upload successful! Portfolio ID: ${result.portfolio_id}`);
+          const portfolioId = result.portfolio_ids?.[0] || result.portfolio_id;
+          setMessage(`Upload successful! Portfolio ID: ${portfolioId}`);
         }
         setMessageType("success");
       } else {

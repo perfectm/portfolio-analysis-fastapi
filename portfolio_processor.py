@@ -44,7 +44,7 @@ def process_portfolio_data(
     daily_rf_rate: float = 0.000171, 
     sma_window: int = 20, 
     use_trading_filter: bool = True, 
-    starting_capital: float = 100000, 
+    starting_capital: float = 1000000, 
     is_blended: bool = False
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
@@ -83,7 +83,7 @@ def process_portfolio_data(
     
     # Calculate SMA if using trading filter
     if use_trading_filter:
-        clean_df['SMA'] = clean_df['Account Value'].rolling(window=sma_window, min_periods=1).mean()
+        clean_df['SMA'] = clean_df['Account Value'].rolling(window=int(sma_window), min_periods=1).mean()
         clean_df['Position'] = np.where(clean_df['Account Value'] > clean_df['SMA'], 1, 0)
         clean_df['Strategy Return'] = clean_df['Daily Return'] * clean_df['Position'].shift(1).fillna(0)
         # Free memory from intermediate columns without inplace

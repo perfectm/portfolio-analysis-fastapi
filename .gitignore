@@ -166,3 +166,11 @@ DATABASE_TROUBLESHOOTING.md
 DEPLOYMENT.md
 SOLUTION.md
 FINAL_ACTION_PLAN.md
+
+# Temporary and generated files
+.agent-os/
+.claude/agents/
+.claude/commands/
+*.pid
+uploads/
+*.csv

@@ -106,7 +106,7 @@ def create_blended_portfolio(
         rf_rate=0.05,
         sma_window=20,
         use_trading_filter=True,
-        starting_capital=100000.0,
+        starting_capital=1000000.0,
         is_blended=True
     )
     
@@ -122,7 +122,7 @@ def create_blended_portfolio(
         daily_rf_rate=0.000171,
         sma_window=20,
         use_trading_filter=True,
-        starting_capital=100000.0
+        starting_capital=1000000.0
     )
     
     db.add(blended_portfolio)
@@ -144,12 +144,92 @@ def create_blended_portfolio(
     return processed_df, metrics
 
 
+def create_blended_portfolio_from_files(
+    files_data: List[Tuple[str, pd.DataFrame]],
+    rf_rate: float = 0.043,
+    sma_window: int = 20,
+    use_trading_filter: bool = True,
+    starting_capital: float = 1000000.0,
+    weights: List[float] = None,
+    use_capital_allocation: bool = False
+) -> Tuple[pd.DataFrame, Dict[str, Any], Dict[str, Any]]:
+    """
+    Create a blended portfolio from file data (for optimization)
+    
+    Args:
+        files_data: List of (filename, dataframe) tuples
+        rf_rate: Annual risk-free rate
+        sma_window: SMA window
+        use_trading_filter: Whether to use trading filter
+        starting_capital: Starting capital
+        weights: Portfolio weights (defaults to equal weights)
+        use_capital_allocation: Whether to use capital allocation
+        
+    Returns:
+        Tuple of (blended_df, blended_metrics, correlation_data)
+    """
+    if not files_data:
+        return None, None, None
+        
+    if weights is None:
+        weights = [1.0 / len(files_data)] * len(files_data)
+    
+    if len(weights) != len(files_data):
+        return None, None, None
+        
+    # Process each portfolio individually
+    individual_results = process_individual_portfolios(
+        files_data, float(rf_rate), int(sma_window), bool(use_trading_filter), float(starting_capital)
+    )
+    
+    if not individual_results:
+        return None, None, None
+        
+    # Create combined P/L by weighting each portfolio
+    combined_data = []
+    for i, (result, weight) in enumerate(zip(individual_results, weights)):
+        if 'clean_df' in result and result['clean_df'] is not None:
+            df = result['clean_df'].copy()
+            df['Weighted_PL'] = df['P/L'] * weight
+            df['Portfolio'] = f"Portfolio_{i}"
+            combined_data.append(df[['Date', 'Weighted_PL', 'Portfolio']])
+    
+    if not combined_data:
+        return None, None, None
+        
+    # Merge all portfolios by date
+    blended_df = combined_data[0].copy()
+    blended_df = blended_df.rename(columns={'Weighted_PL': 'P/L'})
+    blended_df = blended_df.drop('Portfolio', axis=1)
+    
+    for df in combined_data[1:]:
+        blended_df = pd.merge(blended_df, df[['Date', 'Weighted_PL']], on='Date', how='outer')
+        blended_df['P/L'] = blended_df['P/L'].fillna(0) + blended_df['Weighted_PL'].fillna(0)
+        blended_df = blended_df.drop('Weighted_PL', axis=1)
+    
+    blended_df = blended_df.sort_values('Date').reset_index(drop=True)
+    
+    # Process the blended portfolio to get metrics
+    try:
+        processed_df, blended_metrics = process_portfolio_data(
+            blended_df, float(rf_rate), int(sma_window), bool(use_trading_filter), float(starting_capital)
+        )
+        
+        # Create correlation data (simplified)
+        correlation_data = {"correlation_matrix": {}}
+        
+        return processed_df, blended_metrics, correlation_data
+        
+    except Exception as e:
+        logger.error(f"Error processing blended portfolio: {e}")
+        return None, None, None
+
 def process_individual_portfolios(
     files_data: List[Tuple[str, pd.DataFrame]],
     rf_rate: float = 0.043,
     sma_window: int = 20,
     use_trading_filter: bool = True,
-    starting_capital: float = 100000.0
+    starting_capital: float = 1000000.0
 ) -> List[Dict[str, Any]]:
     """
     Process individual portfolio files

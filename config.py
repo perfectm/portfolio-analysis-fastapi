@@ -19,11 +19,11 @@ os.makedirs(PLOTS_FOLDER, exist_ok=True)
 DEFAULT_RF_RATE = 0.043
 DEFAULT_DAILY_RF_RATE = 0.000171
 DEFAULT_SMA_WINDOW = 20
-DEFAULT_STARTING_CAPITAL = 100000.0
+DEFAULT_STARTING_CAPITAL = 1000000.0
 
 # Column name mappings
-DATE_COLUMNS = ['Date Opened', 'Date', 'Trade Date', 'Entry Date', 'Open Date']
-PL_COLUMNS = ['P/L', 'PnL', 'Profit/Loss', 'Net P/L', 'Realized P/L', 'Total P/L']
+DATE_COLUMNS = ['Date Opened', 'Date', 'Trade Date', 'Entry Date', 'Open Date', 'OpenDate', 'FinalTradeClosedDate']
+PL_COLUMNS = ['P/L', 'PnL', 'Profit/Loss', 'Net P/L', 'Realized P/L', 'Total P/L', 'TotalGrossProfitLoss', 'TotalNetProfitLoss']
 
 # Monte Carlo simulation settings
 DEFAULT_SIMULATIONS = 1000

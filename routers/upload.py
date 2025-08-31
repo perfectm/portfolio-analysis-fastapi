@@ -122,11 +122,35 @@ async def upload_files_api(
                         logger.error(f"[API Upload] Error storing analysis result: {str(db_error)}", exc_info=True)
                 del result['clean_df']
         blended_result = None
-        if len(files_data) > 1:
+        if len(files_data) > 1 and len(portfolio_ids) > 1:
             logger.info(f"[API Upload] Creating blended portfolio from {len(files_data)} files")
-            blended_df, blended_metrics, correlation_data = create_blended_portfolio(
-                files_data, rf_rate, sma_window, use_trading_filter, starting_capital, portfolio_weights
-            )
+            try:
+                blended_portfolio = create_blended_portfolio(
+                    db=db,
+                    portfolio_ids=portfolio_ids,
+                    weights=portfolio_weights,
+                    name=f"Blended Portfolio ({len(portfolio_ids)} strategies)",
+                    description=f"Blended portfolio from {len(portfolio_ids)} uploaded strategies"
+                )
+                logger.info(f"[API Upload] Blended portfolio created with ID {blended_portfolio.id}")
+                
+                # For compatibility with the existing response format, create a dummy result
+                blended_metrics = {
+                    'total_return': 0.0,  # Would need to calculate from actual blended data
+                    'sharpe_ratio': 0.0,
+                    'total_pl': 0.0,
+                    'final_account_value': starting_capital,
+                    'max_drawdown': 0.0,
+                    'max_drawdown_percent': 0.0,
+                    'cagr': 0.0,
+                    'annual_volatility': 0.0
+                }
+                
+                blended_df = None  # Not used in current response format
+                correlation_data = None
+            except Exception as blend_error:
+                logger.error(f"[API Upload] Error creating blended portfolio: {str(blend_error)}", exc_info=True)
+                blended_df, blended_metrics, correlation_data = None, None, None
             if blended_df is not None and blended_metrics is not None:
                 logger.info("[API Upload] Blended portfolio created successfully")
                 blended_result = {

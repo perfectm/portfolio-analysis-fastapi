@@ -79,7 +79,7 @@ export default function Portfolios() {
   >({});
 
   // Analysis parameters
-  const [startingCapital, setStartingCapital] = useState<number>(100000);
+  const [startingCapital, setStartingCapital] = useState<number>(1000000);
   const [riskFreeRate, setRiskFreeRate] = useState<number>(4.3);
 
   // Force a fresh deployment with checkboxes
@@ -619,7 +619,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                   id="startingCapital"
                   type="number"
                   min="1000"
-                  max="10000000"
+                  max="100000000"
                   step="1000"
                   value={startingCapital}
                   onChange={(e) => {
@@ -635,7 +635,7 @@ The weights have been applied automatically. Click 'Analyze' to see the full res
                     width: "200px",
                     fontSize: "1rem",
                   }}
-                  placeholder="100000"
+                  placeholder="1000000"
                 />
                 <div
                   style={{

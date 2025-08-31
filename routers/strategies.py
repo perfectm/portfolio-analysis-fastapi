@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
-from typing import Any
+from typing import Any, Annotated
 import logging
 from database import get_db
 from portfolio_service import PortfolioService
+from auth_middleware import get_current_user
+from models import User
 import pandas as pd
 
 router = APIRouter()
@@ -11,9 +13,10 @@ logger = logging.getLogger(__name__)
 
 @router.get("")
 async def get_strategies(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     limit: int = 100,
-    include_summary: bool = True,
-    db: Session = Depends(get_db)
+    include_summary: bool = True
 ):
     try:
         portfolios = PortfolioService.get_portfolios(db, limit=limit)
@@ -28,7 +31,8 @@ async def get_strategies(
                 "row_count": portfolio.row_count,
                 "date_range_start": portfolio.date_range_start.isoformat() if portfolio.date_range_start else None,
                 "date_range_end": portfolio.date_range_end.isoformat() if portfolio.date_range_end else None,
-                "file_hash": portfolio.file_hash[:16] + "..." if portfolio.file_hash else None
+                "file_hash": portfolio.file_hash[:16] + "..." if portfolio.file_hash else None,
+                "strategy": portfolio.strategy
             }
             if include_summary:
                 recent_analysis = PortfolioService.get_recent_analysis_results(
@@ -77,7 +81,10 @@ async def get_strategies(
         }
 
 @router.get("/list")
-async def get_strategies_list(db: Session = Depends(get_db)):
+async def get_strategies_list(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
     try:
         portfolios = PortfolioService.get_portfolios(db, limit=1000)
         strategies_list = [
@@ -86,7 +93,8 @@ async def get_strategies_list(db: Session = Depends(get_db)):
                 "name": portfolio.name,
                 "filename": portfolio.filename,
                 "upload_date": portfolio.upload_date.isoformat(),
-                "row_count": portfolio.row_count
+                "row_count": portfolio.row_count,
+                "strategy": portfolio.strategy
             }
             for portfolio in portfolios
         ]
@@ -107,8 +115,9 @@ async def get_strategies_list(db: Session = Depends(get_db)):
 @router.get("/{strategy_id}/analysis")
 async def get_strategy_analysis(
     strategy_id: int,
-    limit: int = 10,
-    db: Session = Depends(get_db)
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    limit: int = 10
 ):
     try:
         portfolio = PortfolioService.get_portfolio_by_id(db, strategy_id)

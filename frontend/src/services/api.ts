@@ -40,6 +40,32 @@ console.log('[API Config] VITE_API_URL:', import.meta.env.VITE_API_URL);
 // Export the API base URL for use in other components
 export { API_BASE_URL };
 
+// Authentication types
+export interface AuthUser {
+  id: number;
+  username: string;
+  email: string;
+  full_name?: string;
+  is_active: boolean;
+}
+
+export interface AuthToken {
+  access_token: string;
+  token_type: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+  full_name?: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
 // Types for API responses
 export interface Portfolio {
   id: number;
@@ -160,6 +186,81 @@ const apiCall = async (url: string, options: RequestInit = {}): Promise<any> => 
   }
 };
 
+// Authentication helper functions
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('auth_token');
+};
+
+const setAuthToken = (token: string): void => {
+  localStorage.setItem('auth_token', token);
+};
+
+const clearAuthToken = (): void => {
+  localStorage.removeItem('auth_token');
+};
+
+const getAuthHeaders = (): HeadersInit => {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Authentication API methods
+export const authAPI = {
+  // Register new user
+  register: async (userData: RegisterRequest): Promise<AuthUser> => {
+    return apiCall('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  },
+
+  // Login user
+  login: async (credentials: LoginRequest): Promise<AuthToken> => {
+    const response = await apiCall('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+    
+    // Store token in localStorage
+    if (response.access_token) {
+      setAuthToken(response.access_token);
+    }
+    
+    return response;
+  },
+
+  // Get current user
+  getCurrentUser: async (): Promise<AuthUser> => {
+    return apiCall('/api/auth/me', {
+      headers: getAuthHeaders(),
+    });
+  },
+
+  // Logout user
+  logout: async (): Promise<void> => {
+    try {
+      await apiCall('/api/auth/logout', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+    } finally {
+      // Always clear local token regardless of server response
+      clearAuthToken();
+    }
+  },
+
+  // Check if user is authenticated
+  isAuthenticated: (): boolean => {
+    return !!getAuthToken();
+  },
+
+  // Get stored auth token
+  getToken: getAuthToken,
+
+  // Clear stored auth token
+  clearToken: clearAuthToken,
+};
+
 // API service methods
 export const portfolioAPI = {
   // Get all portfolios/strategies
@@ -169,7 +270,7 @@ export const portfolioAPI = {
 
   // Get strategies list (lightweight)
   getStrategiesList: async (): Promise<any> => {
-    return apiCall('/api/strategies/list');
+    return apiCall('/api/strategies/list', { headers: getAuthHeaders() });
   },
 
   // Upload a new portfolio CSV file
@@ -188,7 +289,7 @@ export const portfolioAPI = {
     formData.append('daily_rf_rate', '0.0001369');
     formData.append('sma_window', '20');
     formData.append('use_trading_filter', 'true');
-    formData.append('starting_capital', '100000');
+    formData.append('starting_capital', '1000000');
     formData.append('weighting_method', 'equal');
 
     console.log('[API] Form data prepared for single upload:', {
@@ -266,7 +367,7 @@ export const portfolioAPI = {
       daily_rf_rate: '0.0001369',
       sma_window: '20',
       use_trading_filter: 'true',
-      starting_capital: '100000',
+      starting_capital: '1000000',
       weighting_method: 'equal'
     };
 
@@ -372,7 +473,7 @@ export const portfolioAPI = {
 
   // Get analysis for a specific portfolio
   getAnalysis: async (portfolioId: number): Promise<AnalysisResponse> => {
-    return apiCall(`/api/analysis/${portfolioId}`);
+    return apiCall(`/api/strategies/${portfolioId}/analysis`);
   },
 
   // Delete a portfolio
@@ -408,4 +509,132 @@ export const portfolioAPI = {
       body: JSON.stringify({ portfolio_ids: portfolioIds }),
     });
   },
+};
+
+// Margin API methods
+const marginAPI = {
+  // Bulk upload margin files
+  bulkUploadMargin: async (
+    files: FileList, 
+    startingCapital: number = 1000000, 
+    maxMarginPercent: number = 0.85
+  ): Promise<any> => {
+    const formData = new FormData();
+    
+    Array.from(files).forEach((file) => {
+      formData.append('files', file);
+    });
+    
+    formData.append('starting_capital', startingCapital.toString());
+    formData.append('max_margin_percent', maxMarginPercent.toString());
+
+    return fetch(`${API_BASE_URL}/api/margin/bulk-upload`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...getAuthHeaders(),
+        // Don't set Content-Type for FormData - browser will set it automatically
+      },
+    }).then(async (response) => {
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      return response.json();
+    });
+  },
+
+  // Get margin summary
+  getMarginSummary: async (): Promise<any> => {
+    return apiCall('/api/margin/summary', {
+      headers: getAuthHeaders(),
+    });
+  },
+
+  // Get daily margin aggregates
+  getDailyMarginAggregates: async (limit: number = 100, validOnly: boolean = false): Promise<any> => {
+    const params = new URLSearchParams({ 
+      limit: limit.toString(),
+      valid_only: validOnly.toString()
+    });
+    return apiCall(`/api/margin/daily-aggregates?${params}`, {
+      headers: getAuthHeaders(),
+    });
+  },
+
+  // Get margin data for specific portfolio
+  getPortfolioMarginData: async (portfolioId: number, limit: number = 1000): Promise<any> => {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    return apiCall(`/api/margin/portfolio/${portfolioId}?${params}`, {
+      headers: getAuthHeaders(),
+    });
+  },
+
+  // Get supported margin file formats
+  getSupportedFormats: async (): Promise<any> => {
+    return apiCall('/api/margin/supported-formats', {
+      headers: getAuthHeaders(),
+    });
+  },
+
+  // Recalculate margin aggregates
+  recalculateMarginAggregates: async (
+    startingCapital: number = 1000000, 
+    maxMarginPercent: number = 0.85
+  ): Promise<any> => {
+    const formData = new FormData();
+    formData.append('starting_capital', startingCapital.toString());
+    formData.append('max_margin_percent', maxMarginPercent.toString());
+
+    return fetch(`${API_BASE_URL}/api/margin/recalculate-aggregates`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...getAuthHeaders(),
+        // Don't set Content-Type for FormData - browser will set it automatically
+      },
+    }).then(async (response) => {
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      return response.json();
+    });
+  },
+};
+
+// Create a unified API object that includes both generic methods and portfolio-specific methods
+export const api = {
+  // Generic HTTP methods with auth support
+  get: <T = any>(url: string): Promise<{ data: T }> => 
+    apiCall(url, { headers: getAuthHeaders() }).then(data => ({ data })),
+  
+  post: <T = any>(url: string, data?: any): Promise<{ data: T }> => 
+    apiCall(url, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+      headers: getAuthHeaders(),
+    }).then(response => ({ data: response })),
+  
+  put: <T = any>(url: string, data?: any): Promise<{ data: T }> => 
+    apiCall(url, {
+      method: 'PUT', 
+      body: data ? JSON.stringify(data) : undefined,
+      headers: getAuthHeaders(),
+    }).then(response => ({ data: response })),
+  
+  delete: <T = any>(url: string): Promise<{ data: T }> => 
+    apiCall(url, { 
+      method: 'DELETE',
+      headers: getAuthHeaders() 
+    }).then(data => ({ data })),
+
+  // Authentication methods
+  auth: authAPI,
+
+  // Portfolio-specific methods (for backward compatibility)
+  ...portfolioAPI,
+
+  // Margin-specific methods
+  margin: marginAPI,
 };

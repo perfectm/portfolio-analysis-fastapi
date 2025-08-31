@@ -8,12 +8,20 @@ This is a full-stack portfolio analysis application that provides Monte Carlo si
 
 ## Development Commands
 
-### Backend (FastAPI)
+### Quick Start
+- **First-time setup**: `./install.sh` (installs all dependencies and initializes database)
+- **Start development**: `./start.sh` (lightweight startup - starts both backend and frontend)
+- **Start production**: `./start.sh prod` (Docker-based production mode)
+- **Stop all services**: `./stop.sh` (stops dev or prod services)
+
+### Manual Commands (if needed)
+
+#### Backend (FastAPI)
 - **Start development server**: `uvicorn app:app --reload`
 - **Run tests**: `pytest` (uses pytest framework)
-- **Check specific test files**: `pytest test_app.py`, `pytest test_weighting.py`, etc.
+- **Check specific test files**: `pytest test_app.py`, `pytest test_weighting.py`, `pytest test_regime_analysis.py`
 
-### Frontend (React/TypeScript)
+#### Frontend (React/TypeScript)
 - **Navigate to frontend**: `cd frontend`
 - **Install dependencies**: `npm ci`
 - **Development server**: `npm run dev` (runs on Vite)
@@ -21,12 +29,13 @@ This is a full-stack portfolio analysis application that provides Monte Carlo si
 - **Lint**: `npm run lint` (ESLint configuration)
 - **Preview build**: `npm run preview`
 
-### Database Operations
+#### Database Operations
 - **Initialize database**: `python init_db.py` (creates tables)
+- **Run regime tables migration**: `python migrations/add_regime_tables.py`
 - **Check database connection**: Use the `/api/debug/database` endpoint
 - **Database migrations**: Uses SQLAlchemy with automatic table creation
 
-### Docker & Deployment
+#### Docker & Deployment
 - **Local Docker**: `docker-compose up` (builds and runs the full stack)
 - **Build for production**: `bash build.sh` (Render deployment script)
 - **Dockerfile**: Multi-stage build (Node.js for frontend, Python for backend)

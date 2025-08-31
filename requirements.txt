@@ -22,7 +22,15 @@ httpx>=0.24.0
 # Environment management
 python-dotenv>=1.0.0
 
+# Authentication dependencies
+passlib>=1.7.4
+bcrypt>=4.0.1
+python-jose[cryptography]>=3.3.0
+
 # Optimization dependencies
 scipy>=1.10.0
 
 psutil
+
+# Market data for regime analysis
+yfinance>=0.2.18
