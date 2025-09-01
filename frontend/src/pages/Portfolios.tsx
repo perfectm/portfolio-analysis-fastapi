@@ -82,28 +82,178 @@ export default function Portfolios() {
     null
   );
   const [editingStrategy, setEditingStrategy] = useState<string>("");
+  const [isLogScale, setIsLogScale] = useState<boolean>(false);
+  
+  // Load saved analysis parameters or use defaults
+  const savedParams = (() => {
+    try {
+      const saved = localStorage.getItem('analysisParams');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // Date range slider helpers - set proper constraints
+  const minDate = new Date("2022-05-01"); // Earliest allowed date
+  const maxDate = new Date(); // Current date
+  const maxSliderValue = Math.floor((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Date range state with proper defaults and constraints
+  const getConstrainedDate = (dateString: string | undefined, isEndDate: boolean): string => {
+    if (!dateString) {
+      return isEndDate ? maxDate.toISOString().split('T')[0] : "2022-05-01";
+    }
+    
+    const date = new Date(dateString);
+    if (date < minDate) return minDate.toISOString().split('T')[0];
+    if (date > maxDate) return maxDate.toISOString().split('T')[0];
+    return dateString;
+  };
+
+  const [dateRangeStart, setDateRangeStart] = useState<string>(
+    getConstrainedDate(savedParams?.dateRangeStart, false)
+  );
+  const [dateRangeEnd, setDateRangeEnd] = useState<string>(
+    getConstrainedDate(savedParams?.dateRangeEnd, true)
+  );
+  
+  const dateToSliderValue = (dateString: string): number => {
+    const date = new Date(dateString);
+    return Math.floor((date.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
+  };
+  
+  const sliderValueToDate = (value: number): string => {
+    const date = new Date(minDate.getTime() + value * 24 * 60 * 60 * 1000);
+    return date.toISOString().split('T')[0];
+  };
+  
+  // Initialize slider values, ensuring they're within bounds
+  const [sliderValues, setSliderValues] = useState<[number, number]>(() => {
+    const startValue = dateToSliderValue(dateRangeStart);
+    const endValue = dateToSliderValue(dateRangeEnd);
+    
+    return [
+      Math.max(0, Math.min(startValue, maxSliderValue)),
+      Math.max(0, Math.min(endValue, maxSliderValue))
+    ];
+  });
 
   // Weighting state
   const [weightingMethod, setWeightingMethod] = useState<"equal" | "custom">(
-    "equal"
+    (savedParams?.weightingMethod as "equal" | "custom") || "equal"
   );
   const [portfolioWeights, setPortfolioWeights] = useState<
     Record<number, number>
   >({});
 
   // Analysis parameters
-  const [startingCapital, setStartingCapital] = useState<number>(1000000);
-  const [riskFreeRate, setRiskFreeRate] = useState<number>(4.3);
+  const [startingCapital, setStartingCapital] = useState<number>(
+    savedParams?.startingCapital || 1000000
+  );
+  const [riskFreeRate, setRiskFreeRate] = useState<number>(
+    savedParams?.riskFreeRate || 4.3
+  );
   
   // Margin-based starting capital
   const [marginCapital, setMarginCapital] = useState<number | null>(null);
   const [marginCalculating, setMarginCalculating] = useState<boolean>(false);
+
+  // localStorage persistence helpers
+  const saveSelectedPortfolios = (selections: number[]) => {
+    try {
+      localStorage.setItem('selectedPortfolios', JSON.stringify(selections));
+    } catch (error) {
+      console.warn('Failed to save selected portfolios to localStorage:', error);
+    }
+  };
+
+  const loadSelectedPortfolios = (): number[] => {
+    try {
+      const saved = localStorage.getItem('selectedPortfolios');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.warn('Failed to load selected portfolios from localStorage:', error);
+    }
+    return [];
+  };
+
+  // Save and load analysis parameters
+  const saveAnalysisParams = (params: {
+    startingCapital: number;
+    riskFreeRate: number;
+    dateRangeStart: string;
+    dateRangeEnd: string;
+    weightingMethod: string;
+  }) => {
+    try {
+      localStorage.setItem('analysisParams', JSON.stringify(params));
+    } catch (error) {
+      console.warn('Failed to save analysis parameters:', error);
+    }
+  };
+
+  const loadAnalysisParams = () => {
+    try {
+      const saved = localStorage.getItem('analysisParams');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.warn('Failed to load analysis parameters:', error);
+    }
+    return null;
+  };
 
   // Force a fresh deployment with checkboxes
 
   useEffect(() => {
     fetchPortfolios();
   }, []);
+
+  // Load saved portfolio selections after portfolios are loaded
+  useEffect(() => {
+    if (portfolios.length > 0) {
+      const savedSelections = loadSelectedPortfolios();
+      // Filter to only include portfolios that still exist
+      const validSelections = savedSelections.filter(id => 
+        portfolios.some(portfolio => portfolio.id === id)
+      );
+      if (validSelections.length > 0) {
+        setSelectedPortfolios(validSelections);
+      }
+    }
+  }, [portfolios.length]); // Trigger when portfolios are loaded
+
+  // Save portfolio selections whenever they change
+  useEffect(() => {
+    saveSelectedPortfolios(selectedPortfolios);
+  }, [selectedPortfolios]);
+
+  // Save analysis parameters whenever they change
+  useEffect(() => {
+    const params = {
+      startingCapital,
+      riskFreeRate,
+      dateRangeStart,
+      dateRangeEnd,
+      weightingMethod,
+    };
+    saveAnalysisParams(params);
+  }, [startingCapital, riskFreeRate, dateRangeStart, dateRangeEnd, weightingMethod]);
+
+  // Sync slider values when date strings change (from external updates)
+  useEffect(() => {
+    const startValue = dateToSliderValue(dateRangeStart);
+    const endValue = dateToSliderValue(dateRangeEnd);
+    
+    const boundedStartValue = Math.max(0, Math.min(startValue, maxSliderValue));
+    const boundedEndValue = Math.max(0, Math.min(endValue, maxSliderValue));
+    
+    setSliderValues([boundedStartValue, boundedEndValue]);
+  }, [dateRangeStart, dateRangeEnd]);
 
   // Initialize weights when selected portfolios change
   useEffect(() => {
@@ -521,6 +671,8 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
         portfolio_ids: selectedPortfolios,
         starting_capital: startingCapital,
         rf_rate: riskFreeRate / 100, // Convert percentage to decimal
+        date_range_start: dateRangeStart,
+        date_range_end: dateRangeEnd,
       };
 
       // Add weighting parameters for multiple portfolios if using weighted endpoint
@@ -965,6 +1117,197 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                 >
                   The risk-free rate used for Sharpe ratio and UPI calculations.
                   Default is 4.3%.
+                </div>
+              </div>
+
+              {/* Date Range Filter */}
+              <div style={{ marginBottom: "1rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontWeight: "bold",
+                    color: theme.palette.text.primary,
+                  }}
+                >
+                  📅 Date Range Filter
+                </label>
+                <div style={{ 
+                  display: "flex", 
+                  flexDirection: "column", 
+                  gap: "1rem",
+                  backgroundColor: theme.palette.mode === 'dark' ? "#2d3436" : "#f8f9fa",
+                  padding: "1rem",
+                  borderRadius: "6px",
+                  border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#dee2e6"}`
+                }}>
+                  {/* Date Range Display */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                    <div style={{ 
+                      padding: "0.5rem 1rem", 
+                      backgroundColor: theme.palette.mode === 'dark' ? "#1a1a1a" : "#ffffff",
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: "4px",
+                      fontSize: "0.9rem",
+                      color: theme.palette.text.primary,
+                    }}>
+                      <strong>Start:</strong> {new Date(dateRangeStart).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </div>
+                    <div style={{ 
+                      padding: "0.5rem 1rem", 
+                      backgroundColor: theme.palette.mode === 'dark' ? "#1a1a1a" : "#ffffff",
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: "4px",
+                      fontSize: "0.9rem",
+                      color: theme.palette.text.primary,
+                    }}>
+                      <strong>End:</strong> {new Date(dateRangeEnd).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* Date Range Slider */}
+                  <div style={{ position: "relative", margin: "1rem 0", height: "40px" }}>
+                    {/* Track background */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "17px",
+                        left: "10px",
+                        right: "10px",
+                        height: "6px",
+                        background: theme.palette.mode === 'dark' ? "#666" : "#ddd",
+                        borderRadius: "3px",
+                        zIndex: 1,
+                      }}
+                    >
+                      {/* Active range highlight */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          height: "100%",
+                          background: "linear-gradient(90deg, #5DADE2, #D4A574)",
+                          borderRadius: "3px",
+                          left: `${(sliderValues[0] / maxSliderValue) * 100}%`,
+                          width: `${((sliderValues[1] - sliderValues[0]) / maxSliderValue) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Start handle */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `calc(${(sliderValues[0] / maxSliderValue) * 100}% - 10px)`,
+                        top: "10px",
+                        width: "20px",
+                        height: "20px",
+                        background: "#ffffff",
+                        border: "2px solid #5DADE2",
+                        borderRadius: "50%",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                        zIndex: 4,
+                        userSelect: "none",
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // Capture the parent element reference immediately
+                        const sliderContainer = (e.currentTarget as HTMLElement).parentElement!;
+                        
+                        const startDrag = (moveEvent: MouseEvent) => {
+                          const rect = sliderContainer.getBoundingClientRect();
+                          const trackWidth = rect.width - 20;
+                          const relativeX = moveEvent.clientX - rect.left - 10;
+                          const newPosition = Math.max(0, Math.min(1, relativeX / trackWidth));
+                          const newValue = Math.round(newPosition * maxSliderValue);
+                          
+                          
+                          // Constrain start handle to not go past end handle
+                          const constrainedValue = Math.min(newValue, sliderValues[1]);
+                          const newValues: [number, number] = [constrainedValue, sliderValues[1]];
+                          
+                          setSliderValues(newValues);
+                          setDateRangeStart(sliderValueToDate(newValues[0]));
+                          setDateRangeEnd(sliderValueToDate(newValues[1]));
+                        };
+                        
+                        const endDrag = () => {
+                          document.removeEventListener('mousemove', startDrag);
+                          document.removeEventListener('mouseup', endDrag);
+                        };
+                        
+                        document.addEventListener('mousemove', startDrag);
+                        document.addEventListener('mouseup', endDrag);
+                      }}
+                    />
+                    
+                    {/* End handle */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `calc(${(sliderValues[1] / maxSliderValue) * 100}% - 10px)`,
+                        top: "10px",
+                        width: "20px",
+                        height: "20px",
+                        background: "#ffffff",
+                        border: "2px solid #D4A574",
+                        borderRadius: "50%",
+                        cursor: "pointer",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                        zIndex: 5,
+                        userSelect: "none",
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // Capture the parent element reference immediately
+                        const sliderContainer = (e.currentTarget as HTMLElement).parentElement!;
+                        
+                        const endDrag = (moveEvent: MouseEvent) => {
+                          const rect = sliderContainer.getBoundingClientRect();
+                          const trackWidth = rect.width - 20;
+                          const relativeX = moveEvent.clientX - rect.left - 10;
+                          const newPosition = Math.max(0, Math.min(1, relativeX / trackWidth));
+                          const newValue = Math.round(newPosition * maxSliderValue);
+                          
+                          
+                          // Constrain end handle to not go before start handle
+                          const constrainedValue = Math.max(newValue, sliderValues[0]);
+                          const newValues: [number, number] = [sliderValues[0], constrainedValue];
+                          
+                          setSliderValues(newValues);
+                          setDateRangeStart(sliderValueToDate(newValues[0]));
+                          setDateRangeEnd(sliderValueToDate(newValues[1]));
+                        };
+                        
+                        const stopDrag = () => {
+                          document.removeEventListener('mousemove', endDrag);
+                          document.removeEventListener('mouseup', stopDrag);
+                        };
+                        
+                        document.addEventListener('mousemove', endDrag);
+                        document.addEventListener('mouseup', stopDrag);
+                      }}
+                    />
+                  </div>
+                  
+                  <div style={{
+                    fontSize: "0.85rem",
+                    color: theme.palette.text.secondary,
+                  }}>
+                    Drag the slider handles to adjust the date range. This affects all calculations and chart displays.
+                  </div>
                 </div>
               </div>
             </Paper>
@@ -1886,30 +2229,49 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           <h5 style={{ margin: 0, color: theme.palette.text.primary }}>
                             Daily Net Liquidity
                           </h5>
-                          <div style={{ display: "flex", gap: "1rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                              <div style={{
-                                width: "16px",
-                                height: "3px",
-                                backgroundColor: "#D4A574",
-                                borderRadius: "2px"
-                              }}></div>
-                              <span style={{ 
-                                fontSize: "0.85rem", 
-                                color: theme.palette.text.secondary 
-                              }}>Portfolio</span>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                              <div style={{
-                                width: "16px",
-                                height: "3px",
-                                backgroundColor: "#5DADE2",
-                                borderRadius: "2px"
-                              }}></div>
-                              <span style={{ 
-                                fontSize: "0.85rem", 
-                                color: theme.palette.text.secondary 
-                              }}>SPX</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                            {/* Log Scale Toggle */}
+                            <button
+                              onClick={() => setIsLogScale(!isLogScale)}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                fontSize: "0.75rem",
+                                backgroundColor: isLogScale ? "#5DADE2" : "transparent",
+                                color: isLogScale ? "#ffffff" : theme.palette.text.secondary,
+                                border: `1px solid ${isLogScale ? "#5DADE2" : theme.palette.divider}`,
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                transition: "all 0.2s"
+                              }}
+                            >
+                              Log Scale
+                            </button>
+                            {/* Legend */}
+                            <div style={{ display: "flex", gap: "1rem" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <div style={{
+                                  width: "16px",
+                                  height: "3px",
+                                  backgroundColor: "#D4A574",
+                                  borderRadius: "2px"
+                                }}></div>
+                                <span style={{ 
+                                  fontSize: "0.85rem", 
+                                  color: theme.palette.text.secondary 
+                                }}>Portfolio</span>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <div style={{
+                                  width: "16px",
+                                  height: "3px",
+                                  backgroundColor: "#5DADE2",
+                                  borderRadius: "2px"
+                                }}></div>
+                                <span style={{ 
+                                  fontSize: "0.85rem", 
+                                  color: theme.palette.text.secondary 
+                                }}>SPX</span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1964,7 +2326,8 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     fill: theme.palette.text.secondary 
                                   }}
                                   tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
-                                  domain={['dataMin * 0.9', 'dataMax * 1.1']}
+                                  domain={isLogScale ? ['dataMin', 'dataMax'] : ['dataMin * 0.9', 'dataMax * 1.1']}
+                                  scale={isLogScale ? 'log' : 'linear'}
                                 />
                                 <Tooltip
                                   contentStyle={{

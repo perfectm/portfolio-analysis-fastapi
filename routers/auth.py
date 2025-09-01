@@ -20,7 +20,7 @@ class UserRegistration(BaseModel):
     username: str
     email: EmailStr
     password: str
-    full_name: str = None
+    full_name: str | None = None
 
 class UserLogin(BaseModel):
     username: str
@@ -34,7 +34,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
-    full_name: str = None
+    full_name: str | None = None
     is_active: bool
     
     model_config = {"from_attributes": True}

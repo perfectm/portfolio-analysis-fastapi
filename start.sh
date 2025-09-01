@@ -87,7 +87,7 @@ if [ "$MODE" = "dev" ]; then
     echo $BACKEND_PID > .backend.pid
     
     # Wait for backend to start
-    if ! wait_for_service "http://localhost:8000/api/debug/database" "Backend API"; then
+    if ! wait_for_service "http://0.0.0.0:8000/api/debug/database" "Backend API"; then
         kill $BACKEND_PID 2>/dev/null || true
         rm -f .backend.pid
         exit 1
@@ -102,7 +102,7 @@ if [ "$MODE" = "dev" ]; then
     cd ..
     
     # Wait for frontend to start
-    if ! wait_for_service "http://localhost:5173" "Frontend Dev Server"; then
+    if ! wait_for_service "http://0.0.0.0:5173" "Frontend Dev Server"; then
         kill $FRONTEND_PID 2>/dev/null || true
         kill $BACKEND_PID 2>/dev/null || true
         rm -f .frontend.pid .backend.pid
@@ -110,9 +110,9 @@ if [ "$MODE" = "dev" ]; then
     fi
     
     echo -e "${GREEN}🎉 Development servers started successfully!${NC}"
-    echo -e "${GREEN}   Backend API: http://localhost:8000${NC}"
-    echo -e "${GREEN}   Frontend: http://localhost:5173${NC}"
-    echo -e "${GREEN}   API Docs: http://localhost:8000/docs${NC}"
+    echo -e "${GREEN}   Backend API: http://0.0.0.0:8000${NC}"
+    echo -e "${GREEN}   Frontend: http://0.0.0.0:5173${NC}"
+    echo -e "${GREEN}   API Docs: http://0.0.0.0:8000/docs${NC}"
     echo -e "${YELLOW}   Logs: backend.log, frontend.log${NC}"
     echo -e "${YELLOW}   Stop with: ./stop.sh${NC}"
 
@@ -132,15 +132,15 @@ elif [ "$MODE" = "prod" ]; then
     docker-compose up -d
     
     # Wait for service to be ready
-    if ! wait_for_service "http://localhost:8000" "Production Server"; then
+    if ! wait_for_service "http://0.0.0.0:8000" "Production Server"; then
         echo -e "${RED}❌ Production server failed to start${NC}"
         docker-compose logs
         exit 1
     fi
     
     echo -e "${GREEN}🎉 Production server started successfully!${NC}"
-    echo -e "${GREEN}   Application: http://localhost:8000${NC}"
-    echo -e "${GREEN}   API Docs: http://localhost:8000/docs${NC}"
+    echo -e "${GREEN}   Application: http://0.0.0.0:8000${NC}"
+    echo -e "${GREEN}   API Docs: http://0.0.0.0:8000/docs${NC}"
     echo -e "${YELLOW}   View logs: docker-compose logs -f${NC}"
     echo -e "${YELLOW}   Stop with: ./stop.sh prod${NC}"
 
