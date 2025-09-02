@@ -245,8 +245,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   return (
     <ThemeContext.Provider value={contextValue}>
       <MuiThemeProvider theme={theme}>
-        <CssBaseline />
-        {children}
+        <>
+          <CssBaseline />
+          {children}
+        </>
       </MuiThemeProvider>
     </ThemeContext.Provider>
   );

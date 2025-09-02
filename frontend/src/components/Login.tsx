@@ -58,8 +58,8 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
       >
         <Card sx={{ width: '100%', maxWidth: 400 }}>
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h4" component="h1" align="center" gutterBottom>
-              Sign In
+            <Typography variant="h4" align="center" gutterBottom>
+              <h1>Sign In</h1>
             </Typography>
             <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
               Access your portfolio analysis dashboard
@@ -71,7 +71,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
               </Alert>
             )}
 
-            <Box component="form" onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit}>
               <TextField
                 fullWidth
                 label="Username"
@@ -127,18 +127,26 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
               <Box textAlign="center">
                 <Typography variant="body2" color="text.secondary">
                   Don't have an account?{' '}
-                  <Link
-                    component="button"
-                    variant="body2"
+                  <button
                     type="button"
                     onClick={onSwitchToRegister}
-                    sx={{ textDecoration: 'none', cursor: 'pointer' }}
+                    style={{ 
+                      background: 'none', 
+                      border: 'none', 
+                      textDecoration: 'none', 
+                      cursor: 'pointer',
+                      color: 'inherit',
+                      fontSize: 'inherit',
+                      fontFamily: 'inherit'
+                    }}
                   >
-                    Sign up here
-                  </Link>
+                    <Link variant="body2" sx={{ textDecoration: 'none' }}>
+                      Sign up here
+                    </Link>
+                  </button>
                 </Typography>
               </Box>
-            </Box>
+            </form>
           </CardContent>
         </Card>
       </Box>

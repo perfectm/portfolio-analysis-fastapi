@@ -71,63 +71,64 @@ const Navigation: React.FC = () => {
                 color: theme.palette.primary.main,
               }}
             />
-            <Typography
-              variant="h5"
-              component={Link}
+            <Link
               to="/"
-              sx={{
-                fontWeight: 700,
-                textDecoration: "none",
-                color: theme.palette.text.primary,
-                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                "&:hover": {
-                  opacity: 0.8,
-                },
-              }}
+              style={{ textDecoration: "none" }}
             >
-              Portfolio Analysis
-            </Typography>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 700,
+                  color: theme.palette.text.primary,
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  "&:hover": {
+                    opacity: 0.8,
+                  },
+                }}
+              >
+                Portfolio Analysis
+              </Typography>
+            </Link>
           </Box>
 
           {/* Navigation Items */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             {/* Main Navigation - only show if authenticated */}
             {isAuthenticated && navItems.map((item) => (
-              <Button
-                key={item.path}
-                component={Link}
-                to={item.path}
-                variant={isActive(item.path) ? "contained" : "text"}
-                sx={{
-                  minWidth: "auto",
-                  px: 2,
-                  py: 1,
-                  borderRadius: 2,
-                  fontWeight: 600,
-                  textTransform: "none",
-                  ...(isActive(item.path)
-                    ? {
-                        background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                        boxShadow: theme.shadows[3],
-                        "&:hover": {
-                          background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                          boxShadow: theme.shadows[6],
-                        },
-                      }
-                    : {
-                        color: theme.palette.text.primary,
-                        "&:hover": {
-                          backgroundColor: theme.palette.action.hover,
-                          borderRadius: 2,
-                        },
-                      }),
-                }}
-              >
-                {item.label}
-              </Button>
+              <Link key={item.path} to={item.path} style={{ textDecoration: "none" }}>
+                <Button
+                  variant={isActive(item.path) ? "contained" : "text"}
+                  sx={{
+                    minWidth: "auto",
+                    px: 2,
+                    py: 1,
+                    borderRadius: 2,
+                    fontWeight: 600,
+                    textTransform: "none",
+                    ...(isActive(item.path)
+                      ? {
+                          background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                          boxShadow: theme.shadows[3],
+                          "&:hover": {
+                            background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                            boxShadow: theme.shadows[6],
+                          },
+                        }
+                      : {
+                          color: theme.palette.text.primary,
+                          "&:hover": {
+                            backgroundColor: theme.palette.action.hover,
+                            borderRadius: 2,
+                          },
+                        }),
+                  }}
+                >
+                  {item.label}
+                </Button>
+              </Link>
             ))}
 
             {/* Theme Toggle */}

@@ -212,9 +212,11 @@ const RegimeStatus: React.FC = () => {
               Market Regime
             </Typography>
             <Tooltip title="Show detailed indicators">
-              <IconButton onClick={() => setShowDetails(!showDetails)} size="small">
-                {showDetails ? <ExpandLess /> : <ExpandMore />}
-              </IconButton>
+              <span>
+                <IconButton onClick={() => setShowDetails(!showDetails)} size="small">
+                  {showDetails ? <ExpandLess /> : <ExpandMore />}
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
 
@@ -269,7 +271,9 @@ const RegimeStatus: React.FC = () => {
                       Volatility Percentile
                     </Typography>
                     <Tooltip title="Higher values indicate increased market volatility">
-                      <InfoOutlined fontSize="small" color="action" />
+                      <span>
+                        <InfoOutlined fontSize="small" color="action" />
+                      </span>
                     </Tooltip>
                   </Box>
                   <LinearProgress
@@ -289,7 +293,9 @@ const RegimeStatus: React.FC = () => {
                       Trend Strength
                     </Typography>
                     <Tooltip title="Positive values indicate uptrend, negative values indicate downtrend">
-                      <InfoOutlined fontSize="small" color="action" />
+                      <span>
+                        <InfoOutlined fontSize="small" color="action" />
+                      </span>
                     </Tooltip>
                   </Box>
                   <LinearProgress
@@ -309,7 +315,9 @@ const RegimeStatus: React.FC = () => {
                       Momentum Score
                     </Typography>
                     <Tooltip title="Measures recent price momentum relative to longer-term trends">
-                      <InfoOutlined fontSize="small" color="action" />
+                      <span>
+                        <InfoOutlined fontSize="small" color="action" />
+                      </span>
                     </Tooltip>
                   </Box>
                   <LinearProgress
@@ -329,7 +337,9 @@ const RegimeStatus: React.FC = () => {
                       Drawdown Severity
                     </Typography>
                     <Tooltip title="Current drawdown from recent highs">
-                      <InfoOutlined fontSize="small" color="action" />
+                      <span>
+                        <InfoOutlined fontSize="small" color="action" />
+                      </span>
                     </Tooltip>
                   </Box>
                   <LinearProgress

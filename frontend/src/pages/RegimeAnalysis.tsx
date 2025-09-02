@@ -223,7 +223,8 @@ const RegimeAnalysis: React.FC = () => {
                   </FormControl>
                 </Box>
 
-                <TableContainer component={Paper} variant="outlined">
+                <Paper variant="outlined">
+                  <TableContainer>
                   <Table>
                     <TableHead>
                       <TableRow>
@@ -266,7 +267,8 @@ const RegimeAnalysis: React.FC = () => {
                       ))}
                     </TableBody>
                   </Table>
-                </TableContainer>
+                  </TableContainer>
+                </Paper>
               </CardContent>
             </Card>
 
@@ -279,7 +281,8 @@ const RegimeAnalysis: React.FC = () => {
                 </Typography>
 
                 {portfolioPerformances.length > 0 ? (
-                  <TableContainer component={Paper} variant="outlined">
+                  <Paper variant="outlined">
+                  <TableContainer>
                     <Table>
                       <TableHead>
                         <TableRow>
@@ -325,6 +328,7 @@ const RegimeAnalysis: React.FC = () => {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                </Paper>
                 ) : (
                   <Alert severity="info">
                     No performance data available. Upload portfolios to see regime-specific performance analysis.

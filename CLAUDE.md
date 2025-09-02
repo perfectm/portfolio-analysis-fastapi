@@ -42,21 +42,43 @@ This is a full-stack portfolio analysis application that provides Monte Carlo si
 
 ## Architecture Overview
 
-### Backend Structure
-- **app.py**: Main FastAPI application with all API endpoints
+### Backend Structure (Modular Router Design)
+The backend uses FastAPI with a modular router architecture for better code organization:
+
+- **app.py**: Main FastAPI application with middleware and router registration
 - **database.py**: Database configuration with PostgreSQL/SQLite fallback
 - **models.py**: SQLAlchemy ORM models for portfolios, analysis results, and plots
 - **portfolio_service.py**: Service layer for database operations
 - **config.py**: Configuration constants and environment settings
+
+#### Core Processing Modules
 - **portfolio_processor.py**: Core data processing logic
 - **portfolio_blender.py**: Multi-portfolio blending and weighting logic
+- **portfolio_optimizer.py**: Advanced weight optimization algorithms
 - **plotting.py**: Matplotlib/Seaborn chart generation
 
-### Frontend Structure (React + TypeScript + Vite)
-- **src/components/**: Reusable UI components (Navigation)
-- **src/pages/**: Main application pages (Home, Upload, Portfolios, Analysis)
-- **src/services/api.ts**: Axios-based API client
-- **Frontend routes**: Handled by React Router with catch-all backend route
+#### Router Modules (`/routers/`)
+- **auth.py**: User authentication and registration
+- **upload.py**: File upload and processing endpoints
+- **portfolio.py**: Portfolio management operations
+- **strategies.py**: Strategy listing and analysis
+- **optimization.py**: Portfolio weight optimization
+- **regime.py**: Market regime analysis
+- **margin.py**: Margin management functionality
+
+### Frontend Structure (React + TypeScript + Vite + Material-UI)
+Modern React application with Material-UI components and Recharts for data visualization:
+
+- **src/components/**: Reusable UI components (Navigation, theme providers)
+- **src/pages/**: Main application pages with advanced features
+  - **Home.tsx**: Landing page and overview
+  - **Upload.tsx**: File upload interface
+  - **Portfolios.tsx**: Interactive portfolio analysis with date range sliders
+  - **Analysis.tsx**: Comprehensive analysis results
+  - **RegimeAnalysis.tsx**: Market regime analysis interface
+  - **MarginManagement.tsx**: Margin calculation and management
+- **src/services/api.ts**: Axios-based API client with authentication
+- **Frontend routes**: React Router with protected routes and catch-all backend routing
 
 ### Database Schema
 - **portfolios**: Portfolio metadata, file info, date ranges
@@ -67,22 +89,59 @@ This is a full-stack portfolio analysis application that provides Monte Carlo si
 
 ## Key Features & Endpoints
 
+### Authentication & User Management
+- `POST /api/register`: User registration with full name and email validation
+- `POST /api/login`: User authentication and session management
+- `POST /api/logout`: Session termination
+- `GET /api/me`: Get current user information
+
 ### Portfolio Management
 - `POST /api/upload`: Upload and analyze CSV files
 - `GET /api/strategies`: List all portfolios with analysis summaries
 - `DELETE /api/portfolio/{id}`: Delete portfolio and associated data
 - `PUT /api/portfolio/{id}/name`: Update portfolio name
+- `GET /api/portfolios`: Get all portfolios with metadata
 
 ### Analysis Endpoints
 - `POST /api/analyze-portfolios`: Analyze selected portfolios (equal weighting)
 - `POST /api/analyze-portfolios-weighted`: Advanced analysis with custom weights
 - `GET /api/strategies/{id}/analysis`: Get analysis history for a portfolio
+- `POST /api/optimize-weights`: Intelligent portfolio weight optimization
+
+### Market Regime Analysis
+- `POST /api/regime/analyze`: Analyze market regime periods and transitions
+- `GET /api/regime/data`: Retrieve regime analysis results
+
+### Margin Management
+- `POST /api/margin/calculate`: Calculate margin requirements and portfolio multipliers
+- `GET /api/margin/requirements`: Get margin requirement configurations
 
 ### File Processing
 - **Supported formats**: CSV files with date and P/L columns
 - **Date columns**: 'Date Opened', 'Date', 'Trade Date', 'Entry Date', 'Open Date'
 - **P/L columns**: 'P/L', 'PnL', 'Profit/Loss', 'Net P/L', 'Realized P/L', 'Total P/L'
 - **Charts generated**: Combined analysis plots, correlation heatmaps, Monte Carlo simulations
+
+## Interactive UI Features
+
+### Advanced Portfolio Analysis Interface
+- **Interactive Date Range Slider**: Dual-handle slider for filtering analysis periods (May 2022 - current date)
+- **Logarithmic Scale Toggle**: Switch between linear and log scale for Daily Net Liquidity charts
+- **Persistent User Preferences**: localStorage-based persistence for portfolio selections and analysis parameters
+- **Material-UI Dark/Light Theme**: Responsive theme switching with proper contrast ratios
+- **Real-time Chart Updates**: Recharts integration with dynamic data filtering
+
+### Portfolio Selection & Weighting
+- **Checkbox-based Portfolio Selection**: Multi-select interface with visual feedback
+- **Custom Weight Assignment**: Manual weight input with validation and normalization
+- **Intelligent Weight Optimization**: One-click optimization using multiple algorithms
+- **Weight Constraint Validation**: Real-time validation with min/max weight enforcement
+
+### User Experience Enhancements
+- **Session-based Authentication**: Secure user sessions with automatic logout
+- **Cross-device Network Access**: Configured for 0.0.0.0 binding with CORS support
+- **Responsive Design**: Mobile-friendly interface with Material-UI breakpoints
+- **Error Handling**: Comprehensive error messaging and validation feedback
 
 ## Configuration & Environment
 
@@ -143,3 +202,35 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **Objective Function**: Weighted combination of CAGR and inverse drawdown
 - **Constraints**: Min weight 5%, Max weight 60% per portfolio
 - **Bonus**: Additional scoring for high Sharpe ratios
+
+## Important Development Notes
+
+### React Component Performance
+- **Slider Components**: Use cached calculations for `maxSliderValue` to prevent render loops
+- **State Management**: Avoid stale closures by capturing DOM element references immediately in event handlers
+- **Chart Optimization**: Recharts components benefit from memoized data props to prevent unnecessary re-renders
+
+### Database & Authentication
+- **Pydantic Schemas**: Use `str | None = None` for nullable fields, not `str = None`
+- **User Management**: Full name field is optional and properly handles null values
+- **Session Management**: FastAPI session middleware handles authentication state
+
+### Network Configuration
+- **Development**: Configured for 0.0.0.0 binding to support cross-device access
+- **CORS**: Includes closet.local domain for local network testing
+- **Frontend**: Vite dev server configured with proper host and allowed origins
+
+### Performance Considerations
+- **Memory Management**: Explicit garbage collection for large DataFrame operations
+- **File Uploads**: Streaming file processing for large CSV files
+- **Monte Carlo**: Optimized simulation algorithms with progress tracking
+
+### Code Quality
+- **TypeScript**: Strict type checking enabled for frontend components
+- **Error Handling**: Comprehensive error boundaries and validation
+- **Testing**: Pytest framework with modular test files for different components
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

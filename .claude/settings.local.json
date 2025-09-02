@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(timeout 5s npm run dev)"
+      "Bash(timeout 5s npm run dev)",
+      "Bash(rm:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git add:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(python test_dynamic_weights.py:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

@@ -272,6 +272,118 @@ async def get_supported_margin_formats(
         ]
     }
 
+@router.get("/strategies-overview")
+async def get_strategies_margin_overview(
+    db: Annotated[Session, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None
+):
+    """
+    Get all strategies with their margin data overview
+    """
+    try:
+        from models import Portfolio, PortfolioMarginData
+        from sqlalchemy import func
+        
+        # Get all portfolios with their strategies and margin statistics
+        query = db.query(
+            Portfolio.id,
+            Portfolio.name,
+            Portfolio.strategy,
+            Portfolio.filename,
+            Portfolio.upload_date,
+            func.count(PortfolioMarginData.id).label('margin_records_count'),
+            func.min(PortfolioMarginData.date).label('margin_date_start'),
+            func.max(PortfolioMarginData.date).label('margin_date_end'),
+            func.min(PortfolioMarginData.margin_requirement).label('min_margin'),
+            func.max(PortfolioMarginData.margin_requirement).label('max_margin'),
+            func.avg(PortfolioMarginData.margin_requirement).label('avg_margin')
+        ).outerjoin(
+            PortfolioMarginData, Portfolio.id == PortfolioMarginData.portfolio_id
+        ).group_by(
+            Portfolio.id, Portfolio.name, Portfolio.strategy, Portfolio.filename, Portfolio.upload_date
+        ).order_by(
+            Portfolio.strategy.nullslast(), Portfolio.name
+        ).all()
+        
+        # Group by strategy
+        strategies = {}
+        total_portfolios = 0
+        total_with_margin = 0
+        
+        for row in query:
+            strategy = row.strategy or "No Strategy Set"
+            if strategy not in strategies:
+                strategies[strategy] = {
+                    "strategy_name": strategy,
+                    "portfolios": [],
+                    "total_portfolios": 0,
+                    "portfolios_with_margin": 0,
+                    "total_margin_records": 0,
+                    "strategy_margin_range": {
+                        "min": None,
+                        "max": None,
+                        "avg": None
+                    }
+                }
+            
+            portfolio_data = {
+                "id": row.id,
+                "name": row.name,
+                "filename": row.filename,
+                "upload_date": row.upload_date.isoformat() if row.upload_date else None,
+                "margin_data": {
+                    "has_margin_data": row.margin_records_count > 0,
+                    "records_count": row.margin_records_count or 0,
+                    "date_range": {
+                        "start": row.margin_date_start.isoformat() if row.margin_date_start else None,
+                        "end": row.margin_date_end.isoformat() if row.margin_date_end else None
+                    },
+                    "margin_range": {
+                        "min": float(row.min_margin) if row.min_margin else None,
+                        "max": float(row.max_margin) if row.max_margin else None,
+                        "avg": float(row.avg_margin) if row.avg_margin else None
+                    }
+                }
+            }
+            
+            strategies[strategy]["portfolios"].append(portfolio_data)
+            strategies[strategy]["total_portfolios"] += 1
+            total_portfolios += 1
+            
+            if row.margin_records_count > 0:
+                strategies[strategy]["portfolios_with_margin"] += 1
+                strategies[strategy]["total_margin_records"] += row.margin_records_count
+                total_with_margin += 1
+                
+                # Update strategy-level margin range
+                if strategies[strategy]["strategy_margin_range"]["min"] is None or row.min_margin < strategies[strategy]["strategy_margin_range"]["min"]:
+                    strategies[strategy]["strategy_margin_range"]["min"] = float(row.min_margin) if row.min_margin else None
+                if strategies[strategy]["strategy_margin_range"]["max"] is None or row.max_margin > strategies[strategy]["strategy_margin_range"]["max"]:
+                    strategies[strategy]["strategy_margin_range"]["max"] = float(row.max_margin) if row.max_margin else None
+        
+        # Calculate strategy-level averages
+        for strategy_data in strategies.values():
+            if strategy_data["portfolios_with_margin"] > 0:
+                avg_values = [p["margin_data"]["margin_range"]["avg"] for p in strategy_data["portfolios"] 
+                             if p["margin_data"]["margin_range"]["avg"] is not None]
+                if avg_values:
+                    strategy_data["strategy_margin_range"]["avg"] = sum(avg_values) / len(avg_values)
+        
+        return {
+            "success": True,
+            "summary": {
+                "total_portfolios": total_portfolios,
+                "portfolios_with_margin": total_with_margin,
+                "strategies_count": len(strategies),
+                "coverage_percentage": (total_with_margin / total_portfolios * 100) if total_portfolios > 0 else 0
+            },
+            "strategies": list(strategies.values())
+        }
+        
+    except Exception as e:
+        logger.error(f"[MARGIN] Error getting strategies overview: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting strategies overview: {str(e)}")
+
 @router.post("/recalculate-aggregates") 
 async def recalculate_margin_aggregates(
     starting_capital: float = Form(DEFAULT_STARTING_CAPITAL),

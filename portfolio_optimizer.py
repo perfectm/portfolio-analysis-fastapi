@@ -276,14 +276,74 @@ class OptimizationCache:
         
         return subset_caches
 
+def calculate_dynamic_max_weight(portfolio_count: int) -> float:
+    """
+    Calculate maximum weight per portfolio based on portfolio count.
+    
+    Dynamic scaling ensures reasonable diversification:
+    - 2 portfolios: 80% max (limited options)
+    - 3-6 portfolios: 70% to 50% max (moderate concentration)
+    - 7+ portfolios: 40% to 22% max (diversification focus)
+    
+    Args:
+        portfolio_count: Number of portfolios in optimization
+        
+    Returns:
+        Maximum weight as decimal (e.g., 0.50 for 50%)
+    """
+    if portfolio_count < 2:
+        return 0.80  # Edge case: single portfolio
+    elif portfolio_count == 2:
+        return 0.80  # 2 portfolios: allow up to 80% concentration
+    elif portfolio_count <= 6:
+        # Linear decrease from 70% to 50% for 3-6 portfolios
+        # Formula: 70% - ((count - 3) * 6.25%)
+        return 0.70 - ((portfolio_count - 3) * 0.0625)
+    elif portfolio_count <= 12:
+        # Linear decrease from 40% to 30% for 7-12 portfolios
+        # Formula: 40% - ((count - 7) * 1.67%)
+        return 0.40 - ((portfolio_count - 7) * 0.0167)
+    else:
+        # 13+ portfolios: cap at decreasing rate, minimum 20%
+        return max(0.20, 0.30 - ((portfolio_count - 12) * 0.01))
+
+def calculate_dynamic_min_weight(portfolio_count: int) -> float:
+    """
+    Calculate minimum weight per portfolio based on portfolio count.
+    
+    Ensures meaningful allocation while maintaining feasible constraints:
+    - Basic minimum: 1/(portfolio_count * 5) but at least 1%
+    - Never more than max_weight / 5 to maintain feasible constraints
+    - Must ensure total minimum weights don't exceed 1.0
+    
+    Args:
+        portfolio_count: Number of portfolios in optimization
+        
+    Returns:
+        Minimum weight as decimal (e.g., 0.05 for 5%)
+    """
+    if portfolio_count < 2:
+        return 0.05
+    
+    # Basic minimum: more conservative approach
+    basic_min = max(0.01, 1.0 / (portfolio_count * 5))
+    
+    # But never more than 1/5 of the maximum weight to maintain feasibility
+    max_weight = calculate_dynamic_max_weight(portfolio_count)
+    feasible_min = max_weight / 5
+    
+    # Ensure the sum of minimum weights doesn't exceed reasonable bounds
+    candidate_min = min(basic_min, feasible_min)
+    max_feasible_min = 0.8 / portfolio_count  # Leave 20% room for weight variation
+    
+    return min(candidate_min, max_feasible_min)
+
 @dataclass
 class OptimizationObjective:
     """Configuration for optimization objectives"""
     return_weight: float = 0.6  # Weight for return in objective function
     drawdown_weight: float = 0.4  # Weight for drawdown penalty in objective function
-    min_weight: float = 0.05  # Minimum weight per portfolio
-    max_weight: float = 0.60  # Maximum weight per portfolio
-    sharpe_bonus: float = 0.1  # Bonus multiplier for high Sharpe ratios
+    # Note: min_weight and max_weight are now calculated dynamically based on portfolio count
 
 class PortfolioOptimizer:
     """
@@ -295,7 +355,8 @@ class PortfolioOptimizer:
                  rf_rate: float = 0.05,
                  sma_window: int = 20,
                  use_trading_filter: bool = True,
-                 starting_capital: float = 1000000.0):
+                 starting_capital: float = 1000000.0,
+                 portfolio_count: int = None):
         """
         Initialize the portfolio optimizer
         
@@ -305,6 +366,7 @@ class PortfolioOptimizer:
             sma_window: SMA window for trading filter
             use_trading_filter: Whether to apply SMA filter
             starting_capital: Starting capital for calculations
+            portfolio_count: Number of portfolios (for dynamic weight constraints)
         """
         self.objective = objective or OptimizationObjective()
         self.rf_rate = float(rf_rate)
@@ -312,6 +374,28 @@ class PortfolioOptimizer:
         self.use_trading_filter = bool(use_trading_filter)
         self.starting_capital = float(starting_capital)
         self.explored_combinations = []
+        
+        # Dynamic weight constraints (will be set when portfolio_count is known)
+        self.portfolio_count = portfolio_count
+        self.min_weight = None
+        self.max_weight = None
+        if portfolio_count is not None:
+            self.set_dynamic_constraints(portfolio_count)
+    
+    def set_dynamic_constraints(self, portfolio_count: int):
+        """
+        Set dynamic min/max weight constraints based on portfolio count
+        
+        Args:
+            portfolio_count: Number of portfolios in optimization
+        """
+        self.portfolio_count = portfolio_count
+        self.min_weight = calculate_dynamic_min_weight(portfolio_count)
+        self.max_weight = calculate_dynamic_max_weight(portfolio_count)
+        
+        logger.info(f"[DYNAMIC WEIGHTS] Portfolio count: {portfolio_count}")
+        logger.info(f"[DYNAMIC WEIGHTS] Min weight: {self.min_weight:.3f} ({self.min_weight*100:.1f}%)")
+        logger.info(f"[DYNAMIC WEIGHTS] Max weight: {self.max_weight:.3f} ({self.max_weight*100:.1f}%)")
         
     def optimize_weights_from_ids(self, 
                                   db_session, 
@@ -331,12 +415,15 @@ class PortfolioOptimizer:
         logger.info(f"Starting weight optimization for portfolios: {portfolio_ids}")
         logger.info(f"Using method: {method}")
         
+        # Set dynamic constraints based on portfolio count
+        self.set_dynamic_constraints(len(portfolio_ids))
+        
         # Check cache first
         start_time = time.time()
         cached_result = OptimizationCache.lookup_cache(
             db_session, portfolio_ids, 
             self.rf_rate, self.sma_window, self.use_trading_filter,
-            self.starting_capital, self.objective.min_weight, self.objective.max_weight
+            self.starting_capital, self.min_weight, self.max_weight
         )
         
         if cached_result:
@@ -359,7 +446,7 @@ class PortfolioOptimizer:
         subset_caches = OptimizationCache.find_subset_caches(
             db_session, portfolio_ids,
             self.rf_rate, self.sma_window, self.use_trading_filter,
-            self.starting_capital, self.objective.min_weight, self.objective.max_weight
+            self.starting_capital, self.min_weight, self.max_weight
         )
         
         if subset_caches:
@@ -408,7 +495,7 @@ class PortfolioOptimizer:
                 OptimizationCache.store_cache(
                     db_session, portfolio_ids, result, execution_time,
                     self.rf_rate, self.sma_window, self.use_trading_filter,
-                    self.starting_capital, self.objective.min_weight, self.objective.max_weight
+                    self.starting_capital, self.min_weight, self.max_weight
                 )
                 logger.info(f"Stored optimization result in cache for portfolios {portfolio_ids}")
             except Exception as e:
@@ -523,12 +610,10 @@ class PortfolioOptimizer:
             
             # Apply objective function with weights
             # Higher return is better (positive contribution)
-            # Lower drawdown is better (positive contribution when inverted)
-            # Higher Sharpe is better (bonus)
+            # Lower drawdown is better (subtract drawdown penalty)
             objective_value = (
-                self.objective.return_weight * abs(cagr) +
-                self.objective.drawdown_weight * (1.0 / max_drawdown_pct) +
-                self.objective.sharpe_bonus * max(sharpe_ratio, 0)
+                self.objective.return_weight * abs(cagr) -
+                self.objective.drawdown_weight * max_drawdown_pct
             )
             
             # Store this combination for analysis
@@ -556,7 +641,16 @@ class PortfolioOptimizer:
         portfolio_names = [name for name, _ in portfolios_data]
         
         if not subset_caches:
-            return np.array([1.0 / num_portfolios] * num_portfolios)
+            # Use equal weights but ensure they respect dynamic constraints
+            equal_weight = 1.0 / num_portfolios
+            if equal_weight < self.min_weight:
+                # If equal weights would be too small, use minimum weight
+                return np.array([self.min_weight] * num_portfolios) / np.sum([self.min_weight] * num_portfolios)
+            elif equal_weight > self.max_weight:
+                # If equal weights would be too large, use maximum weight  
+                return np.array([self.max_weight] * num_portfolios) / np.sum([self.max_weight] * num_portfolios)
+            else:
+                return np.array([equal_weight] * num_portfolios)
         
         # Find the largest subset cache that we can use
         best_subset = None
@@ -571,16 +665,16 @@ class PortfolioOptimizer:
                 best_subset_size = subset_size
         
         if best_subset and best_subset_size >= 2:
-            # Start with cached weights and extend for new portfolios
-            initial_weights = np.array([self.objective.min_weight] * num_portfolios)
+            # Start with cached weights and extend for new portfolios using dynamic constraints
+            initial_weights = np.array([self.min_weight] * num_portfolios)
             
             # Distribute remaining weight proportionally based on cached results
-            remaining_weight = 1.0 - (num_portfolios * self.objective.min_weight)
+            remaining_weight = 1.0 - (num_portfolios * self.min_weight)
             
             # Apply cached weights where possible (simplified mapping)
             for i, weight in enumerate(best_subset['optimal_weights']):
                 if i < num_portfolios:
-                    initial_weights[i] = max(weight, self.objective.min_weight)
+                    initial_weights[i] = max(weight, self.min_weight)
             
             # Normalize to ensure sum equals 1
             initial_weights = initial_weights / np.sum(initial_weights)
@@ -588,8 +682,14 @@ class PortfolioOptimizer:
             logger.info(f"Using smart initial guess based on cached subset of size {best_subset_size}")
             return initial_weights
         
-        # Fallback to equal weights
-        return np.array([1.0 / num_portfolios] * num_portfolios)
+        # Fallback to equal weights respecting dynamic constraints
+        equal_weight = 1.0 / num_portfolios
+        if equal_weight < self.min_weight:
+            return np.array([self.min_weight] * num_portfolios) / np.sum([self.min_weight] * num_portfolios)
+        elif equal_weight > self.max_weight:
+            return np.array([self.max_weight] * num_portfolios) / np.sum([self.max_weight] * num_portfolios)
+        else:
+            return np.array([equal_weight] * num_portfolios)
 
     def _optimize_with_scipy(self, portfolios_data: List[Tuple[str, pd.DataFrame]], 
                             subset_caches: List[Dict] = None) -> OptimizationResult:
@@ -602,8 +702,8 @@ class PortfolioOptimizer:
         # Constraints: weights sum to 1
         constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0}
         
-        # Bounds: each weight between min_weight and max_weight
-        bounds = [(self.objective.min_weight, self.objective.max_weight) for _ in range(num_portfolios)]
+        # Bounds: each weight between dynamic min_weight and max_weight
+        bounds = [(self.min_weight, self.max_weight) for _ in range(num_portfolios)]
         
         logger.info("Starting scipy optimization...")
         
@@ -643,8 +743,8 @@ class PortfolioOptimizer:
         """Optimize using differential evolution (global optimizer)"""
         num_portfolios = len(portfolios_data)
         
-        # Bounds for each weight
-        bounds = [(self.objective.min_weight, self.objective.max_weight) for _ in range(num_portfolios)]
+        # Bounds for each weight using dynamic constraints
+        bounds = [(self.min_weight, self.max_weight) for _ in range(num_portfolios)]
         
         logger.info("Starting differential evolution optimization...")
         
@@ -699,12 +799,12 @@ class PortfolioOptimizer:
         
         # Generate weight combinations
         if num_portfolios == 2:
-            # For 2 portfolios, search in 5% increments
-            weight_options = np.arange(self.objective.min_weight, self.objective.max_weight + 0.05, 0.05)
+            # For 2 portfolios, search in 5% increments using dynamic bounds
+            weight_options = np.arange(self.min_weight, self.max_weight + 0.05, 0.05)
             
             for w1 in weight_options:
                 w2 = 1.0 - w1
-                if self.objective.min_weight <= w2 <= self.objective.max_weight:
+                if self.min_weight <= w2 <= self.max_weight:
                     weights = np.array([w1, w2])
                     objective_value = self._objective_function(weights, portfolios_data)
                     iterations += 1
@@ -714,13 +814,13 @@ class PortfolioOptimizer:
                         best_weights = weights
                         
         elif num_portfolios == 3:
-            # For 3 portfolios, search in 10% increments
-            weight_options = np.arange(self.objective.min_weight, self.objective.max_weight + 0.1, 0.1)
+            # For 3 portfolios, search in 10% increments using dynamic bounds
+            weight_options = np.arange(self.min_weight, self.max_weight + 0.1, 0.1)
             
             for w1 in weight_options:
                 for w2 in weight_options:
                     w3 = 1.0 - w1 - w2
-                    if self.objective.min_weight <= w3 <= self.objective.max_weight:
+                    if self.min_weight <= w3 <= self.max_weight:
                         weights = np.array([w1, w2, w3])
                         objective_value = self._objective_function(weights, portfolios_data)
                         iterations += 1
@@ -737,8 +837,8 @@ class PortfolioOptimizer:
                 # Generate random weights
                 weights = np.random.dirichlet(np.ones(num_portfolios))
                 
-                # Ensure constraints
-                if np.all(weights >= self.objective.min_weight) and np.all(weights <= self.objective.max_weight):
+                # Ensure constraints using dynamic bounds
+                if np.all(weights >= self.min_weight) and np.all(weights <= self.max_weight):
                     objective_value = self._objective_function(weights, portfolios_data)
                     iterations += 1
                     

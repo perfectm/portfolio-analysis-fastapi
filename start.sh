@@ -52,6 +52,33 @@ wait_for_service() {
     return 1
 }
 
+# Function to rotate log file if it exceeds 50MB
+rotate_log_if_needed() {
+    local log_file=$1
+    local max_size_mb=50
+    
+    if [ -f "$log_file" ]; then
+        # Get file size in MB
+        local file_size=$(du -m "$log_file" | cut -f1)
+        
+        if [ "$file_size" -gt "$max_size_mb" ]; then
+            local timestamp=$(date +"%Y%m%d_%H%M%S")
+            local archive_name="${log_file}.${timestamp}.archive"
+            
+            echo -e "${YELLOW}📦 Log file ${log_file} is ${file_size}MB, archiving to ${archive_name}${NC}"
+            mv "$log_file" "$archive_name"
+            
+            # Compress the archive to save space
+            if command -v gzip >/dev/null 2>&1; then
+                gzip "$archive_name"
+                echo -e "${GREEN}✅ Archived and compressed to ${archive_name}.gz${NC}"
+            else
+                echo -e "${GREEN}✅ Archived to ${archive_name}${NC}"
+            fi
+        fi
+    fi
+}
+
 if [ "$MODE" = "dev" ]; then
     echo -e "${BLUE}📦 Development Mode${NC}"
     
@@ -80,6 +107,9 @@ if [ "$MODE" = "dev" ]; then
         echo -e "${YELLOW}⚠️  Frontend dependencies missing. Run: cd frontend && npm ci${NC}"
     fi
     
+    # Rotate backend log if needed before starting
+    rotate_log_if_needed "backend.log"
+    
     # Start backend in background
     echo -e "${BLUE}🚀 Starting FastAPI backend on port 8000...${NC}"
     uvicorn app:app --reload --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
@@ -92,6 +122,9 @@ if [ "$MODE" = "dev" ]; then
         rm -f .backend.pid
         exit 1
     fi
+    
+    # Rotate frontend log if needed before starting
+    rotate_log_if_needed "frontend.log"
     
     # Start frontend in background
     echo -e "${BLUE}🚀 Starting React frontend on port 5173...${NC}"

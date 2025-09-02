@@ -601,6 +601,12 @@ const marginAPI = {
       return response.json();
     });
   },
+  // Get strategies margin overview
+  getStrategiesOverview: async (): Promise<any> => {
+    return apiCall('/api/margin/strategies-overview', {
+      headers: getAuthHeaders(),
+    });
+  },
 };
 
 // Create a unified API object that includes both generic methods and portfolio-specific methods

@@ -8,5 +8,10 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     allowedHosts: ['closet.local']
+  },
+  build: {
+    // Simple build configuration without complex chunking
+    chunkSizeWarningLimit: 1000,
+    sourcemap: true
   }
 })

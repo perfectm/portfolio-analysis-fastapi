@@ -28,7 +28,8 @@ import {
   TrendingUp,
   Assessment,
 } from '@mui/icons-material';
-import RegimeStatus from '../components/RegimeStatus';
+// Temporarily disabled to debug React.Children.only error
+// import RegimeStatus from '../components/RegimeStatus';
 import { api } from '../services/api';
 
 interface RegimeHistory {
@@ -194,9 +195,15 @@ const RegimeAnalysisFixed: React.FC = () => {
           </Alert>
         )}
 
-        {/* Current Regime Status */}
+        {/* Current Regime Status - Temporarily disabled to debug React.Children.only error */}
         <Box mb={4}>
-          <RegimeStatus />
+          <Card>
+            <CardContent>
+              <Typography variant="h6">
+                Regime Status (Temporarily Disabled for Debugging)
+              </Typography>
+            </CardContent>
+          </Card>
         </Box>
 
         {/* Main Content */}
@@ -226,7 +233,8 @@ const RegimeAnalysisFixed: React.FC = () => {
               </Box>
 
               {regimeHistory.length > 0 ? (
-                <TableContainer component={Paper} variant="outlined">
+                <Paper variant="outlined">
+                  <TableContainer>
                   <Table>
                     <TableHead>
                       <TableRow>
@@ -269,7 +277,8 @@ const RegimeAnalysisFixed: React.FC = () => {
                       ))}
                     </TableBody>
                   </Table>
-                </TableContainer>
+                  </TableContainer>
+                </Paper>
               ) : (
                 <Alert severity="info">
                   No regime history available yet. The system will automatically track market regimes over time.
@@ -287,7 +296,8 @@ const RegimeAnalysisFixed: React.FC = () => {
               </Typography>
 
               {portfolioPerformances.length > 0 ? (
-                <TableContainer component={Paper} variant="outlined">
+                <Paper variant="outlined">
+                  <TableContainer>
                   <Table>
                     <TableHead>
                       <TableRow>
@@ -332,7 +342,8 @@ const RegimeAnalysisFixed: React.FC = () => {
                       )}
                     </TableBody>
                   </Table>
-                </TableContainer>
+                  </TableContainer>
+                </Paper>
               ) : (
                 <Alert severity="info">
                   No performance data available. Upload portfolios to see regime-specific performance analysis.

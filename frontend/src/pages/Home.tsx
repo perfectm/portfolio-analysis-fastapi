@@ -126,54 +126,54 @@ const Home: React.FC = () => {
               flexWrap: "wrap",
             }}
           >
-            <Button
-              component={RouterLink}
-              to="/upload"
-              variant="contained"
-              size="large"
-              startIcon={<CloudUpload />}
-              sx={{
-                py: 1.5,
-                px: 4,
-                borderRadius: 3,
-                fontWeight: 600,
-                fontSize: "1.1rem",
-                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                boxShadow: theme.shadows[4],
-                "&:hover": {
-                  background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                  boxShadow: theme.shadows[8],
-                  transform: "translateY(-2px)",
-                },
-                transition: "all 0.2s ease-in-out",
-              }}
-            >
-              Upload Portfolio
-            </Button>
-
-            <Button
-              component={RouterLink}
-              to="/portfolios"
-              variant="outlined"
-              size="large"
-              startIcon={<Visibility />}
-              sx={{
-                py: 1.5,
-                px: 4,
-                borderRadius: 3,
-                fontWeight: 600,
-                fontSize: "1.1rem",
-                borderWidth: 2,
-                "&:hover": {
-                  borderWidth: 2,
-                  transform: "translateY(-2px)",
+            <RouterLink to="/upload" style={{ textDecoration: "none" }}>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<CloudUpload />}
+                sx={{
+                  py: 1.5,
+                  px: 4,
+                  borderRadius: 3,
+                  fontWeight: 600,
+                  fontSize: "1.1rem",
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
                   boxShadow: theme.shadows[4],
-                },
-                transition: "all 0.2s ease-in-out",
-              }}
-            >
-              View Portfolios
-            </Button>
+                  "&:hover": {
+                    background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                    boxShadow: theme.shadows[8],
+                    transform: "translateY(-2px)",
+                  },
+                  transition: "all 0.2s ease-in-out",
+                }}
+              >
+                Upload Portfolio
+              </Button>
+            </RouterLink>
+
+            <RouterLink to="/portfolios" style={{ textDecoration: "none" }}>
+              <Button
+                variant="outlined"
+                size="large"
+                startIcon={<Visibility />}
+                sx={{
+                  py: 1.5,
+                  px: 4,
+                  borderRadius: 3,
+                  fontWeight: 600,
+                  fontSize: "1.1rem",
+                  borderWidth: 2,
+                  "&:hover": {
+                    borderWidth: 2,
+                    transform: "translateY(-2px)",
+                    boxShadow: theme.shadows[4],
+                  },
+                  transition: "all 0.2s ease-in-out",
+                }}
+              >
+                View Portfolios
+              </Button>
+            </RouterLink>
           </Box>
 
           {/* Metrics Chips */}

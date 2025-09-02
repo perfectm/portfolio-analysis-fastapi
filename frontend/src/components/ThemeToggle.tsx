@@ -14,7 +14,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
 }) => {
   const { mode, toggleTheme } = useTheme();
 
-  const button = (
+  const iconButton = (
     <IconButton
       onClick={toggleTheme}
       size={size}
@@ -45,10 +45,10 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         arrow
         placement="bottom"
       >
-        {button}
+        <span>{iconButton}</span>
       </Tooltip>
     );
   }
 
-  return button;
+  return iconButton;
 };

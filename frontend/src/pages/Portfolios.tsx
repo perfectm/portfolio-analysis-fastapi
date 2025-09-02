@@ -522,8 +522,11 @@ export default function Portfolios() {
           setWeightingMethod("custom");
           const optimizedWeights: Record<number, number> = {};
           selectedPortfolios.forEach((portfolioId, index) => {
-            optimizedWeights[portfolioId] =
-              optimizationResult.optimal_ratios_array[index];
+            // Ensure the value is valid and within acceptable bounds
+            const rawValue = optimizationResult.optimal_ratios_array[index];
+            const validatedValue = Math.max(0.1, Math.min(10.0, Number(rawValue) || 1.0));
+            // Round to 2 decimal places to avoid HTML5 validation issues
+            optimizedWeights[portfolioId] = Math.round(validatedValue * 100) / 100;
           });
           setPortfolioWeights(optimizedWeights);
 
@@ -2960,130 +2963,203 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
             </div>
           )}
 
-          {/* Compact Portfolio Table */}
-          <div style={{ overflowX: "auto", marginTop: "1rem" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "0.9rem",
-                background: theme.palette.mode === "dark" ? "#2d3748" : "#ffffff",
-                color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c",
-                borderRadius: "8px",
-                overflow: "hidden",
-                boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)"
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    backgroundColor:
-                      theme.palette.mode === "dark"
-                        ? "#4a5568"
-                        : "#f7fafc",
-                    borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
-                  }}
-                >
-                  <th
+          {/* Portfolios Grouped by Strategy */}
+          <div style={{ marginTop: "1rem" }}>
+            {(() => {
+              // Group portfolios by strategy
+              const groupedPortfolios = portfolios.reduce((groups, portfolio) => {
+                const strategy = portfolio.strategy || "No Strategy Set";
+                if (!groups[strategy]) {
+                  groups[strategy] = [];
+                }
+                groups[strategy].push(portfolio);
+                return groups;
+              }, {} as Record<string, Portfolio[]>);
+
+              // Sort strategy names, putting "No Strategy Set" last
+              const sortedStrategies = Object.keys(groupedPortfolios).sort((a, b) => {
+                if (a === "No Strategy Set") return 1;
+                if (b === "No Strategy Set") return -1;
+                return a.localeCompare(b);
+              });
+
+              return sortedStrategies.map((strategy, groupIndex) => (
+                <div key={strategy} style={{ marginBottom: "2rem" }}>
+                  {/* Strategy Group Header */}
+                  <div
                     style={{
-                      padding: "0.75rem 0.5rem",
-                      textAlign: "left",
-                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
-                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                      fontWeight: "600"
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "1rem",
+                      background: theme.palette.mode === "dark" 
+                        ? "linear-gradient(135deg, #4a5568 0%, #2d3748 100%)"
+                        : "linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%)",
+                      borderRadius: "8px 8px 0 0",
+                      marginBottom: "0",
+                      borderBottom: "2px solid " + (theme.palette.mode === "dark" ? "#1a202c" : "#a0aec0"),
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={
-                        selectedPortfolios.length === portfolios.length &&
-                        portfolios.length > 0
-                      }
-                      onChange={() => {
-                        if (selectedPortfolios.length === portfolios.length) {
-                          setSelectedPortfolios([]);
-                        } else {
-                          setSelectedPortfolios(portfolios.map((p) => p.id));
-                        }
+                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: "1.25rem",
+                          fontWeight: "600",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                        }}
+                      >
+                        {strategy}
+                      </h3>
+                      <span
+                        style={{
+                          background: theme.palette.mode === "dark" ? "#3182ce" : "#4299e1",
+                          color: "white",
+                          padding: "0.25rem 0.75rem",
+                          borderRadius: "12px",
+                          fontSize: "0.875rem",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {groupedPortfolios[strategy].length} {groupedPortfolios[strategy].length === 1 ? 'portfolio' : 'portfolios'}
+                      </span>
+                    </div>
+                    
+                    {/* Strategy Group Select All */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <label
+                        style={{
+                          fontSize: "0.875rem",
+                          color: theme.palette.mode === "dark" ? "#d1d5db" : "#4b5563",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={
+                            groupedPortfolios[strategy].every(p => selectedPortfolios.includes(p.id))
+                          }
+                          onChange={() => {
+                            const strategyPortfolioIds = groupedPortfolios[strategy].map(p => p.id);
+                            const allSelected = strategyPortfolioIds.every(id => selectedPortfolios.includes(id));
+                            
+                            if (allSelected) {
+                              // Deselect all in this strategy
+                              setSelectedPortfolios(prev => prev.filter(id => !strategyPortfolioIds.includes(id)));
+                            } else {
+                              // Select all in this strategy
+                              setSelectedPortfolios(prev => [...prev, ...strategyPortfolioIds.filter(id => !prev.includes(id))]);
+                            }
+                          }}
+                          style={{ 
+                            transform: "scale(1.2)", 
+                            marginRight: "0.5rem"
+                          }}
+                        />
+                        Select All {strategy}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Strategy Group Table */}
+                  <div style={{ overflowX: "auto" }}>
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        fontSize: "0.9rem",
+                        background: theme.palette.mode === "dark" ? "#2d3748" : "#ffffff",
+                        color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c",
+                        borderRadius: groupIndex === 0 ? "0 0 8px 8px" : "8px",
+                        overflow: "hidden",
+                        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                        marginBottom: "0"
                       }}
-                      style={{ transform: "scale(1.2)" }}
-                    />
-                  </th>
-                  <th
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      textAlign: "left",
-                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
-                      minWidth: "150px",
-                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                      fontWeight: "600"
-                    }}
-                  >
-                    Portfolio
-                  </th>
-                  <th
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      textAlign: "left",
-                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
-                      minWidth: "120px",
-                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                      fontWeight: "600"
-                    }}
-                  >
-                    File
-                  </th>
-                  <th
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      textAlign: "center",
-                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
-                      minWidth: "80px",
-                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                      fontWeight: "600"
-                    }}
-                  >
-                    Records
-                  </th>
-                  <th
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      textAlign: "center",
-                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
-                      minWidth: "100px",
-                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                      fontWeight: "600"
-                    }}
-                  >
-                    Uploaded
-                  </th>
-                  <th
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      textAlign: "left",
-                      borderRight: "1px solid rgba(255, 255, 255, 0.1)",
-                      minWidth: "150px",
-                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                      fontWeight: "600"
-                    }}
-                  >
-                    Strategy
-                  </th>
-                  <th
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      textAlign: "center",
-                      minWidth: "120px",
-                      color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                      fontWeight: "600"
-                    }}
-                  >
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {portfolios.map((portfolio) => (
+                    >
+                      <thead>
+                        <tr
+                          style={{
+                            backgroundColor:
+                              theme.palette.mode === "dark"
+                                ? "#4a5568"
+                                : "#f7fafc",
+                            borderBottom: "2px solid rgba(255, 255, 255, 0.1)",
+                          }}
+                        >
+                          <th
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              textAlign: "left",
+                              borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                              color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Select
+                          </th>
+                          <th
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              textAlign: "left",
+                              borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                              minWidth: "150px",
+                              color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Portfolio
+                          </th>
+                          <th
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              textAlign: "left",
+                              borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                              minWidth: "120px",
+                              color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                              fontWeight: "600"
+                            }}
+                          >
+                            File
+                          </th>
+                          <th
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              textAlign: "center",
+                              borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                              minWidth: "80px",
+                              color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Records
+                          </th>
+                          <th
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              textAlign: "center",
+                              borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                              minWidth: "100px",
+                              color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Uploaded
+                          </th>
+                          <th
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              textAlign: "center",
+                              minWidth: "120px",
+                              color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupedPortfolios[strategy].map((portfolio) => (
                   <React.Fragment key={portfolio.id}>
                     <tr
                       style={{
@@ -3261,121 +3337,6 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
-                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
-                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
-                        }}
-                      >
-                        {editingStrategyId === portfolio.id ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.5rem",
-                            }}
-                          >
-                            <input
-                              type="text"
-                              value={editingStrategy}
-                              onChange={(e) =>
-                                setEditingStrategy(e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  saveStrategy(portfolio.id);
-                                } else if (e.key === "Escape") {
-                                  cancelEditingStrategy();
-                                }
-                              }}
-                              placeholder="Enter strategy..."
-                              style={{
-                                flex: 1,
-                                padding: "0.25rem",
-                                border: "1px solid #ccc",
-                                borderRadius: "4px",
-                                fontSize: "0.9rem",
-                              }}
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                saveStrategy(portfolio.id);
-                              }}
-                              style={{
-                                padding: "0.25rem 0.5rem",
-                                background: "#28a745",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "0.7rem",
-                              }}
-                            >
-                              ✓
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                cancelEditingStrategy();
-                              }}
-                              style={{
-                                padding: "0.25rem 0.5rem",
-                                background: "#dc3545",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "0.7rem",
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontStyle: portfolio.strategy
-                                  ? "normal"
-                                  : "italic",
-                                color: portfolio.strategy 
-                                  ? (theme.palette.mode === "dark" ? "#ffffff" : "#2d3748")
-                                  : (theme.palette.mode === "dark" ? "#9ca3af" : "#6b7280"),
-                              }}
-                            >
-                              {portfolio.strategy || "No strategy set"}
-                            </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditingStrategy(portfolio);
-                              }}
-                              style={{
-                                padding: "0.25rem 0.5rem",
-                                background: "#007bff",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "0.7rem",
-                                marginLeft: "0.5rem",
-                              }}
-                            >
-                              ✏️
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.75rem 0.5rem",
                           textAlign: "center",
                           color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
@@ -3448,7 +3409,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         }}
                       >
                         <td
-                          colSpan={7}
+                          colSpan={6}
                           style={{
                             padding: "1rem",
                             color: theme.palette.mode === "dark" ? "#d1d5db" : "#6b7280",
@@ -3483,9 +3444,13 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                       </tr>
                     )}
                   </React.Fragment>
-                ))}
-              </tbody>
-            </table>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
         </>
       )}

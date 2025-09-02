@@ -387,6 +387,16 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
             return {"success": False, "error": "Maximum 20 portfolios allowed for optimization to prevent performance issues"}
         logger.info(f"[Weight Optimization] Optimizing weights for portfolios: {portfolio_ids}")
         logger.info(f"[Weight Optimization] Using optimization method: {method}")
+        
+        # Validate portfolios exist and have data
+        for portfolio_id in portfolio_ids:
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+            if not portfolio:
+                return {"success": False, "error": f"Portfolio {portfolio_id} not found"}
+            df = PortfolioService.get_portfolio_dataframe(db, portfolio_id)
+            if df.empty:
+                return {"success": False, "error": f"No data found for portfolio {portfolio_id}"}
+        
         try:
             from portfolio_optimizer import PortfolioOptimizer, OptimizationObjective
         except ImportError as e:
@@ -400,14 +410,110 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
             rf_rate=0.043,
             sma_window=20,
             use_trading_filter=True,
-            starting_capital=1000000.0
+            starting_capital=1000000.0,
+            portfolio_count=len(portfolio_ids)
         )
-        result = optimizer.optimize_weights_from_ids(db, portfolio_ids, method)
+        # Add timeout to prevent hanging
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Optimization timed out after 300 seconds")
+        
+        # Set timeout for 300 seconds (5 minutes)
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(300)
+        
+        try:
+            result = optimizer.optimize_weights_from_ids(db, portfolio_ids, method)
+            signal.alarm(0)  # Cancel timeout
+        except TimeoutError as e:
+            logger.warning(f"[Weight Optimization] Optimization timed out after 5 minutes, falling back to equal weights")
+            # Fallback to equal weights
+            num_portfolios = len(portfolio_ids)
+            equal_weights = [1.0 / num_portfolios] * num_portfolios
+            equal_ratios = [1.0] * num_portfolios
+            
+            portfolio_names = []
+            for portfolio_id in portfolio_ids:
+                portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+                if portfolio:
+                    portfolio_names.append(portfolio.name)
+            
+            weight_mapping = dict(zip(portfolio_names, equal_weights))
+            ratio_mapping = dict(zip(portfolio_names, equal_ratios))
+            
+            return {
+                "success": True,
+                "message": "Optimization timed out, using equal weights as fallback",
+                "optimal_weights": weight_mapping,
+                "optimal_weights_array": equal_weights,
+                "optimal_ratios": ratio_mapping,
+                "optimal_ratios_array": equal_ratios,
+                "metrics": {
+                    "cagr": 0.0,
+                    "max_drawdown_percent": 0.0,
+                    "return_drawdown_ratio": 0.0,
+                    "sharpe_ratio": 0.0
+                },
+                "optimization_details": {
+                    "method": "equal_weight_fallback",
+                    "iterations": 0,
+                    "combinations_explored": 0
+                },
+                "portfolio_names": portfolio_names,
+                "portfolio_ids": portfolio_ids,
+                "fallback": True,
+                "timeout": True
+            }
+        except Exception as opt_error:
+            signal.alarm(0)  # Cancel timeout
+            logger.error(f"[Weight Optimization] Optimization error: {str(opt_error)}")
+            # Also fallback to equal weights on other errors
+            try:
+                num_portfolios = len(portfolio_ids)
+                equal_weights = [1.0 / num_portfolios] * num_portfolios
+                equal_ratios = [1.0] * num_portfolios
+                
+                portfolio_names = []
+                for portfolio_id in portfolio_ids:
+                    portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+                    if portfolio:
+                        portfolio_names.append(portfolio.name)
+                
+                weight_mapping = dict(zip(portfolio_names, equal_weights))
+                ratio_mapping = dict(zip(portfolio_names, equal_ratios))
+                
+                return {
+                    "success": True,
+                    "message": f"Optimization failed ({str(opt_error)}), using equal weights as fallback",
+                    "optimal_weights": weight_mapping,
+                    "optimal_weights_array": equal_weights,
+                    "optimal_ratios": ratio_mapping,
+                    "optimal_ratios_array": equal_ratios,
+                    "metrics": {
+                        "cagr": 0.0,
+                        "max_drawdown_percent": 0.0,
+                        "return_drawdown_ratio": 0.0,
+                        "sharpe_ratio": 0.0
+                    },
+                    "optimization_details": {
+                        "method": "equal_weight_fallback",
+                        "iterations": 0,
+                        "combinations_explored": 0
+                    },
+                    "portfolio_names": portfolio_names,
+                    "portfolio_ids": portfolio_ids,
+                    "fallback": True,
+                    "error": str(opt_error)
+                }
+            except Exception as fallback_error:
+                raise opt_error  # Raise original error if fallback also fails
+            
         if not result.success:
             return {
                 "success": False,
                 "error": result.message,
-                "explored_combinations": len(result.explored_combinations)
+                "explored_combinations": len(result.explored_combinations) if hasattr(result, 'explored_combinations') else 0
             }
         portfolio_names = []
         for portfolio_id in portfolio_ids:
@@ -446,6 +552,45 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
     except Exception as e:
         logger.error(f"[Weight Optimization] Error optimizing weights: {str(e)}", exc_info=True)
         return {"success": False, "error": f"Weight optimization failed: {str(e)}"}
+
+@router.post("/clear-optimization-cache")
+async def clear_optimization_cache(db: Session = Depends(get_db)):
+    """
+    Clear all cached optimization results.
+    Use this when optimization logic has been updated to remove stale results.
+    """
+    try:
+        from models import OptimizationCache
+        
+        # Count existing cache entries
+        cache_count = db.query(OptimizationCache).count()
+        
+        if cache_count == 0:
+            return {
+                "success": True,
+                "message": "Optimization cache was already empty",
+                "cleared_entries": 0
+            }
+        
+        # Clear all cache entries
+        db.query(OptimizationCache).delete()
+        db.commit()
+        
+        logger.info(f"[OPTIMIZATION CACHE] Cleared {cache_count} cached optimization results")
+        
+        return {
+            "success": True,
+            "message": f"Successfully cleared optimization cache",
+            "cleared_entries": cache_count
+        }
+        
+    except Exception as e:
+        logger.error(f"[OPTIMIZATION CACHE] Error clearing cache: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": f"Failed to clear optimization cache: {str(e)}"
+        }
 
 @router.post("/calculate-margin-capital")
 async def calculate_margin_based_capital(request: Request, db: Session = Depends(get_db)):
