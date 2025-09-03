@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from portfolio_blender import create_blended_portfolio
+    from portfolio_blender import create_blended_portfolio_from_files
     
     print("🧪 TESTING PORTFOLIO WEIGHTING FUNCTIONALITY")
     print("=" * 50)
@@ -59,7 +59,7 @@ try:
     print(f"\n🧪 Test 1: Equal Weighting")
     print("-" * 30)
     
-    blended_df1, blended_metrics1, correlation_data1 = create_blended_portfolio(
+    blended_df1, blended_metrics1, correlation_data1 = create_blended_portfolio_from_files(
         files_data,
         starting_capital=100000,
         weights=None,  # Should default to equal weighting
@@ -70,8 +70,8 @@ try:
         print(f"✅ Equal weighting test successful")
         print(f"   Weighting method: {blended_metrics1.get('Weighting_Method', 'Not specified')}")
         print(f"   Portfolio weights: {blended_metrics1.get('Portfolio_Weights', {})}")
-        print(f"   Final account value: ${blended_metrics1['Final Account Value']:,.2f}")
-        print(f"   Total P/L: ${blended_metrics1['Total P/L']:,.2f}")
+        print(f"   Final account value: ${blended_metrics1.get('final_account_value', 0):,.2f}")
+        print(f"   Total P/L: ${blended_metrics1.get('total_pl', 0):,.2f}")
         
         # Verify equal weighting
         weights = blended_metrics1.get('Portfolio_Weights', {})
@@ -91,7 +91,7 @@ try:
     
     custom_weights = [0.6, 0.2, 0.2]  # Conservative 60%, Aggressive 20%, Moderate 20%
     
-    blended_df2, blended_metrics2, correlation_data2 = create_blended_portfolio(
+    blended_df2, blended_metrics2, correlation_data2 = create_blended_portfolio_from_files(
         files_data,
         starting_capital=100000,
         weights=custom_weights,
@@ -102,8 +102,8 @@ try:
         print(f"✅ Custom weighting test successful")
         print(f"   Weighting method: {blended_metrics2.get('Weighting_Method', 'Not specified')}")
         print(f"   Portfolio weights: {blended_metrics2.get('Portfolio_Weights', {})}")
-        print(f"   Final account value: ${blended_metrics2['Final Account Value']:,.2f}")
-        print(f"   Total P/L: ${blended_metrics2['Total P/L']:,.2f}")
+        print(f"   Final account value: ${blended_metrics2.get('final_account_value', 0):,.2f}")
+        print(f"   Total P/L: ${blended_metrics2.get('total_pl', 0):,.2f}")
         
         # Verify custom weighting
         weights = blended_metrics2.get('Portfolio_Weights', {})
@@ -122,7 +122,7 @@ try:
     
     aggressive_weights = [0.1, 0.7, 0.2]  # Conservative 10%, Aggressive 70%, Moderate 20%
     
-    blended_df3, blended_metrics3, correlation_data3 = create_blended_portfolio(
+    blended_df3, blended_metrics3, correlation_data3 = create_blended_portfolio_from_files(
         files_data,
         starting_capital=100000,
         weights=aggressive_weights,
@@ -133,8 +133,8 @@ try:
         print(f"✅ Aggressive weighting test successful")
         print(f"   Weighting method: {blended_metrics3.get('Weighting_Method', 'Not specified')}")
         print(f"   Portfolio weights: {blended_metrics3.get('Portfolio_Weights', {})}")
-        print(f"   Final account value: ${blended_metrics3['Final Account Value']:,.2f}")
-        print(f"   Total P/L: ${blended_metrics3['Total P/L']:,.2f}")
+        print(f"   Final account value: ${blended_metrics3.get('final_account_value', 0):,.2f}")
+        print(f"   Total P/L: ${blended_metrics3.get('total_pl', 0):,.2f}")
     else:
         print(f"❌ Aggressive weighting test failed")
     
@@ -145,9 +145,9 @@ try:
     if all([blended_metrics1, blended_metrics2, blended_metrics3]):
         print(f"Strategy                 | Final Value    | Total P/L      | Sharpe Ratio")
         print(f"-" * 70)
-        print(f"Equal Weighting         | ${blended_metrics1['Final Account Value']:>10,.2f} | ${blended_metrics1['Total P/L']:>10,.2f} | {blended_metrics1['Sharpe Ratio']:>10.2f}")
-        print(f"Conservative Heavy      | ${blended_metrics2['Final Account Value']:>10,.2f} | ${blended_metrics2['Total P/L']:>10,.2f} | {blended_metrics2['Sharpe Ratio']:>10.2f}")
-        print(f"Aggressive Heavy        | ${blended_metrics3['Final Account Value']:>10,.2f} | ${blended_metrics3['Total P/L']:>10,.2f} | {blended_metrics3['Sharpe Ratio']:>10.2f}")
+        print(f"Equal Weighting         | ${blended_metrics1.get('final_account_value', 0):>10,.2f} | ${blended_metrics1.get('total_pl', 0):>10,.2f} | {blended_metrics1.get('sharpe_ratio', 0):>10.2f}")
+        print(f"Conservative Heavy      | ${blended_metrics2.get('final_account_value', 0):>10,.2f} | ${blended_metrics2.get('total_pl', 0):>10,.2f} | {blended_metrics2.get('sharpe_ratio', 0):>10.2f}")
+        print(f"Aggressive Heavy        | ${blended_metrics3.get('final_account_value', 0):>10,.2f} | ${blended_metrics3.get('total_pl', 0):>10,.2f} | {blended_metrics3.get('sharpe_ratio', 0):>10.2f}")
         
         # Test weight normalization
         print(f"\n🧪 Test 4: Weight Normalization")
@@ -156,7 +156,7 @@ try:
         unnormalized_weights = [0.6, 0.3, 0.3]  # Sum = 1.2 (should be normalized)
         
         try:
-            blended_df4, blended_metrics4, correlation_data4 = create_blended_portfolio(
+            blended_df4, blended_metrics4, correlation_data4 = create_blended_portfolio_from_files(
                 files_data,
                 starting_capital=100000,
                 weights=unnormalized_weights,

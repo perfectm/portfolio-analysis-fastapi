@@ -57,9 +57,7 @@ class TestPortfolioOptimizer:
         # Create optimizer with test settings
         self.objective = OptimizationObjective(
             return_weight=0.6,
-            drawdown_weight=0.4,
-            min_weight=0.1,
-            max_weight=0.8
+            drawdown_weight=0.4
         )
         self.optimizer = PortfolioOptimizer(
             objective=self.objective,
@@ -72,21 +70,15 @@ class TestPortfolioOptimizer:
         obj = OptimizationObjective()
         assert obj.return_weight == 0.6
         assert obj.drawdown_weight == 0.4
-        assert obj.min_weight == 0.05
-        assert obj.max_weight == 0.60
-        assert obj.sharpe_bonus == 0.1
+        # Note: min_weight and max_weight are now calculated dynamically based on portfolio count
         
         # Test custom initialization
         custom_obj = OptimizationObjective(
             return_weight=0.7,
-            drawdown_weight=0.3,
-            min_weight=0.1,
-            max_weight=0.9
+            drawdown_weight=0.3
         )
         assert custom_obj.return_weight == 0.7
         assert custom_obj.drawdown_weight == 0.3
-        assert custom_obj.min_weight == 0.1
-        assert custom_obj.max_weight == 0.9
     
     def test_optimizer_initialization(self):
         """Test PortfolioOptimizer initialization"""

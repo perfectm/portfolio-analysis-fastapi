@@ -11,9 +11,9 @@ def test_root_endpoint():
     assert "text/html" in response.headers["content-type"]
 
 def test_upload_endpoint_get():
-    """Test that the upload endpoint handles GET requests."""
+    """Test that the upload endpoint serves React app for GET requests."""
     response = client.get("/upload")
-    assert response.status_code == 405  # Method not allowed for GET
+    assert response.status_code == 200  # React app served by catch-all route
 
 def test_app_startup():
     """Test that the FastAPI app can be created successfully."""
