@@ -284,8 +284,8 @@ async def get_strategies_margin_overview(
         from models import Portfolio, PortfolioMarginData
         from sqlalchemy import func
         
-        # Get all portfolios with their strategies and margin statistics
-        query = db.query(
+        # First, get all portfolios with basic info and margin record counts
+        portfolio_query = db.query(
             Portfolio.id,
             Portfolio.name,
             Portfolio.strategy,
@@ -293,10 +293,7 @@ async def get_strategies_margin_overview(
             Portfolio.upload_date,
             func.count(PortfolioMarginData.id).label('margin_records_count'),
             func.min(PortfolioMarginData.date).label('margin_date_start'),
-            func.max(PortfolioMarginData.date).label('margin_date_end'),
-            func.min(PortfolioMarginData.margin_requirement).label('min_margin'),
-            func.max(PortfolioMarginData.margin_requirement).label('max_margin'),
-            func.avg(PortfolioMarginData.margin_requirement).label('avg_margin')
+            func.max(PortfolioMarginData.date).label('margin_date_end')
         ).outerjoin(
             PortfolioMarginData, Portfolio.id == PortfolioMarginData.portfolio_id
         ).group_by(
@@ -305,13 +302,69 @@ async def get_strategies_margin_overview(
             Portfolio.strategy.nullslast(), Portfolio.name
         ).all()
         
+        # Calculate daily margin statistics for each portfolio separately
+        portfolio_results = []
+        for portfolio in portfolio_query:
+            if portfolio.margin_records_count > 0:
+                # Calculate daily totals for this portfolio, then get min/max/avg of those daily totals
+                daily_totals_query = db.query(
+                    func.sum(PortfolioMarginData.margin_requirement).label('daily_total')
+                ).filter(
+                    PortfolioMarginData.portfolio_id == portfolio.id
+                ).group_by(PortfolioMarginData.date)
+                
+                daily_totals = [float(result.daily_total) for result in daily_totals_query.all()]
+                
+                if daily_totals:
+                    portfolio_results.append({
+                        'id': portfolio.id,
+                        'name': portfolio.name,
+                        'strategy': portfolio.strategy,
+                        'filename': portfolio.filename,
+                        'upload_date': portfolio.upload_date,
+                        'margin_records_count': portfolio.margin_records_count,
+                        'margin_date_start': portfolio.margin_date_start,
+                        'margin_date_end': portfolio.margin_date_end,
+                        'min_margin': min(daily_totals),
+                        'max_margin': max(daily_totals),
+                        'avg_margin': sum(daily_totals) / len(daily_totals)
+                    })
+                else:
+                    portfolio_results.append({
+                        'id': portfolio.id,
+                        'name': portfolio.name,
+                        'strategy': portfolio.strategy,
+                        'filename': portfolio.filename,
+                        'upload_date': portfolio.upload_date,
+                        'margin_records_count': portfolio.margin_records_count,
+                        'margin_date_start': portfolio.margin_date_start,
+                        'margin_date_end': portfolio.margin_date_end,
+                        'min_margin': None,
+                        'max_margin': None,
+                        'avg_margin': None
+                    })
+            else:
+                portfolio_results.append({
+                    'id': portfolio.id,
+                    'name': portfolio.name,
+                    'strategy': portfolio.strategy,
+                    'filename': portfolio.filename,
+                    'upload_date': portfolio.upload_date,
+                    'margin_records_count': portfolio.margin_records_count,
+                    'margin_date_start': portfolio.margin_date_start,
+                    'margin_date_end': portfolio.margin_date_end,
+                    'min_margin': None,
+                    'max_margin': None,
+                    'avg_margin': None
+                })
+        
         # Group by strategy
         strategies = {}
         total_portfolios = 0
         total_with_margin = 0
         
-        for row in query:
-            strategy = row.strategy or "No Strategy Set"
+        for row in portfolio_results:
+            strategy = row['strategy'] or "No Strategy Set"
             if strategy not in strategies:
                 strategies[strategy] = {
                     "strategy_name": strategy,
@@ -327,21 +380,21 @@ async def get_strategies_margin_overview(
                 }
             
             portfolio_data = {
-                "id": row.id,
-                "name": row.name,
-                "filename": row.filename,
-                "upload_date": row.upload_date.isoformat() if row.upload_date else None,
+                "id": row['id'],
+                "name": row['name'],
+                "filename": row['filename'],
+                "upload_date": row['upload_date'].isoformat() if row['upload_date'] else None,
                 "margin_data": {
-                    "has_margin_data": row.margin_records_count > 0,
-                    "records_count": row.margin_records_count or 0,
+                    "has_margin_data": row['margin_records_count'] > 0,
+                    "records_count": row['margin_records_count'] or 0,
                     "date_range": {
-                        "start": row.margin_date_start.isoformat() if row.margin_date_start else None,
-                        "end": row.margin_date_end.isoformat() if row.margin_date_end else None
+                        "start": row['margin_date_start'].isoformat() if row['margin_date_start'] else None,
+                        "end": row['margin_date_end'].isoformat() if row['margin_date_end'] else None
                     },
                     "margin_range": {
-                        "min": float(row.min_margin) if row.min_margin else None,
-                        "max": float(row.max_margin) if row.max_margin else None,
-                        "avg": float(row.avg_margin) if row.avg_margin else None
+                        "min": float(row['min_margin']) if row['min_margin'] else None,
+                        "max": float(row['max_margin']) if row['max_margin'] else None,
+                        "avg": float(row['avg_margin']) if row['avg_margin'] else None
                     }
                 }
             }
@@ -350,16 +403,18 @@ async def get_strategies_margin_overview(
             strategies[strategy]["total_portfolios"] += 1
             total_portfolios += 1
             
-            if row.margin_records_count > 0:
+            if row['margin_records_count'] > 0:
                 strategies[strategy]["portfolios_with_margin"] += 1
-                strategies[strategy]["total_margin_records"] += row.margin_records_count
+                strategies[strategy]["total_margin_records"] += row['margin_records_count']
                 total_with_margin += 1
                 
-                # Update strategy-level margin range
-                if strategies[strategy]["strategy_margin_range"]["min"] is None or row.min_margin < strategies[strategy]["strategy_margin_range"]["min"]:
-                    strategies[strategy]["strategy_margin_range"]["min"] = float(row.min_margin) if row.min_margin else None
-                if strategies[strategy]["strategy_margin_range"]["max"] is None or row.max_margin > strategies[strategy]["strategy_margin_range"]["max"]:
-                    strategies[strategy]["strategy_margin_range"]["max"] = float(row.max_margin) if row.max_margin else None
+                # Update strategy-level margin range (based on daily averages)
+                if row['min_margin'] is not None:
+                    if strategies[strategy]["strategy_margin_range"]["min"] is None or row['min_margin'] < strategies[strategy]["strategy_margin_range"]["min"]:
+                        strategies[strategy]["strategy_margin_range"]["min"] = float(row['min_margin'])
+                if row['max_margin'] is not None:
+                    if strategies[strategy]["strategy_margin_range"]["max"] is None or row['max_margin'] > strategies[strategy]["strategy_margin_range"]["max"]:
+                        strategies[strategy]["strategy_margin_range"]["max"] = float(row['max_margin'])
         
         # Calculate strategy-level averages
         for strategy_data in strategies.values():

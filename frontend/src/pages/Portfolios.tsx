@@ -13,6 +13,32 @@ import {
   ReferenceLine
 } from 'recharts';
 
+// localStorage keys for persistence
+const STORAGE_KEYS = {
+  SELECTED_PORTFOLIOS: 'portfolio_app_selected_portfolios',
+  WEIGHTING_METHOD: 'portfolio_app_weighting_method',
+  PORTFOLIO_WEIGHTS: 'portfolio_app_portfolio_weights',
+};
+
+// Helper functions for localStorage operations
+const saveToLocalStorage = (key: string, value: any) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn('Failed to save to localStorage:', error);
+  }
+};
+
+const loadFromLocalStorage = (key: string, defaultValue: any = null) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.warn('Failed to load from localStorage:', error);
+    return defaultValue;
+  }
+};
+
 interface Portfolio {
   id: number;
   name: string;
@@ -69,8 +95,13 @@ export default function Portfolios() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPortfolios, setSelectedPortfolios] = useState<number[]>([]);
+  const [selectedPortfolios, setSelectedPortfolios] = useState<number[]>(() => {
+    const saved = loadFromLocalStorage(STORAGE_KEYS.SELECTED_PORTFOLIOS, []);
+    console.log('Loaded portfolio selections from localStorage:', saved);
+    return saved;
+  });
   const [analyzing, setAnalyzing] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
   const [analysisResults, setAnalysisResults] =
     useState<AnalysisResults | null>(null);
   const [editingPortfolioId, setEditingPortfolioId] = useState<number | null>(
@@ -83,6 +114,13 @@ export default function Portfolios() {
   );
   const [editingStrategy, setEditingStrategy] = useState<string>("");
   const [isLogScale, setIsLogScale] = useState<boolean>(false);
+  
+  // Progressive optimization state
+  const [optimizationProgress, setOptimizationProgress] = useState<number>(0);
+  const [isPartialResult, setIsPartialResult] = useState<boolean>(false);
+  const [canContinue, setContinue] = useState<boolean>(false);
+  const [partialResult, setPartialResult] = useState<any>(null);
+  const [optimizationStartTime, setOptimizationStartTime] = useState<number>(0);
   
   // Load saved analysis parameters or use defaults
   const savedParams = (() => {
@@ -141,11 +179,11 @@ export default function Portfolios() {
 
   // Weighting state
   const [weightingMethod, setWeightingMethod] = useState<"equal" | "custom">(
-    (savedParams?.weightingMethod as "equal" | "custom") || "equal"
+    loadFromLocalStorage(STORAGE_KEYS.WEIGHTING_METHOD, "equal")
   );
   const [portfolioWeights, setPortfolioWeights] = useState<
     Record<number, number>
-  >({});
+  >(loadFromLocalStorage(STORAGE_KEYS.PORTFOLIO_WEIGHTS, {}));
 
   // Analysis parameters
   const [startingCapital, setStartingCapital] = useState<number>(
@@ -243,6 +281,22 @@ export default function Portfolios() {
     };
     saveAnalysisParams(params);
   }, [startingCapital, riskFreeRate, dateRangeStart, dateRangeEnd, weightingMethod]);
+
+  // Save selected portfolios to localStorage
+  useEffect(() => {
+    saveToLocalStorage(STORAGE_KEYS.SELECTED_PORTFOLIOS, selectedPortfolios);
+    console.log('Saved portfolio selections to localStorage:', selectedPortfolios);
+  }, [selectedPortfolios]);
+
+  // Save weighting method to localStorage
+  useEffect(() => {
+    saveToLocalStorage(STORAGE_KEYS.WEIGHTING_METHOD, weightingMethod);
+  }, [weightingMethod]);
+
+  // Save portfolio weights to localStorage
+  useEffect(() => {
+    saveToLocalStorage(STORAGE_KEYS.PORTFOLIO_WEIGHTS, portfolioWeights);
+  }, [portfolioWeights]);
 
   // Sync slider values when date strings change (from external updates)
   useEffect(() => {
@@ -472,75 +526,280 @@ export default function Portfolios() {
     );
   };
 
-  const optimizePortfolioWeights = async () => {
-    if (selectedPortfolios.length < 2) {
-      alert("Please select at least 2 portfolios for weight optimization");
+  // Progressive optimization function that handles partial results and continuation
+  const optimizePortfolioWeights = async (continueOptimization = false) => {
+    console.log("DEBUG: optimizePortfolioWeights called - continueOptimization:", continueOptimization);
+    console.log("DEBUG: Current state - optimizing:", optimizing, "selectedPortfolios:", selectedPortfolios.length, "isPartialResult:", isPartialResult);
+    
+    // Prevent multiple simultaneous optimizations
+    if (optimizing && !continueOptimization) {
+      console.log("DEBUG: Optimization already in progress, ignoring request");
       return;
     }
 
-    if (selectedPortfolios.length > 20) {
-      alert(
-        "Maximum 20 portfolios allowed for optimization to prevent performance issues"
-      );
-      return;
+    if (!continueOptimization) {
+      // Initial validation for new optimization
+      if (selectedPortfolios.length < 2) {
+        alert("Please select at least 2 portfolios for weight optimization");
+        return;
+      }
+
+      if (selectedPortfolios.length > 20) {
+        alert(
+          "Maximum 20 portfolios allowed for optimization to prevent performance issues"
+        );
+        return;
+      }
+
+      // Reset progressive optimization state
+      console.log("DEBUG: Resetting optimization state for new optimization");
+      setOptimizationProgress(0);
+      setIsPartialResult(false);
+      setContinue(false);
+      setPartialResult(null);
     }
 
-    // Provide guidance for large portfolio counts
-    if (selectedPortfolios.length > 8) {
-      const proceed = confirm(
-        `Optimizing ${selectedPortfolios.length} portfolios may take longer and be less reliable. ` +
-        `For best results, consider selecting 6 or fewer portfolios. ` +
-        `Would you like to proceed anyway?`
-      );
-      if (!proceed) return;
-    }
+    console.log("DEBUG: Starting optimization, setting optimizing=true");
+    const actualStartTime = Date.now();
+    setOptimizing(true);
+    setOptimizationStartTime(actualStartTime);
+    console.log("DEBUG: Optimization start time:", new Date(actualStartTime).toISOString());
+    if (!continueOptimization) setAnalysisResults(null);
 
-    setAnalyzing(true);
-    setAnalysisResults(null);
+    let currentIsPartialResult = false; // Track the actual result from this optimization
 
     try {
+      console.log("DEBUG: Starting optimization request...");
+      
+      // Debug continuation parameters
+      console.log("DEBUG: Continuation check - continueOptimization:", continueOptimization);
+      console.log("DEBUG: Continuation check - partialResult:", partialResult);
+      console.log("DEBUG: Continuation check - optimal_weights_array:", partialResult?.optimal_weights_array);
+      
+      // Calculate timeout - shorter for continuations since starting from better point
+      let baseTimeout = selectedPortfolios.length <= 3 ? 30 : 
+                       selectedPortfolios.length <= 5 ? 60 : 
+                       selectedPortfolios.length <= 7 ? 90 : 
+                       selectedPortfolios.length <= 10 ? 120 : 180;
+      
+      let adjustedTimeout = baseTimeout;
+      if (continueOptimization) {
+        // Reduce timeout for continuation (50% of original)  
+        adjustedTimeout = Math.max(Math.round(baseTimeout * 0.5), 15);
+        console.log(`DEBUG: Continuation timeout reduced: ${baseTimeout}s → ${adjustedTimeout}s`);
+      }
+      
+      const requestBody = {
+        portfolio_ids: selectedPortfolios,
+        method: "differential_evolution",
+        max_time_seconds: adjustedTimeout,
+        resume_from_weights: continueOptimization && partialResult ? 
+          partialResult.optimal_weights_array : null,
+      };
+      
+      console.log("DEBUG: Request body:", requestBody);
+      
       const optimizeResponse = await fetch(
-        `${API_BASE_URL}/api/optimize-weights`,
+        `${API_BASE_URL}/api/optimize-weights-progressive`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
           },
-          body: JSON.stringify({
-            portfolio_ids: selectedPortfolios,
-            method: "differential_evolution", // Can be 'scipy', 'differential_evolution', 'grid_search'
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
+      
+      const responseTime = Date.now();
+      const elapsedMs = responseTime - actualStartTime;
+      console.log("DEBUG: Response received after", elapsedMs, "ms");
+      console.log("DEBUG: Response status:", optimizeResponse.status);
+      console.log("DEBUG: Response headers:", Object.fromEntries(optimizeResponse.headers.entries()));
 
       if (optimizeResponse.ok) {
-        const optimizationResult = await optimizeResponse.json();
-        console.log("Optimization result:", optimizationResult);
+        let optimizationResult;
+        try {
+          const rawText = await optimizeResponse.text();
+          console.log("DEBUG: Raw response text length:", rawText.length);
+          console.log("DEBUG: Raw response preview:", rawText.substring(0, 200) + (rawText.length > 200 ? "..." : ""));
+          
+          // Validate that we have a complete JSON response
+          if (!rawText.trim().startsWith("{") || !rawText.trim().endsWith("}")) {
+            throw new Error(`Invalid JSON response format: response does not appear to be complete JSON`);
+          }
+          
+          optimizationResult = JSON.parse(rawText);
+          console.log("Progressive optimization result:", optimizationResult);
+          
+          // Validate the optimization result structure
+          if (!optimizationResult || typeof optimizationResult !== 'object') {
+            throw new Error("Invalid optimization result: response is not a valid object");
+          }
+          
+          if (!optimizationResult.hasOwnProperty('success')) {
+            throw new Error("Invalid optimization result: missing required 'success' field");
+          }
+          
+        } catch (parseError) {
+          console.error("DEBUG: JSON parsing error:", parseError);
+          
+          // Provide a more user-friendly error message for pattern-related issues
+          const errorMsg = parseError.message;
+          if (errorMsg.includes("pattern") || errorMsg.includes("match")) {
+            throw new Error("Response parsing failed: The server response format was unexpected. Please try again.");
+          } else if (errorMsg.includes("JSON")) {
+            throw new Error("Response parsing failed: Invalid JSON format received from server. Please try again.");
+          } else {
+            throw new Error(`Response parsing failed: ${errorMsg}`);
+          }
+        }
 
         if (optimizationResult.success) {
-          // Update the weights with the optimized trading units (ratios)
+          // Validate required fields for successful response
+          if (!Array.isArray(optimizationResult.optimal_ratios_array)) {
+            throw new Error("Invalid optimization result: optimal_ratios_array is not an array");
+          }
+          
+          if (optimizationResult.optimal_ratios_array.length !== selectedPortfolios.length) {
+            throw new Error(`Invalid optimization result: expected ${selectedPortfolios.length} ratios, got ${optimizationResult.optimal_ratios_array.length}`);
+          }
+          
+          // Update progress and check if partial
+          setOptimizationProgress(optimizationResult.progress_percentage || 100);
+          currentIsPartialResult = optimizationResult.is_partial_result || false; // Track for finally block
+          setIsPartialResult(currentIsPartialResult);
+          setContinue(optimizationResult.can_continue || false);
+          setPartialResult(optimizationResult);
+
+          // Apply the weights (partial or complete)
           setWeightingMethod("custom");
           const optimizedWeights: Record<number, number> = {};
+          
+          // Debug logging
+          console.log("DEBUG: optimizationResult.optimal_ratios_array:", optimizationResult.optimal_ratios_array);
+          console.log("DEBUG: selectedPortfolios:", selectedPortfolios);
+          
+          let hasProcessingErrors = false;
           selectedPortfolios.forEach((portfolioId, index) => {
-            // Ensure the value is valid and within acceptable bounds
-            const rawValue = optimizationResult.optimal_ratios_array[index];
-            const validatedValue = Math.max(0.1, Math.min(10.0, Number(rawValue) || 1.0));
-            // Round to 2 decimal places to avoid HTML5 validation issues
-            optimizedWeights[portfolioId] = Math.round(validatedValue * 100) / 100;
+            try {
+              const rawValue = optimizationResult.optimal_ratios_array[index];
+              console.log(`DEBUG: Processing portfolio ${portfolioId}, index ${index}, rawValue:`, rawValue, `(type: ${typeof rawValue})`);
+              
+              // More robust value validation
+              let numericValue: number;
+              if (typeof rawValue === 'number' && !isNaN(rawValue) && isFinite(rawValue)) {
+                numericValue = rawValue;
+              } else if (typeof rawValue === 'string' && !isNaN(parseFloat(rawValue))) {
+                numericValue = parseFloat(rawValue);
+              } else {
+                console.warn(`Invalid ratio value for portfolio ${portfolioId}: ${rawValue}, using default 1.0`);
+                numericValue = 1.0;
+                hasProcessingErrors = true;
+              }
+              
+              const validatedValue = Math.max(0.1, Math.min(10.0, numericValue));
+              console.log(`DEBUG: Validated value for portfolio ${portfolioId}:`, validatedValue);
+              
+              optimizedWeights[portfolioId] = Math.round(validatedValue * 100) / 100;
+            } catch (error) {
+              console.error(`DEBUG: Error processing portfolio ${portfolioId} at index ${index}:`, error);
+              // Don't fail the whole optimization for one portfolio - use fallback
+              optimizedWeights[portfolioId] = 1.0;
+              hasProcessingErrors = true;
+            }
           });
+          
+          if (hasProcessingErrors) {
+            console.warn("Some portfolio ratios had invalid values and were set to default (1.0)");
+          }
+          
           setPortfolioWeights(optimizedWeights);
 
-          // Show optimization results to the user with both multipliers and ratios
-          const multipliersList = Object.entries(optimizationResult.optimal_weights)
-            .map(([name, weight]) => `• ${name}: ${Number(weight).toFixed(2)}x`)
-            .join("\n");
+          // Handle partial vs complete results
+          if (optimizationResult.is_partial_result) {
+            console.log("DEBUG: Partial result detected, not showing success message");
+            // Don't show alert for partial results - show in UI instead
+            return;
+          } else {
+            console.log("DEBUG: Complete result detected, showing success message");
+            // Complete optimization - show success message
+            showOptimizationSuccessMessage(optimizationResult);
+          }
+        } else {
+          handleOptimizationError(optimizationResult.error);
+        }
+      } else {
+        // Handle non-200 responses more robustly
+        let errorMsg = "Unknown error";
+        try {
+          const errorText = await optimizeResponse.text();
+          console.log("DEBUG: Error response text:", errorText);
+          
+          // Check if this is an HTML error response (like 504 Gateway Timeout)
+          if (errorText.includes('<html>') || errorText.includes('<head>') || errorText.includes('<body>')) {
+            // Extract meaningful error info from HTML
+            if (optimizeResponse.status === 504) {
+              errorMsg = `Server timeout (${selectedPortfolios.length} portfolios). Try optimizing fewer portfolios or use a shorter timeout.`;
+            } else if (optimizeResponse.status === 502 || optimizeResponse.status === 503) {
+              errorMsg = `Server temporarily unavailable. Please try again in a moment.`;
+            } else {
+              errorMsg = `Server error (${optimizeResponse.status}). The optimization took too long to complete.`;
+            }
+          } else {
+            // Try to parse as JSON first
+            try {
+              const parsed = JSON.parse(errorText);
+              errorMsg = parsed.error || parsed.message || `HTTP ${optimizeResponse.status}: ${optimizeResponse.statusText}`;
+            } catch {
+              // If not JSON, use the raw text or status
+              errorMsg = errorText || `HTTP ${optimizeResponse.status}: ${optimizeResponse.statusText}`;
+            }
+          }
+        } catch {
+          errorMsg = `HTTP ${optimizeResponse.status}: ${optimizeResponse.statusText}`;
+        }
+        
+        handleOptimizationError(errorMsg);
+      }
+    } catch (error) {
+      console.error("Progressive optimization failed:", error);
+      handleOptimizationError(
+        error instanceof Error ? error.message : "Unknown error"
+      );
+    } finally {
+      // Use the actual result from this optimization, not the state variable
+      console.log(`DEBUG: Optimization finally block - currentIsPartialResult: ${currentIsPartialResult}`);
+      if (!currentIsPartialResult) {
+        console.log("DEBUG: Complete optimization, setting optimizing=false");
+        setOptimizing(false);
+      } else {
+        console.log("DEBUG: Partial optimization, keeping optimizing=true");
+      }
+    }
+  };
 
-          const ratiosList = Object.entries(optimizationResult.optimal_ratios || {})
-            .map(([name, ratio]) => `• ${name}: ${ratio} unit${ratio !== 1 ? 's' : ''}`)
-            .join("\n");
+  const showOptimizationSuccessMessage = (optimizationResult: any) => {
+    const multipliersList = Object.entries(optimizationResult.optimal_weights)
+      .map(([name, weight]) => `• ${name}: ${Number(weight).toFixed(2)}x`)
+      .join("\n");
 
-          const message = `
-Optimization completed successfully!
+    const ratiosList = Object.entries(optimizationResult.optimal_ratios || {})
+      .map(([name, ratio]) => `• ${name}: ${ratio} unit${ratio !== 1 ? 's' : ''}`)
+      .join("\n");
+
+    const executionTime = optimizationResult.execution_time_seconds || 0;
+    // More accurate progress text based on both partial status and continuation possibility
+    const progressText = optimizationResult.is_partial_result ? 
+      `(${optimizationResult.progress_percentage.toFixed(1)}% explored - partial)` : 
+      optimizationResult.can_continue ? 
+        `(${optimizationResult.progress_percentage.toFixed(1)}% explored - can continue)` :
+        "(Complete optimization)";
+
+    const message = `
+Optimization completed successfully! ${progressText}
 
 🔢 Optimal Multipliers:
 ${multipliersList}
@@ -548,54 +807,119 @@ ${multipliersList}
 📊 Trading Units Ratio:
 ${ratiosList}
 
-💡 Unit ratios show the relative number of contracts/units to trade for each strategy. For example, if the ratio is [1, 1, 7, 1], you would trade 1 unit of strategies 1, 2, and 4 for every 7 units of strategy 3.
-
 Expected Performance:
 • CAGR: ${(optimizationResult.metrics.cagr * 100).toFixed(2)}%
-• Max Drawdown: ${(
-            optimizationResult.metrics.max_drawdown_percent * 100
-          ).toFixed(2)}%
-• Return/Drawdown Ratio: ${optimizationResult.metrics.return_drawdown_ratio.toFixed(
-            2
-          )}
+• Max Drawdown: ${(optimizationResult.metrics.max_drawdown_percent * 100).toFixed(2)}%
+• Return/Drawdown Ratio: ${optimizationResult.metrics.return_drawdown_ratio.toFixed(2)}
 • Sharpe Ratio: ${optimizationResult.metrics.sharpe_ratio.toFixed(2)}
 
 Method: ${optimizationResult.optimization_details.method}
-Combinations explored: ${
-            optimizationResult.optimization_details.combinations_explored
-          }
+Time: ${executionTime.toFixed(1)}s
+Combinations explored: ${optimizationResult.optimization_details.combinations_explored}
 
 The multipliers have been applied automatically. Click 'Analyze' to see the full results.
-          `.trim();
+    `.trim();
 
-          alert(message);
-        } else {
-          // Provide helpful error message with suggestions
-          let errorMessage = `Weight optimization failed: ${optimizationResult.error}`;
-          
-          if (optimizationResult.error.includes("timeout") || optimizationResult.error.includes("iterations")) {
-            errorMessage += `\n\nSuggestions:\n• Try selecting fewer portfolios (6 or less recommended)\n• The optimization may work better with portfolios that have similar performance characteristics`;
-          } else if (optimizationResult.error.includes("convergence")) {
-            errorMessage += `\n\nSuggestions:\n• Try reducing the number of selected portfolios\n• Some portfolio combinations may be difficult to optimize`;
-          }
-          
-          alert(errorMessage);
+    alert(message);
+  };
+
+  const handleOptimizationError = (errorMessage: string) => {
+    let fullErrorMessage = `Weight optimization failed: ${errorMessage}`;
+    
+    if (errorMessage.includes("Server timeout") || errorMessage.includes("504")) {
+      fullErrorMessage += `\n\n⚠️ Large Portfolio Optimization:\n• ${selectedPortfolios.length} portfolios require significant computation time\n• Try selecting 6 or fewer portfolios for faster results\n• Or continue optimization to get partial results\n• Consider grouping similar strategies together`;
+    } else if (errorMessage.includes("timeout") || errorMessage.includes("iterations")) {
+      fullErrorMessage += `\n\nSuggestions:\n• Try selecting fewer portfolios (6 or less recommended)\n• The optimization may work better with portfolios that have similar performance characteristics`;
+    } else if (errorMessage.includes("convergence")) {
+      fullErrorMessage += `\n\nSuggestions:\n• Try reducing the number of selected portfolios\n• Some portfolio combinations may be difficult to optimize`;
+    } else if (errorMessage.includes("Server error") || errorMessage.includes("unavailable")) {
+      fullErrorMessage += `\n\nServer Issue:\n• The optimization process exceeded server limits\n• Try again with fewer portfolios\n• Consider optimizing in smaller batches`;
+    }
+    
+    alert(fullErrorMessage);
+  };
+
+  // Function to accept partial results and stop optimization
+  const acceptPartialResult = () => {
+    setOptimizing(false);
+    setIsPartialResult(false);
+    setContinue(false);
+    if (partialResult) {
+      showOptimizationSuccessMessage(partialResult);
+    }
+  };
+
+  // Function to clear optimization cache and reset state
+  const clearOptimizationCache = async () => {
+    console.log("DEBUG: BEFORE clear - optimizing:", optimizing, "isPartialResult:", isPartialResult, "canContinue:", canContinue);
+    
+    try {
+      // Clear backend optimization cache first
+      console.log("DEBUG: Clearing backend optimization cache...");
+      const cacheResponse = await fetch(`${API_BASE_URL}/api/optimization-cache`, {
+        method: "DELETE",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
         }
+      });
+      
+      let backendCacheCleared = false;
+      if (cacheResponse.ok) {
+        const cacheResult = await cacheResponse.json();
+        console.log("DEBUG: Backend cache clear result:", cacheResult);
+        backendCacheCleared = cacheResult.success;
       } else {
-        const errorData = await optimizeResponse.json();
-        alert(
-          `Weight optimization failed: ${errorData.error || "Unknown error"}`
-        );
+        console.warn("DEBUG: Failed to clear backend cache:", cacheResponse.status);
       }
+      
+      // Clear frontend optimization state
+      setOptimizing(false);
+      setIsPartialResult(false);
+      setContinue(false);
+      setPartialResult(null);
+      setOptimizationProgress(0);
+      setOptimizationStartTime(0);
+      
+      // Clear analysis results
+      setAnalysisResults(null);
+      
+      // Reset portfolio weights to default
+      const defaultWeights: Record<number, number> = {};
+      selectedPortfolios.forEach(id => {
+        defaultWeights[id] = 1.0;
+      });
+      setPortfolioWeights(defaultWeights);
+      
+      // Clear localStorage cache
+      let clearedKeys = 0;
+      Object.values(STORAGE_KEYS).forEach(key => {
+        if (localStorage.getItem(key)) {
+          localStorage.removeItem(key);
+          clearedKeys++;
+        }
+      });
+      
+      console.log("DEBUG: Optimization cache and state cleared");
+      console.log("DEBUG: Cleared", clearedKeys, "localStorage keys");
+      console.log("DEBUG: Backend cache cleared:", backendCacheCleared);
+      console.log("DEBUG: AFTER clear - should be reset to defaults");
+      
+      // Force a small delay to ensure state updates have processed
+      setTimeout(() => {
+        console.log("DEBUG: State after clear (delayed check) - optimizing:", optimizing, "portfolioWeights:", portfolioWeights);
+      }, 100);
+      
+      const message = backendCacheCleared 
+        ? "Optimization cache and state cleared! Backend cache also cleared. You can now start fresh optimization."
+        : "Frontend cache and state cleared! Note: Backend cache clear failed - optimization may still return cached results.";
+      
+      alert(message);
+      
     } catch (error) {
-      console.error("Weight optimization failed:", error);
-      alert(
-        `Weight optimization failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    } finally {
-      setAnalyzing(false);
+      console.error("DEBUG: Error clearing cache:", error);
+      alert("Error clearing cache. Please try refreshing the page.");
     }
   };
 
@@ -865,6 +1189,18 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
               <strong>
                 Selected: {selectedPortfolios.length} / {portfolios.length}
               </strong>
+              {selectedPortfolios.length > 0 && (
+                <span 
+                  style={{ 
+                    fontSize: "0.8rem", 
+                    color: theme.palette.mode === "dark" ? "#94a3b8" : "#64748b",
+                    fontStyle: "italic" 
+                  }}
+                  title="Your portfolio selections are automatically saved"
+                >
+                  ✓ saved
+                </span>
+              )}
             </div>
             <button
               onClick={selectAllPortfolios}
@@ -890,31 +1226,98 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
               Clear Selection
             </button>
             {selectedPortfolios.length >= 2 && (
-              <button
-                onClick={optimizePortfolioWeights}
-                disabled={analyzing || selectedPortfolios.length > 20}
-                className="btn btn-success"
-                style={{
-                  padding: "0.5rem 1.5rem",
-                  fontSize: "0.9rem",
-                  marginRight: "0.5rem",
-                  opacity:
-                    analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
-                }}
-                title="Find optimal weights to maximize return while minimizing drawdown"
-              >
-                {analyzing ? "Optimizing..." : "🎯 Optimize Weights"}
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {/* Progressive Optimization Controls */}
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={() => optimizePortfolioWeights(false)}
+                    disabled={optimizing || analyzing || selectedPortfolios.length > 20}
+                    className="btn btn-success"
+                    style={{
+                      padding: "0.5rem 1.5rem",
+                      fontSize: "0.9rem",
+                      opacity: optimizing || analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
+                    }}
+                    title="Find optimal weights to maximize return while minimizing drawdown"
+                  >
+                    {optimizing 
+                      ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
+                      : "🎯 Optimize Weights"}
+                  </button>
+                  
+                  {/* Clear Cache button */}
+                  <button
+                    onClick={clearOptimizationCache}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.5rem 1rem",
+                      fontSize: "0.9rem",
+                      marginLeft: "0.5rem"
+                    }}
+                    title="Clear optimization cache and reset state"
+                  >
+                    🗑️ Clear Cache
+                  </button>
+                  
+                  {/* Continue and Accept buttons for partial results */}
+                  {isPartialResult && optimizing && (
+                    <>
+                      <button
+                        onClick={() => {
+                          console.log("DEBUG: Continue button clicked (1st location)");
+                          console.log("DEBUG: About to call optimizePortfolioWeights(true)");
+                          console.log("DEBUG: Current partialResult:", partialResult);
+                          console.log("DEBUG: Current canContinue:", canContinue);
+                          optimizePortfolioWeights(true);
+                        }}
+                        disabled={!canContinue}
+                        className="btn btn-warning"
+                        style={{
+                          padding: "0.5rem 1rem",
+                          fontSize: "0.9rem",
+                          opacity: canContinue ? 1 : 0.5,
+                        }}
+                        title="Continue optimization for better results"
+                      >
+                        ⏱️ Continue
+                      </button>
+                      <button
+                        onClick={acceptPartialResult}
+                        className="btn btn-info"
+                        style={{
+                          padding: "0.5rem 1rem",
+                          fontSize: "0.9rem",
+                        }}
+                        title="Use current partial optimization results"
+                      >
+                        ✅ Use These
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                {/* Progress indicator for partial results */}
+                {isPartialResult && optimizing && canContinue && (
+                  <div style={{ 
+                    fontSize: "0.8rem", 
+                    color: theme.palette.mode === "dark" ? "#fbbf24" : "#d97706",
+                    fontStyle: "italic" 
+                  }}>
+                    Partial optimization complete ({optimizationProgress.toFixed(1)}% explored). 
+                    Continue for better results or use current weights.
+                  </div>
+                )}
+              </div>
             )}
             <button
               onClick={analyzeSelectedPortfolios}
-              disabled={selectedPortfolios.length === 0 || analyzing}
+              disabled={selectedPortfolios.length === 0 || analyzing || optimizing}
               className="btn btn-primary"
               style={{
                 padding: "0.5rem 1.5rem",
                 fontSize: "0.9rem",
                 marginLeft: selectedPortfolios.length >= 2 ? "0" : "auto",
-                opacity: selectedPortfolios.length === 0 ? 0.5 : 1,
+                opacity: selectedPortfolios.length === 0 || analyzing || optimizing ? 0.5 : 1,
               }}
             >
               {analyzing
@@ -939,30 +1342,97 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
             Clear Selection
           </button>
           {selectedPortfolios.length >= 2 && (
-            <button
-              onClick={optimizePortfolioWeights}
-              disabled={analyzing || selectedPortfolios.length > 20}
-              className="btn btn-success"
-              style={{
-                padding: "0.5rem 1.5rem",
-                fontSize: "0.9rem",
-                marginRight: "0.5rem",
-                opacity: analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
-              }}
-              title="Find optimal weights to maximize return while minimizing drawdown"
-            >
-              {analyzing ? "Optimizing..." : "🎯 Optimize Weights"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginRight: "0.5rem" }}>
+              {/* Progressive Optimization Controls */}
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  onClick={() => optimizePortfolioWeights(false)}
+                  disabled={optimizing || analyzing || selectedPortfolios.length > 20}
+                  className="btn btn-success"
+                  style={{
+                    padding: "0.5rem 1.5rem",
+                    fontSize: "0.9rem",
+                    opacity: optimizing || analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
+                  }}
+                  title="Find optimal weights to maximize return while minimizing drawdown"
+                >
+                  {optimizing 
+                    ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
+                    : "🎯 Optimize Weights"}
+                </button>
+                
+                {/* Clear Cache button */}
+                <button
+                  onClick={clearOptimizationCache}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: "0.5rem 1rem",
+                    fontSize: "0.9rem"
+                  }}
+                  title="Clear optimization cache and reset state"
+                >
+                  🗑️ Clear Cache
+                </button>
+                
+                {/* Continue and Accept buttons for partial results */}
+                {isPartialResult && optimizing && (
+                  <>
+                    <button
+                      onClick={() => {
+                        console.log("DEBUG: Continue button clicked (2nd location)");
+                        console.log("DEBUG: About to call optimizePortfolioWeights(true)");
+                        console.log("DEBUG: Current partialResult:", partialResult);
+                        console.log("DEBUG: Current canContinue:", canContinue);
+                        optimizePortfolioWeights(true);
+                      }}
+                      disabled={!canContinue}
+                      className="btn btn-warning"
+                      style={{
+                        padding: "0.5rem 1rem",
+                        fontSize: "0.9rem",
+                        opacity: canContinue ? 1 : 0.5,
+                      }}
+                      title="Continue optimization for better results"
+                    >
+                      ⏱️ Continue
+                    </button>
+                    <button
+                      onClick={acceptPartialResult}
+                      className="btn btn-info"
+                      style={{
+                        padding: "0.5rem 1rem",
+                        fontSize: "0.9rem",
+                      }}
+                      title="Use current partial optimization results"
+                    >
+                      ✅ Use These
+                    </button>
+                  </>
+                )}
+              </div>
+              
+              {/* Progress indicator for partial results */}
+              {isPartialResult && optimizing && canContinue && (
+                <div style={{ 
+                  fontSize: "0.8rem", 
+                  color: theme.palette.mode === "dark" ? "#fbbf24" : "#d97706",
+                  fontStyle: "italic" 
+                }}>
+                  Partial optimization complete ({optimizationProgress.toFixed(1)}% explored). 
+                  Continue for better results or use current weights.
+                </div>
+              )}
+            </div>
           )}
           <button
             onClick={analyzeSelectedPortfolios}
-            disabled={selectedPortfolios.length === 0 || analyzing}
+            disabled={selectedPortfolios.length === 0 || analyzing || optimizing}
             className="btn btn-primary"
             style={{
               padding: "0.5rem 1.5rem",
               fontSize: "0.9rem",
               marginLeft: selectedPortfolios.length >= 2 ? "0" : "auto",
-              opacity: selectedPortfolios.length === 0 ? 0.5 : 1,
+              opacity: selectedPortfolios.length === 0 || analyzing || optimizing ? 0.5 : 1,
             }}
           >
             {analyzing

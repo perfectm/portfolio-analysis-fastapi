@@ -9,7 +9,14 @@
       "Bash(curl:*)",
       "Bash(pkill:*)",
       "Bash(python test_dynamic_weights.py:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(git commit:*)",
+      "Bash(python:*)",
+      "Bash(uvicorn:*)",
+      "Bash(/dev/null)",
+      "Bash(./start.sh:*)",
+      "Bash(open http://localhost:5173)",
+      "Bash(node:*)"
     ],
     "deny": []
   }

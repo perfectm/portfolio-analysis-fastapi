@@ -33,13 +33,15 @@ def generate_params_key(rf_rate: float, sma_window: int, use_trading_filter: boo
     params = f"{rf_rate:.6f}_{sma_window}_{use_trading_filter}_{starting_capital:.2f}_{min_weight:.3f}_{max_weight:.3f}"
     return params
 
-def convert_weights_to_ratios(weights: List[float], min_units: int = 1, max_ratio: int = 10) -> List[int]:
+def convert_weights_to_ratios(weights: List[float], min_units: int = 1, max_ratio: int = 10, portfolio_count: int = None) -> List[int]:
     """
     Convert decimal weights to whole number ratios with minimum allocation.
     
     Args:
         weights: List of decimal weights (e.g., [0.12, 0.07, 0.73, 0.07])
         min_units: Minimum units per strategy (default: 1)
+        max_ratio: Maximum ratio allowed (default: 10)
+        portfolio_count: Number of portfolios (for dynamic constraint calculation)
         
     Returns:
         List of whole number ratios (e.g., [1, 1, 7, 1])
@@ -51,6 +53,18 @@ def convert_weights_to_ratios(weights: List[float], min_units: int = 1, max_rati
     """
     if not weights or len(weights) == 0:
         return []
+    
+    # Calculate dynamic max_ratio if portfolio_count is provided
+    if portfolio_count is not None and portfolio_count > 0:
+        base_weight = 1.0 / portfolio_count
+        max_weight = calculate_dynamic_max_weight(portfolio_count)
+        # Use ceiling to allow the full constraint (e.g., 2.9x becomes 3x)
+        dynamic_max_ratio = int(math.ceil(max_weight / base_weight))
+        max_ratio = min(max_ratio, dynamic_max_ratio)  # Use the more restrictive limit
+        logger.info(f"[RATIO CONVERSION] Portfolio count: {portfolio_count}, base_weight: {base_weight:.3f}, max_weight: {max_weight:.3f}")
+        logger.info(f"[RATIO CONVERSION] Calculated dynamic max ratio: {max_weight/base_weight:.1f}x -> ceiling: {dynamic_max_ratio}, using max_ratio: {max_ratio}")
+    else:
+        logger.info(f"[RATIO CONVERSION] No portfolio count provided, using default max_ratio: {max_ratio}")
     
     # Convert to numpy array for easier manipulation
     weights_array = np.array(weights)
@@ -115,25 +129,26 @@ def convert_weights_to_ratios(weights: List[float], min_units: int = 1, max_rati
     except:
         pass
     
-    # If ratios are still too large, try to simplify further by allowing some approximation
-    if max(best_ratios) >= max_ratio:
-        # Try a more aggressive approach - cap the maximum ratio
-        capped_ratios = best_ratios.copy()
-        if isinstance(capped_ratios, np.ndarray):
-            capped_ratios = capped_ratios.astype(float)
-        else:
-            capped_ratios = np.array(capped_ratios, dtype=float)
-            
-        while max(capped_ratios) >= max_ratio and max(capped_ratios) > min_units:
-            # Find the largest ratio and reduce proportionally
-            reduction_factor = (max_ratio - 1) / max(capped_ratios)
-            capped_ratios = np.maximum(
-                np.round(capped_ratios * reduction_factor), min_units
-            ).astype(int)
+    # If ratios are still too large, apply constraint-respecting scaling
+    if max(best_ratios) > max_ratio:
+        logger.info(f"[RATIO CONVERSION] Original ratios exceed max_ratio ({max_ratio}): {best_ratios.tolist() if isinstance(best_ratios, np.ndarray) else best_ratios}")
         
-        # Use capped version if it's simpler (lower maximum)
-        if max(capped_ratios) < max(best_ratios):
-            best_ratios = capped_ratios
+        # Scale ratios to fit within max_ratio constraint while maintaining proportions
+        capped_ratios = np.array(best_ratios, dtype=float)
+        
+        # Scale down proportionally so the maximum doesn't exceed max_ratio
+        scale_factor = max_ratio / max(capped_ratios)
+        scaled_ratios = capped_ratios * scale_factor
+        
+        # Round and ensure minimum units
+        final_ratios = np.maximum(np.round(scaled_ratios), min_units).astype(int)
+        
+        # If the constraint is still violated after rounding, cap the maximum
+        if max(final_ratios) > max_ratio:
+            final_ratios = np.minimum(final_ratios, max_ratio)
+        
+        logger.info(f"[RATIO CONVERSION] Scale factor: {scale_factor:.3f}, scaled result: {final_ratios.tolist()}")
+        best_ratios = final_ratios
     
     return best_ratios.tolist() if isinstance(best_ratios, np.ndarray) else best_ratios
 
@@ -151,6 +166,12 @@ class OptimizationResult:
     success: bool
     message: str
     explored_combinations: List[Dict[str, Any]]
+    # Progressive optimization fields
+    is_partial_result: bool = False  # True if optimization timed out but found good result
+    progress_percentage: float = 0.0  # Estimated completion percentage (0-100)
+    remaining_iterations: int = 0  # Estimated remaining iterations for completion
+    execution_time_seconds: float = 0.0  # Actual execution time
+    can_continue: bool = False  # True if optimization can be resumed
 
 class OptimizationCache:
     """Helper class for optimization cache operations"""
@@ -356,7 +377,8 @@ class PortfolioOptimizer:
                  sma_window: int = 20,
                  use_trading_filter: bool = True,
                  starting_capital: float = 1000000.0,
-                 portfolio_count: int = None):
+                 portfolio_count: int = None,
+                 max_time_seconds: float = None):
         """
         Initialize the portfolio optimizer
         
@@ -367,6 +389,7 @@ class PortfolioOptimizer:
             use_trading_filter: Whether to apply SMA filter
             starting_capital: Starting capital for calculations
             portfolio_count: Number of portfolios (for dynamic weight constraints)
+            max_time_seconds: Maximum optimization time before returning partial result
         """
         self.objective = objective or OptimizationObjective()
         self.rf_rate = float(rf_rate)
@@ -375,12 +398,59 @@ class PortfolioOptimizer:
         self.starting_capital = float(starting_capital)
         self.explored_combinations = []
         
+        # Progressive optimization tracking
+        self.start_time = None
+        self.max_time_seconds = max_time_seconds or self._calculate_default_timeout(portfolio_count)
+        self.best_result_so_far = None
+        self.current_iteration = 0
+        self.total_iterations = 0
+        
+        # Weight discretization for practical trading units
+        # 0.5% increments (0.005) reduces search space dramatically:
+        # - Without discretization: infinite precision = infinite search space
+        # - With discretization: 200 possible values per weight (0% to 100% in 0.5% steps)
+        # - For 2 portfolios: ~200 meaningful combinations vs infinite
+        # - For 3 portfolios: ~40,000 combinations vs infinite  
+        self.weight_precision = 0.005  # 0.5% increments - can be adjusted for finer/coarser precision
+        
         # Dynamic weight constraints (will be set when portfolio_count is known)
         self.portfolio_count = portfolio_count
         self.min_weight = None
         self.max_weight = None
         if portfolio_count is not None:
             self.set_dynamic_constraints(portfolio_count)
+    
+    def _calculate_default_timeout(self, portfolio_count: int = None) -> float:
+        """Calculate reasonable default timeout based on portfolio count"""
+        if not portfolio_count:
+            return 60.0  # Default 1 minute
+        
+        # Progressive timeouts: more portfolios = more time needed
+        if portfolio_count <= 3:
+            return 30.0  # 30 seconds for simple cases
+        elif portfolio_count <= 5:
+            return 60.0  # 1 minute for moderate complexity
+        elif portfolio_count <= 7:
+            return 120.0  # 2 minutes for higher complexity
+        else:
+            return 180.0  # 3 minutes for very complex cases
+    
+    def _is_timeout_reached(self) -> bool:
+        """Check if optimization should timeout"""
+        if not self.start_time or not self.max_time_seconds:
+            return False
+        return (time.time() - self.start_time) >= self.max_time_seconds
+    
+    def _update_best_result(self, weights: np.ndarray, portfolios_data: List[Tuple[str, pd.DataFrame]], 
+                           objective_value: float, iteration: int) -> None:
+        """Update the best result found so far"""
+        if self.best_result_so_far is None or objective_value < self.best_result_so_far['objective_value']:
+            self.best_result_so_far = {
+                'weights': weights.copy(),
+                'objective_value': objective_value,
+                'iteration': iteration,
+                'timestamp': time.time()
+            }
     
     def set_dynamic_constraints(self, portfolio_count: int):
         """
@@ -400,7 +470,8 @@ class PortfolioOptimizer:
     def optimize_weights_from_ids(self, 
                                   db_session, 
                                   portfolio_ids: List[int],
-                                  method: str = 'differential_evolution') -> OptimizationResult:
+                                  method: str = 'differential_evolution',
+                                  resume_from_weights: List[float] = None) -> OptimizationResult:
         """
         Optimize portfolio weights using portfolio IDs from database
         
@@ -418,13 +489,19 @@ class PortfolioOptimizer:
         # Set dynamic constraints based on portfolio count
         self.set_dynamic_constraints(len(portfolio_ids))
         
-        # Check cache first
+        # Check cache first, but skip cache if resuming from previous weights
         start_time = time.time()
-        cached_result = OptimizationCache.lookup_cache(
-            db_session, portfolio_ids, 
-            self.rf_rate, self.sma_window, self.use_trading_filter,
-            self.starting_capital, self.min_weight, self.max_weight
-        )
+        cached_result = None
+        
+        if not resume_from_weights:
+            # Only use cache for fresh optimizations, not continuations
+            cached_result = OptimizationCache.lookup_cache(
+                db_session, portfolio_ids, 
+                self.rf_rate, self.sma_window, self.use_trading_filter,
+                self.starting_capital, self.min_weight, self.max_weight
+            )
+        else:
+            logger.info(f"Skipping cache lookup because resuming from previous weights: {resume_from_weights}")
         
         if cached_result:
             logger.info(f"Found cached optimization result for portfolios {portfolio_ids}")
@@ -485,8 +562,8 @@ class PortfolioOptimizer:
                 explored_combinations=[]
             )
         
-        # Run optimization with smart initial guess from cached subsets
-        result = self.optimize_weights(portfolios_data, method, subset_caches)
+        # Run optimization with smart initial guess from cached subsets or resume weights
+        result = self.optimize_weights(portfolios_data, method, subset_caches, resume_from_weights)
         
         # Store result in cache
         execution_time = time.time() - start_time
@@ -506,7 +583,8 @@ class PortfolioOptimizer:
     def optimize_weights(self, 
                         portfolios_data: List[Tuple[str, pd.DataFrame]], 
                         method: str = 'differential_evolution',
-                        subset_caches: List[Dict] = None) -> OptimizationResult:
+                        subset_caches: List[Dict] = None,
+                        resume_from_weights: List[float] = None) -> OptimizationResult:
         """
         Optimize portfolio weights to maximize return/drawdown ratio
         
@@ -541,18 +619,18 @@ class PortfolioOptimizer:
         
         try:
             if method == 'scipy':
-                return self._optimize_with_scipy(portfolios_data, subset_caches)
+                return self._optimize_with_scipy(portfolios_data, subset_caches, resume_from_weights)
             elif method == 'differential_evolution':
-                return self._optimize_with_differential_evolution(portfolios_data, subset_caches)
+                return self._optimize_with_differential_evolution(portfolios_data, subset_caches, resume_from_weights)
             elif method == 'grid_search':
-                return self._optimize_with_grid_search(portfolios_data, subset_caches)
+                return self._optimize_with_grid_search(portfolios_data, subset_caches, resume_from_weights)
             else:
                 raise ValueError(f"Unknown optimization method: {method}")
                 
         except Exception as e:
             logger.error(f"Optimization failed: {str(e)}", exc_info=True)
             equal_weights = [1.0 / num_portfolios] * num_portfolios  # Equal weights fallback
-            equal_ratios = convert_weights_to_ratios(equal_weights)
+            equal_ratios = convert_weights_to_ratios(equal_weights, portfolio_count=num_portfolios)
             return OptimizationResult(
                 optimal_weights=equal_weights,
                 optimal_ratios=equal_ratios,
@@ -579,6 +657,11 @@ class PortfolioOptimizer:
             Negative of the objective value (for minimization)
         """
         try:
+            # Increment iteration counters
+            self.current_iteration += 1
+            if hasattr(self, 'cumulative_iterations'):
+                self.cumulative_iterations += 1
+            
             # Ensure weights sum to 1
             weights = weights / np.sum(weights)
             
@@ -616,6 +699,10 @@ class PortfolioOptimizer:
                 self.objective.drawdown_weight * max_drawdown_pct
             )
             
+            # Update best result tracking (store negative value since we're minimizing)
+            negative_objective = -objective_value
+            self._update_best_result(weights, portfolios_data, negative_objective, self.current_iteration)
+            
             # Store this combination for analysis
             combination = {
                 'weights': weights.tolist(),
@@ -628,7 +715,7 @@ class PortfolioOptimizer:
             self.explored_combinations.append(combination)
             
             # Return negative value for minimization (we want to maximize the objective)
-            return -objective_value
+            return negative_objective
             
         except Exception as e:
             logger.warning(f"Error in objective function with weights {weights}: {str(e)}")
@@ -692,7 +779,8 @@ class PortfolioOptimizer:
             return np.array([equal_weight] * num_portfolios)
 
     def _optimize_with_scipy(self, portfolios_data: List[Tuple[str, pd.DataFrame]], 
-                            subset_caches: List[Dict] = None) -> OptimizationResult:
+                            subset_caches: List[Dict] = None,
+                            resume_from_weights: List[float] = None) -> OptimizationResult:
         """Optimize using scipy's minimize function"""
         num_portfolios = len(portfolios_data)
         
@@ -739,18 +827,69 @@ class PortfolioOptimizer:
             return self._create_result_from_weights(initial_weights, portfolios_data, 'scipy', result.nit, False, error_message)
     
     def _optimize_with_differential_evolution(self, portfolios_data: List[Tuple[str, pd.DataFrame]], 
-                                            subset_caches: List[Dict] = None) -> OptimizationResult:
+                                            subset_caches: List[Dict] = None,
+                                            resume_from_weights: List[float] = None) -> OptimizationResult:
         """Optimize using differential evolution (global optimizer)"""
         num_portfolios = len(portfolios_data)
+        
+        # Initialize optimization tracking
+        self.start_time = time.time()
+        
+        # For continuation, don't reset iteration counter - keep accumulating progress
+        if not resume_from_weights:
+            self.current_iteration = 0
+            self.cumulative_iterations = 0
+            # Use coarser precision for initial exploration (faster convergence)
+            self.weight_precision = 0.01  # 1% increments for fresh optimization
+            logger.info(f"Fresh optimization: using coarser precision ({self.weight_precision * 100:.1f}% increments)")
+        else:
+            # Keep existing iteration count and continue from there
+            self.cumulative_iterations = getattr(self, 'cumulative_iterations', 0)
+            # Use finer precision for refinement
+            self.weight_precision = 0.005  # 0.5% increments for continuation
+            logger.info(f"Continuing optimization from {self.cumulative_iterations} cumulative iterations")
+            logger.info(f"Continuation: using finer precision ({self.weight_precision * 100:.1f}% increments)")
+        
+        self.best_result_so_far = None
         
         # Bounds for each weight using dynamic constraints
         bounds = [(self.min_weight, self.max_weight) for _ in range(num_portfolios)]
         
-        logger.info("Starting differential evolution optimization...")
+        logger.info(f"Starting differential evolution optimization (timeout: {self.max_time_seconds}s)...")
+        
+        # Prepare initial guess if resume weights are provided
+        initial_guess = None
+        if resume_from_weights and len(resume_from_weights) == num_portfolios:
+            initial_guess = np.array(resume_from_weights)
+            # Normalize to sum to 1
+            initial_guess = initial_guess / np.sum(initial_guess)
+            # Ensure weights are within bounds
+            initial_guess = np.clip(initial_guess, self.min_weight, self.max_weight)
+            logger.info(f"Using resume weights as initial guess: {initial_guess}")
         
         def constrained_objective(weights):
-            # Normalize weights to sum to 1
-            normalized_weights = weights / np.sum(weights)
+            # Check for timeout before evaluating
+            if self._is_timeout_reached():
+                # Return a high value to signal stopping, but don't raise exception
+                return 1000
+            
+            # Discretize weights to practical increments (reduces search space)
+            # This dramatically reduces the search space and speeds up convergence
+            discretized_weights = np.round(weights / self.weight_precision) * self.weight_precision
+            
+            # Log discretization effect occasionally for debugging  
+            if self.current_iteration % 50 == 0:
+                logger.info(f"Weight discretization example: {weights[:2]} → {discretized_weights[:2]}")
+            
+            # Normalize discretized weights to sum to 1
+            normalized_weights = discretized_weights / np.sum(discretized_weights)
+            
+            # Ensure weights are within bounds after discretization
+            normalized_weights = np.clip(normalized_weights, self.min_weight, self.max_weight)
+            
+            # Re-normalize after clipping
+            normalized_weights = normalized_weights / np.sum(normalized_weights)
+            
             return self._objective_function(normalized_weights, portfolios_data)
         
         # Suppress warnings
@@ -758,24 +897,130 @@ class PortfolioOptimizer:
             warnings.simplefilter("ignore")
             
             # Adjust parameters based on portfolio count
-            maxiter = min(100 + num_portfolios * 10, 300)  # Scale iterations with complexity
-            popsize = min(15 + num_portfolios, 30)  # Scale population with complexity
+            base_maxiter = min(100 + num_portfolios * 10, 300)  # Scale iterations with complexity
+            base_popsize = min(15 + num_portfolios, 30)  # Scale population with complexity
             
-            result = differential_evolution(
-                func=constrained_objective,
-                bounds=bounds,
-                maxiter=maxiter,
-                popsize=popsize,
-                seed=42,
-                polish=True,
-                atol=1e-4
-            )
+            # For continuations, reduce iterations since we're starting from a better point
+            if resume_from_weights:
+                # Reduce iterations for continuation (30% of original) since we start from good point
+                maxiter = max(int(base_maxiter * 0.3), 20)
+                popsize = max(int(base_popsize * 0.5), 10)  # Smaller population for focused search
+                logger.info(f"Continuation optimization: reduced maxiter={maxiter}, popsize={popsize}")
+            else:
+                maxiter = base_maxiter
+                popsize = base_popsize
+                logger.info(f"Fresh optimization: maxiter={maxiter}, popsize={popsize}")
+            
+            # Update total iterations estimate accounting for cumulative runs
+            if hasattr(self, 'cumulative_iterations') and self.cumulative_iterations > 0:
+                # Add to existing total estimate  
+                additional_iterations = maxiter * popsize
+                self.total_iterations = getattr(self, 'total_iterations', base_maxiter * base_popsize) + additional_iterations
+                logger.info(f"Updated total iterations estimate: {self.total_iterations}")
+            else:
+                self.total_iterations = maxiter * popsize  # Fresh start
+            
+            # Build parameters for differential evolution
+            de_params = {
+                'func': constrained_objective,
+                'bounds': bounds,
+                'maxiter': maxiter,
+                'popsize': popsize,
+                'seed': 42,
+                'polish': True,
+                'atol': 1e-4
+            }
+            
+            # Add initial guess if resuming from previous weights
+            if initial_guess is not None:
+                de_params['x0'] = initial_guess
+                
+            result = differential_evolution(**de_params)
         
-        if result.success:
-            optimal_weights = result.x / np.sum(result.x)  # Normalize
-            return self._create_result_from_weights(optimal_weights, portfolios_data, 'differential_evolution', result.nit, True, "Optimization successful")
+        # Calculate execution time and progress
+        execution_time = time.time() - self.start_time
+        
+        # Use cumulative iterations for progress calculation when continuing
+        iterations_for_progress = getattr(self, 'cumulative_iterations', self.current_iteration)
+        progress_percentage = min((iterations_for_progress / max(self.total_iterations, 1)) * 100, 100.0)
+        
+        logger.info(f"Progress calculation: {iterations_for_progress} / {self.total_iterations} = {progress_percentage:.1f}%")
+        
+        # Check if we have a good result (either from success or timeout with best result)
+        has_good_result = result.success or (self.best_result_so_far is not None)
+        
+        if has_good_result:
+            # Use best result if we have one, otherwise use scipy result
+            if self.best_result_so_far is not None and (not result.success or self._is_timeout_reached()):
+                optimal_weights = self.best_result_so_far['weights']
+                # Consider complete if progress >= 100%, even if timeout reached
+                timed_out = self._is_timeout_reached()
+                is_partial = timed_out and progress_percentage < 100.0
+                message = "Partial optimization completed (timeout reached)" if is_partial else "Optimization successful"
+            else:
+                optimal_weights = result.x / np.sum(result.x)  # Normalize
+                is_partial = False
+                message = "Optimization successful"
+            
+            # Apply final discretization to ensure results match trading unit precision
+            logger.info(f"Raw optimal weights before discretization: {optimal_weights}")
+            
+            # Round to exact precision to avoid floating point errors
+            discrete_weights = np.round(optimal_weights / self.weight_precision) * self.weight_precision
+            logger.info(f"After discretization: {discrete_weights} (step: {self.weight_precision})")
+            
+            # Normalize discretized weights to sum to 1
+            discrete_weights = discrete_weights / np.sum(discrete_weights)
+            
+            # Ensure weights are within bounds after discretization
+            discrete_weights = np.clip(discrete_weights, self.min_weight, self.max_weight)
+            
+            # Re-normalize after clipping and round again to clean up floating point errors
+            optimal_weights = discrete_weights / np.sum(discrete_weights)
+            
+            # Final cleanup - round to avoid floating point precision artifacts
+            optimal_weights = np.round(optimal_weights / self.weight_precision) * self.weight_precision
+            optimal_weights = optimal_weights / np.sum(optimal_weights)  # Final normalization
+            
+            # Additional cleanup to ensure clean discretized results  
+            # Round to the discretization precision and normalize again
+            optimal_weights = np.round(optimal_weights / self.weight_precision) * self.weight_precision
+            optimal_weights = optimal_weights / np.sum(optimal_weights)
+            
+            # Final precision cleanup - round to avoid tiny floating point errors
+            # Use one more decimal place than discretization for internal precision
+            decimal_places = max(2, int(-np.log10(self.weight_precision)) + 1)
+            optimal_weights = np.round(optimal_weights, decimal_places)
+            
+            logger.info(f"Final discretized weights: {optimal_weights} (precision: {self.weight_precision * 100:.1f}%, decimals: {decimal_places})")
+            
+            optimization_result = self._create_result_from_weights(
+                optimal_weights, portfolios_data, 'differential_evolution', 
+                self.current_iteration, has_good_result, message
+            )
+            
+            # Set progressive optimization fields
+            optimization_result.is_partial_result = is_partial
+            optimization_result.progress_percentage = progress_percentage
+            # Calculate remaining iterations based on cumulative progress
+            remaining_iterations = max(0, self.total_iterations - iterations_for_progress)
+            optimization_result.remaining_iterations = remaining_iterations
+            optimization_result.execution_time_seconds = execution_time
+            # Allow continuation if:
+            # 1. Optimization was partial (timeout), OR
+            # 2. For complete optimizations: only if significant exploration remains (< 80%) AND remaining iterations
+            if is_partial:
+                # Partial optimization - allow continuation if progress < 95%
+                optimization_result.can_continue = progress_percentage < 95.0
+            else:
+                # Complete optimization - do not allow continuation
+                # Reasoning: If the optimization completed successfully, it found a satisfactory result
+                # Users can manually re-run optimization if they want to explore further
+                optimization_result.can_continue = False
+            
+            return optimization_result
         else:
-            # Provide more specific error messages
+            # No good result found - provide more specific error messages
             error_message = result.message
             if "Maximum number of iterations" in str(result.message):
                 error_message = f"Optimization timeout after {result.nit} iterations with {num_portfolios} portfolios. Try with fewer portfolios (≤6 recommended) or use 'scipy' method."
@@ -784,10 +1029,11 @@ class PortfolioOptimizer:
             
             logger.warning(f"Differential evolution failed: {error_message}")
             equal_weights = np.array([1.0 / num_portfolios] * num_portfolios)
-            return self._create_result_from_weights(equal_weights, portfolios_data, 'differential_evolution', result.nit, False, error_message)
+            return self._create_result_from_weights(equal_weights, portfolios_data, 'differential_evolution', self.current_iteration, False, error_message)
     
     def _optimize_with_grid_search(self, portfolios_data: List[Tuple[str, pd.DataFrame]], 
-                                  subset_caches: List[Dict] = None) -> OptimizationResult:
+                                  subset_caches: List[Dict] = None,
+                                  resume_from_weights: List[float] = None) -> OptimizationResult:
         """Optimize using grid search (thorough but slower)"""
         num_portfolios = len(portfolios_data)
         
@@ -873,11 +1119,19 @@ class PortfolioOptimizer:
             )
             
             if blended_metrics is not None:
-                # Convert weights to ratios
-                ratios = convert_weights_to_ratios(weights.tolist())
+                # Apply final discretization to weights before converting to list
+                # This ensures clean values like 0.18 instead of 0.18487394957983194
+                clean_weights = np.round(weights / self.weight_precision) * self.weight_precision
+                clean_weights = clean_weights / np.sum(clean_weights)  # Normalize
+                # Final precision cleanup
+                decimal_places = max(2, int(-np.log10(self.weight_precision)) + 1)
+                clean_weights = np.round(clean_weights, decimal_places)
+                
+                # Convert weights to ratios with dynamic constraints
+                ratios = convert_weights_to_ratios(clean_weights.tolist(), portfolio_count=self.portfolio_count)
                 
                 return OptimizationResult(
-                    optimal_weights=weights.tolist(),
+                    optimal_weights=clean_weights.tolist(),
                     optimal_ratios=ratios,
                     optimal_cagr=float(blended_metrics.get('cagr', 0)),
                     optimal_max_drawdown=float(blended_metrics.get('max_drawdown_percent', 0)),
@@ -892,10 +1146,17 @@ class PortfolioOptimizer:
         except Exception as e:
             logger.error(f"Error creating result: {str(e)}")
         
-        # Fallback result
-        ratios = convert_weights_to_ratios(weights.tolist()) if len(weights) > 0 else []
+        # Fallback result - apply discretization here too
+        clean_weights = weights
+        if len(weights) > 0:
+            clean_weights = np.round(weights / self.weight_precision) * self.weight_precision
+            clean_weights = clean_weights / np.sum(clean_weights)
+            decimal_places = max(2, int(-np.log10(self.weight_precision)) + 1)
+            clean_weights = np.round(clean_weights, decimal_places)
+        
+        ratios = convert_weights_to_ratios(clean_weights.tolist(), portfolio_count=self.portfolio_count) if len(clean_weights) > 0 else []
         return OptimizationResult(
-            optimal_weights=weights.tolist(),
+            optimal_weights=clean_weights.tolist(),
             optimal_ratios=ratios,
             optimal_cagr=0,
             optimal_max_drawdown=0,

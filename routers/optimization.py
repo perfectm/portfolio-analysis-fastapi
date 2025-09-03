@@ -373,6 +373,131 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         gc.collect()
         return {"success": False, "error": f"Weighted analysis failed: {str(e)}"}
 
+@router.post("/optimize-weights-progressive")
+async def optimize_portfolio_weights_progressive(request: Request, db: Session = Depends(get_db)):
+    """
+    Progressive optimization that returns partial results on timeout and supports continuation
+    """
+    try:
+        body = await request.json()
+        portfolio_ids = body.get("portfolio_ids", [])
+        method = body.get("method", "differential_evolution")
+        max_time_seconds = body.get("max_time_seconds", None)
+        resume_from_weights = body.get("resume_from_weights", None)
+        
+        # Debug logging
+        logger.info(f"[DEBUG] Received optimization request: portfolio_ids={portfolio_ids}, method={method}, max_time_seconds={max_time_seconds}")
+        logger.info(f"[DEBUG] Request body type checks: portfolio_ids type={type(portfolio_ids)}, method type={type(method)}")
+        
+        # Validate data types
+        if not isinstance(portfolio_ids, list):
+            return {"success": False, "error": f"portfolio_ids must be a list, received {type(portfolio_ids)}"}
+        if not isinstance(method, str):
+            return {"success": False, "error": f"method must be a string, received {type(method)}"}
+        if max_time_seconds is not None and not isinstance(max_time_seconds, (int, float)):
+            return {"success": False, "error": f"max_time_seconds must be a number, received {type(max_time_seconds)}"}
+        
+        if not portfolio_ids:
+            return {"success": False, "error": "No portfolio IDs provided"}
+        if len(portfolio_ids) < 2:
+            return {"success": False, "error": "Need at least 2 portfolios for weight optimization"}
+        if len(portfolio_ids) > 20:
+            return {"success": False, "error": "Maximum 20 portfolios allowed for optimization to prevent performance issues"}
+        
+        logger.info(f"[Progressive Optimization] Optimizing weights for portfolios: {portfolio_ids}")
+        logger.info(f"[Progressive Optimization] Method: {method}, timeout: {max_time_seconds}s")
+        if resume_from_weights:
+            logger.info(f"[Progressive Optimization] Resuming from previous weights: {resume_from_weights}")
+        
+        # Validate portfolios exist and have data
+        for portfolio_id in portfolio_ids:
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+            if not portfolio:
+                return {"success": False, "error": f"Portfolio {portfolio_id} not found"}
+            df = PortfolioService.get_portfolio_dataframe(db, portfolio_id)
+            if df.empty:
+                return {"success": False, "error": f"No data found for portfolio {portfolio_id}"}
+        
+        try:
+            from portfolio_optimizer import PortfolioOptimizer, OptimizationObjective
+        except ImportError as e:
+            return {
+                "success": False,
+                "error": "Portfolio optimization requires scipy. Please install scipy>=1.10.0",
+                "details": str(e)
+            }
+        
+        # Create optimizer with timeout support
+        optimizer = PortfolioOptimizer(
+            objective=OptimizationObjective(),
+            rf_rate=0.043,
+            sma_window=20,
+            use_trading_filter=True,
+            starting_capital=1000000.0,
+            portfolio_count=len(portfolio_ids),
+            max_time_seconds=max_time_seconds
+        )
+        
+        # Run optimization with optional resume weights
+        result = optimizer.optimize_weights_from_ids(db, portfolio_ids, method, resume_from_weights)
+        
+        # Get portfolio names for response
+        portfolio_names = []
+        for portfolio_id in portfolio_ids:
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
+            if portfolio:
+                portfolio_names.append(portfolio.name)
+        
+        weight_mapping = dict(zip(portfolio_names, result.optimal_weights))
+        ratio_mapping = dict(zip(portfolio_names, result.optimal_ratios))
+        
+        # Build response with progressive optimization fields
+        response_data = {
+            "success": result.success or result.is_partial_result,  # Partial results are still "successful"
+            "message": result.message,
+            "optimal_weights": weight_mapping,
+            "optimal_weights_array": result.optimal_weights,
+            "optimal_ratios": ratio_mapping,
+            "optimal_ratios_array": result.optimal_ratios,
+            "metrics": {
+                "cagr": result.optimal_cagr,
+                "max_drawdown_percent": result.optimal_max_drawdown,
+                "return_drawdown_ratio": result.optimal_return_drawdown_ratio,
+                "sharpe_ratio": result.optimal_sharpe_ratio
+            },
+            "optimization_details": {
+                "method": result.optimization_method,
+                "iterations": result.iterations,
+                "combinations_explored": len(result.explored_combinations)
+            },
+            "portfolio_names": portfolio_names,
+            "portfolio_ids": portfolio_ids,
+            # Progressive optimization fields
+            "is_partial_result": result.is_partial_result,
+            "progress_percentage": result.progress_percentage,
+            "remaining_iterations": result.remaining_iterations,
+            "execution_time_seconds": result.execution_time_seconds,
+            "can_continue": result.can_continue
+        }
+        
+        if result.is_partial_result:
+            logger.info(f"[Progressive Optimization] Returning partial result: {result.progress_percentage:.1f}% complete")
+        else:
+            logger.info(f"[Progressive Optimization] Optimization completed successfully in {result.execution_time_seconds:.1f}s")
+            
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"[Progressive Optimization] Error: {str(e)}", exc_info=True)
+        
+        # Debug pattern-related errors
+        if "pattern" in str(e).lower():
+            logger.error(f"[DEBUG] Pattern-related error detected: {str(e)}")
+            logger.error(f"[DEBUG] Exception type: {type(e)}")
+            logger.error(f"[DEBUG] Exception args: {e.args if hasattr(e, 'args') else 'No args'}")
+        
+        return {"success": False, "error": f"Progressive optimization failed: {str(e)}"}
+
 @router.post("/optimize-weights")
 async def optimize_portfolio_weights(request: Request, db: Session = Depends(get_db)):
     try:
@@ -879,4 +1004,36 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         }
     except Exception as e:
         logger.error(f"[Analyze Portfolios] Error analyzing portfolios: {str(e)}", exc_info=True)
-        return {"success": False, "error": f"Analysis failed: {str(e)}"} 
+        return {"success": False, "error": f"Analysis failed: {str(e)}"}
+
+@router.delete("/optimization-cache")
+async def clear_optimization_cache(db: Session = Depends(get_db)):
+    """
+    Clear the optimization cache to force fresh optimization runs
+    """
+    try:
+        from models import OptimizationCache
+        
+        # Count existing cache entries
+        cache_count = db.query(OptimizationCache).count()
+        
+        # Clear all cache entries
+        deleted_count = db.query(OptimizationCache).delete()
+        db.commit()
+        
+        logger.info(f"[Cache Clear] Cleared {deleted_count} optimization cache entries")
+        
+        return {
+            "success": True,
+            "message": f"Optimization cache cleared successfully",
+            "entries_deleted": deleted_count,
+            "previous_count": cache_count
+        }
+        
+    except Exception as e:
+        logger.error(f"[Cache Clear] Error clearing optimization cache: {str(e)}")
+        db.rollback()
+        return {
+            "success": False, 
+            "error": f"Failed to clear optimization cache: {str(e)}"
+        } 
