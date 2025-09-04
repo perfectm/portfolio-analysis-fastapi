@@ -90,6 +90,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         weighting_method = body.get("weighting_method", "equal")
         weights = body.get("weights", None)
         user_starting_capital = body.get("starting_capital", 1000000.0)
+        date_range_start = body.get("date_range_start", None)
+        date_range_end = body.get("date_range_end", None)
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
         if user_starting_capital <= 0:
@@ -246,7 +248,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     portfolio_ids=portfolio_ids,
                     weights=portfolio_weights,
                     name=f"Weighted Blended Portfolio ({len(portfolios_data)} strategies)",
-                    description=f"Weighted blend of {len(portfolios_data)} portfolios"
+                    description=f"Weighted blend of {len(portfolios_data)} portfolios",
+                    date_range_start=date_range_start,
+                    date_range_end=date_range_end
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []
@@ -785,6 +789,8 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         body = await request.json()
         portfolio_ids = body.get("portfolio_ids", [])
         user_starting_capital = body.get("starting_capital", 1000000.0)
+        date_range_start = body.get("date_range_start", None)
+        date_range_end = body.get("date_range_end", None)
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
         if user_starting_capital <= 0:
@@ -907,7 +913,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     portfolio_ids=portfolio_ids,
                     weights=equal_weights,
                     name=f"Equal-Weight Blended Portfolio ({len(portfolios_data)} strategies)",
-                    description=f"Equal-weight blend of {len(portfolios_data)} portfolios"
+                    description=f"Equal-weight blend of {len(portfolios_data)} portfolios",
+                    date_range_start=date_range_start,
+                    date_range_end=date_range_end
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []

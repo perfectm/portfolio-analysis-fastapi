@@ -20,7 +20,9 @@ def create_blended_portfolio(
     portfolio_ids: List[int],
     weights: List[float],
     name: str = None,
-    description: str = None
+    description: str = None,
+    date_range_start: str = None,
+    date_range_end: str = None
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Create a blended portfolio with memory optimization"""
     import psutil
@@ -54,6 +56,21 @@ def create_blended_portfolio(
             
         # Ensure Date is datetime and normalize to midnight
         df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
+        
+        # Apply date filtering if specified
+        if date_range_start:
+            start_date = pd.to_datetime(date_range_start).normalize()
+            df = df[df['Date'] >= start_date]
+            logger.info(f"Portfolio {portfolio_id}: Filtered to dates >= {start_date.date()}")
+            
+        if date_range_end:
+            end_date = pd.to_datetime(date_range_end).normalize()
+            df = df[df['Date'] <= end_date]
+            logger.info(f"Portfolio {portfolio_id}: Filtered to dates <= {end_date.date()}")
+        
+        if df.empty:
+            logger.warning(f"Portfolio {portfolio_id}: No data remaining after date filtering")
+            continue
         
         # Aggregate P/L by date in case of duplicates
         df = df.groupby('Date')['P/L'].sum().reset_index()
@@ -151,7 +168,9 @@ def create_blended_portfolio_from_files(
     use_trading_filter: bool = True,
     starting_capital: float = 1000000.0,
     weights: List[float] = None,
-    use_capital_allocation: bool = False
+    use_capital_allocation: bool = False,
+    date_range_start: str = None,
+    date_range_end: str = None
 ) -> Tuple[pd.DataFrame, Dict[str, Any], Dict[str, Any]]:
     """
     Create a blended portfolio from file data (for optimization)
@@ -208,6 +227,23 @@ def create_blended_portfolio_from_files(
         blended_df = blended_df.drop('Weighted_PL', axis=1)
     
     blended_df = blended_df.sort_values('Date').reset_index(drop=True)
+    
+    # Apply date filtering if specified
+    if date_range_start:
+        start_date = pd.to_datetime(date_range_start).normalize()
+        blended_df = blended_df[blended_df['Date'] >= start_date]
+        logger.info(f"Blended portfolio: Filtered to dates >= {start_date.date()}")
+        
+    if date_range_end:
+        end_date = pd.to_datetime(date_range_end).normalize()
+        blended_df = blended_df[blended_df['Date'] <= end_date]
+        logger.info(f"Blended portfolio: Filtered to dates <= {end_date.date()}")
+    
+    if blended_df.empty:
+        logger.warning("Blended portfolio: No data remaining after date filtering")
+        return None, None, None
+    
+    blended_df = blended_df.reset_index(drop=True)
     
     # Process the blended portfolio to get metrics
     try:
