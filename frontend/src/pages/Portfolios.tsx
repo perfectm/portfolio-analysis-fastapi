@@ -3619,6 +3619,18 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             style={{
                               padding: "0.75rem 0.5rem",
                               textAlign: "center",
+                              borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                              minWidth: "150px",
+                              color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                              fontWeight: "600"
+                            }}
+                          >
+                            Strategy
+                          </th>
+                          <th
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              textAlign: "center",
                               minWidth: "120px",
                               color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                               fontWeight: "600"
@@ -3807,6 +3819,123 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                       <td
                         style={{
                           padding: "0.75rem 0.5rem",
+                          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
+                        }}
+                      >
+                        {editingStrategyId === portfolio.id ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={editingStrategy}
+                              onChange={(e) => setEditingStrategy(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  saveStrategy(portfolio.id);
+                                } else if (e.key === "Escape") {
+                                  cancelEditingStrategy();
+                                }
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: "0.25rem",
+                                border: "1px solid #ccc",
+                                borderRadius: "4px",
+                                fontSize: "0.8rem",
+                                minWidth: "100px",
+                              }}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="Enter strategy..."
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveStrategy(portfolio.id);
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#28a745",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                              }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelEditingStrategy();
+                              }}
+                              style={{
+                                padding: "0.25rem 0.5rem",
+                                background: "#dc3545",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.7rem",
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "0.9rem",
+                                fontStyle: portfolio.strategy ? "normal" : "italic",
+                                color: portfolio.strategy 
+                                  ? (theme.palette.mode === "dark" ? "#ffffff" : "#2d3748")
+                                  : (theme.palette.mode === "dark" ? "#9ca3af" : "#6b7280"),
+                                cursor: "pointer",
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingStrategy(portfolio);
+                              }}
+                            >
+                              {portfolio.strategy || "No Strategy"}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingStrategy(portfolio);
+                              }}
+                              style={{
+                                padding: "0.25rem",
+                                background: "transparent",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: "0.8rem",
+                                color: theme.palette.mode === "dark" ? "#9ca3af" : "#6b7280",
+                              }}
+                              title="Edit strategy"
+                            >
+                              ✏️
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.75rem 0.5rem",
                           textAlign: "center",
                           color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
@@ -3879,7 +4008,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         }}
                       >
                         <td
-                          colSpan={6}
+                          colSpan={7}
                           style={{
                             padding: "1rem",
                             color: theme.palette.mode === "dark" ? "#d1d5db" : "#6b7280",
