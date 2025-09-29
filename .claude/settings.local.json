@@ -16,7 +16,13 @@
       "Bash(/dev/null)",
       "Bash(./start.sh:*)",
       "Bash(open http://localhost:5173)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git push:*)",
+      "Bash(pytest:*)",
+      "Bash(kill:*)",
+      "Bash(sqlite3:*)",
+      "Read(//Users/closet/projects/**)",
+      "WebSearch"
     ],
     "deny": []
   }

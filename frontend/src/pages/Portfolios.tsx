@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { portfolioAPI, API_BASE_URL } from "../services/api";
-import { useTheme, Paper, Box } from "@mui/material";
+import { useLocation, useSearchParams } from "react-router-dom";
+import { useTheme, Paper, Box, Typography } from "@mui/material";
 import { 
   LineChart, 
   Line, 
@@ -48,6 +49,22 @@ interface Portfolio {
   date_range_start?: string;
   date_range_end?: string;
   strategy?: string;
+  latest_analysis?: {
+    id: number;
+    analysis_type: string;
+    created_at: string;
+    metrics: {
+      total_return?: number;
+      max_drawdown_percent?: number;
+      sharpe_ratio?: number;
+      cagr?: number;
+      total_pl?: number;
+      final_account_value?: number;
+      max_drawdown_dollar?: number;
+      annual_volatility?: number;
+      [key: string]: any; // Allow for additional metrics
+    };
+  };
 }
 
 interface AnalysisResult {
@@ -92,9 +109,30 @@ interface AnalysisResults {
 
 export default function Portfolios() {
   const theme = useTheme();
+  const [searchParams] = useSearchParams();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Optimization data from URL parameters
+  const [loadedOptimization, setLoadedOptimization] = useState<{
+    id: string;
+    name?: string;
+    portfolio_ids: number[];
+    weights: number[];
+    ratios: number[];
+    method: string;
+    metrics: {
+      cagr: number;
+      max_drawdown: number;
+      return_drawdown_ratio: number;
+      sharpe_ratio: number;
+    };
+    parameters?: {
+      sma_window: number;
+      use_trading_filter: boolean;
+    };
+  } | null>(null);
   const [selectedPortfolios, setSelectedPortfolios] = useState<number[]>(() => {
     const saved = loadFromLocalStorage(STORAGE_KEYS.SELECTED_PORTFOLIOS, []);
     console.log('Loaded portfolio selections from localStorage:', saved);
@@ -251,19 +289,95 @@ export default function Portfolios() {
     fetchPortfolios();
   }, []);
 
-  // Load saved portfolio selections after portfolios are loaded
+  // Parse URL parameters for optimization data
   useEffect(() => {
-    if (portfolios.length > 0) {
+    const optimizationId = searchParams.get('optimization_id');
+    const optimizationName = searchParams.get('name');
+    const portfolioIds = searchParams.get('portfolio_ids');
+    const weights = searchParams.get('weights');
+    const ratios = searchParams.get('ratios');
+    const method = searchParams.get('method');
+    const cagr = searchParams.get('cagr');
+    const maxDrawdown = searchParams.get('max_drawdown');
+    const returnDrawdownRatio = searchParams.get('return_drawdown_ratio');
+    const sharpeRatio = searchParams.get('sharpe_ratio');
+    const rfRate = searchParams.get('rf_rate');
+    const smaWindow = searchParams.get('sma_window');
+    const useTradingFilter = searchParams.get('use_trading_filter');
+    const optimizationStartingCapital = searchParams.get('starting_capital');
+
+    if (optimizationId && portfolioIds && weights && ratios && method) {
+      try {
+        const optimization = {
+          id: optimizationId,
+          name: optimizationName || undefined,
+          portfolio_ids: portfolioIds.split(',').map(id => parseInt(id, 10)),
+          weights: weights.split(',').map(w => parseFloat(w)),
+          ratios: ratios.split(',').map(r => parseFloat(r)),
+          method: method,
+          metrics: {
+            cagr: cagr ? parseFloat(cagr) : 0,
+            max_drawdown: maxDrawdown ? parseFloat(maxDrawdown) : 0,
+            return_drawdown_ratio: returnDrawdownRatio ? parseFloat(returnDrawdownRatio) : 0,
+            sharpe_ratio: sharpeRatio ? parseFloat(sharpeRatio) : 0,
+          },
+          parameters: {
+            sma_window: smaWindow ? parseInt(smaWindow) : 20,
+            use_trading_filter: useTradingFilter ? useTradingFilter === 'true' : true
+          }
+        };
+
+        setLoadedOptimization(optimization);
+
+        // Auto-select the portfolios from the optimization
+        setSelectedPortfolios(optimization.portfolio_ids);
+
+        // Apply the optimal ratios to the portfolio weights state (ratios are multipliers, not percentages)
+        const weightMapping: Record<number, number> = {};
+        optimization.portfolio_ids.forEach((portfolioId, index) => {
+          weightMapping[portfolioId] = optimization.ratios[index];
+        });
+        setPortfolioWeights(weightMapping);
+
+        // Set weighting method to custom since we're applying specific weights
+        setWeightingMethod("custom");
+
+        // Apply optimization parameters to match the cached optimization exactly
+        if (rfRate) {
+          setRiskFreeRate(parseFloat(rfRate) * 100); // Convert from decimal to percentage for UI
+        }
+        if (optimizationStartingCapital) {
+          setStartingCapital(parseFloat(optimizationStartingCapital));
+        }
+
+
+        console.log('[Portfolios] Loaded optimization from URL:', optimization);
+        console.log('[Portfolios] Applied weights:', weightMapping);
+        console.log('[Portfolios] Applied parameters:', {
+          rfRate: rfRate ? parseFloat(rfRate) : 'not set',
+          smaWindow: smaWindow ? parseInt(smaWindow) : 'not set',
+          useTradingFilter: useTradingFilter ? useTradingFilter === 'true' : 'not set',
+          startingCapital: optimizationStartingCapital ? parseFloat(optimizationStartingCapital) : 'not set'
+        });
+      } catch (error) {
+        console.error('[Portfolios] Error parsing URL optimization data:', error);
+      }
+    }
+  }, [searchParams]);
+
+  // Load saved portfolio selections after portfolios are loaded (only if not loading from URL)
+  useEffect(() => {
+    if (portfolios.length > 0 && !loadedOptimization) {
       const savedSelections = loadSelectedPortfolios();
       // Filter to only include portfolios that still exist
-      const validSelections = savedSelections.filter(id => 
+      const validSelections = savedSelections.filter(id =>
         portfolios.some(portfolio => portfolio.id === id)
       );
       if (validSelections.length > 0) {
         setSelectedPortfolios(validSelections);
       }
     }
-  }, [portfolios.length]); // Trigger when portfolios are loaded
+  }, [portfolios.length, loadedOptimization]); // Trigger when portfolios are loaded, but not if optimization is loaded
 
   // Save portfolio selections whenever they change
   useEffect(() => {
@@ -309,15 +423,18 @@ export default function Portfolios() {
     setSliderValues([boundedStartValue, boundedEndValue]);
   }, [dateRangeStart, dateRangeEnd]);
 
-  // Initialize weights when selected portfolios change
+  // Initialize weights when selected portfolios change (only if not loading from optimization)
   useEffect(() => {
-    if (selectedPortfolios.length > 0) {
+    if (selectedPortfolios.length > 0 && !loadedOptimization) {
       initializeWeights(selectedPortfolios);
+      calculateMarginCapital();
+    } else if (selectedPortfolios.length > 0 && loadedOptimization) {
+      // Just calculate margin capital for loaded optimization, don't reset weights
       calculateMarginCapital();
     } else {
       setMarginCapital(null);
     }
-  }, [selectedPortfolios.length, weightingMethod]);
+  }, [selectedPortfolios.length, weightingMethod, loadedOptimization]);
 
   // Recalculate margin when portfolio weights change
   useEffect(() => {
@@ -329,11 +446,18 @@ export default function Portfolios() {
   const fetchPortfolios = async () => {
     try {
       setLoading(true);
-      const response = await portfolioAPI.getStrategiesList();
-      if (response.success) {
-        setPortfolios(response.strategies);
+      const response = await fetch('/api/portfolios', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setPortfolios(data.portfolios);
       } else {
-        setError(response.error || "Failed to fetch portfolios");
+        setError(data.error || "Failed to fetch portfolios");
       }
     } catch (err) {
       setError("Failed to fetch portfolios");
@@ -827,9 +951,9 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
     let fullErrorMessage = `Weight optimization failed: ${errorMessage}`;
     
     if (errorMessage.includes("Server timeout") || errorMessage.includes("504")) {
-      fullErrorMessage += `\n\n⚠️ Large Portfolio Optimization:\n• ${selectedPortfolios.length} portfolios require significant computation time\n• Try selecting 6 or fewer portfolios for faster results\n• Or continue optimization to get partial results\n• Consider grouping similar strategies together`;
+      fullErrorMessage += `\n\n⚠️ Large Portfolio Optimization:\n• ${selectedPortfolios.length} portfolios require significant computation time\n• Try selecting 10 or fewer portfolios for faster results\n• Or continue optimization to get partial results\n• Consider grouping similar strategies together`;
     } else if (errorMessage.includes("timeout") || errorMessage.includes("iterations")) {
-      fullErrorMessage += `\n\nSuggestions:\n• Try selecting fewer portfolios (6 or less recommended)\n• The optimization may work better with portfolios that have similar performance characteristics`;
+      fullErrorMessage += `\n\nSuggestions:\n• Try selecting fewer portfolios (10 or less recommended)\n• The optimization may work better with portfolios that have similar performance characteristics`;
     } else if (errorMessage.includes("convergence")) {
       fullErrorMessage += `\n\nSuggestions:\n• Try reducing the number of selected portfolios\n• Some portfolio combinations may be difficult to optimize`;
     } else if (errorMessage.includes("Server error") || errorMessage.includes("unavailable")) {
@@ -998,6 +1122,9 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
         portfolio_ids: selectedPortfolios,
         starting_capital: startingCapital,
         rf_rate: riskFreeRate / 100, // Convert percentage to decimal
+        sma_window: loadedOptimization?.parameters?.sma_window || 20,
+        use_trading_filter: loadedOptimization?.parameters?.use_trading_filter !== undefined
+          ? loadedOptimization.parameters.use_trading_filter : true,
         date_range_start: dateRangeStart,
         date_range_end: dateRangeEnd,
       };
@@ -1014,6 +1141,9 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
 
       console.log("Calling endpoint:", endpoint);
       console.log("Request body:", requestBody);
+      console.log("Portfolio weights state:", portfolioWeights);
+      console.log("Loaded optimization:", loadedOptimization);
+      console.log("Weighting method:", weightingMethod);
 
       // Call the backend API to analyze selected portfolios
       const response = await fetch(endpoint, {
@@ -1161,6 +1291,113 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
         color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c",
         marginBottom: "2rem"
       }}>Portfolio Management</h1>
+
+      {/* Loaded Optimization Display */}
+      {loadedOptimization && (
+        <Paper
+          sx={{
+            p: 2,
+            mb: 2,
+            border: `2px solid ${theme.palette.primary.main}`,
+            borderRadius: "8px",
+            background: theme.palette.mode === "dark"
+              ? "rgba(25, 118, 210, 0.1)"
+              : "rgba(25, 118, 210, 0.05)",
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Box sx={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              backgroundColor: theme.palette.primary.main,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white'
+            }}>
+              📊
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>
+                {loadedOptimization.name || `Optimization #${loadedOptimization.id}`}
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Method: {loadedOptimization.method.replace('_', ' ')} • {loadedOptimization.portfolio_ids.length} portfolios
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 2 }}>
+            <Box>
+              <Typography variant="body2" color="textSecondary">CAGR</Typography>
+              <Typography variant="h6" sx={{ color: loadedOptimization.metrics.cagr >= 0 ? 'success.main' : 'error.main' }}>
+                {(loadedOptimization.metrics.cagr * 100).toFixed(2)}%
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="textSecondary">Max Drawdown</Typography>
+              <Typography variant="h6" color="error.main">
+                {(Math.abs(loadedOptimization.metrics.max_drawdown) * 100).toFixed(2)}%
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="textSecondary">Return/Drawdown Ratio</Typography>
+              <Typography variant="h6" color="primary.main">
+                {loadedOptimization.metrics.return_drawdown_ratio.toFixed(2)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="textSecondary">Sharpe Ratio</Typography>
+              <Typography variant="h6" sx={{ color: loadedOptimization.metrics.sharpe_ratio >= 0 ? 'success.main' : 'error.main' }}>
+                {loadedOptimization.metrics.sharpe_ratio.toFixed(2)}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+            Optimal Portfolio Weights:
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {loadedOptimization.portfolio_ids.map((portfolioId, index) => {
+              const portfolio = portfolios.find(p => p.id === portfolioId);
+              const weight = loadedOptimization.weights[index];
+              const ratio = loadedOptimization.ratios[index];
+
+              return (
+                <Box
+                  key={portfolioId}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    px: 2,
+                    py: 1,
+                    borderRadius: '20px',
+                    backgroundColor: theme.palette.mode === "dark" ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    border: `1px solid ${theme.palette.divider}`,
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                    {portfolio?.name || `Portfolio ${portfolioId}`}
+                  </Typography>
+                  <Typography variant="body2" color="primary.main">
+                    {ratio.toFixed(1)}x
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    ({(weight * 100).toFixed(1)}%)
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
+
+          <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: 'block' }}>
+            💡 The portfolios below have been automatically selected based on this optimization result.
+            You can now analyze these portfolios with the optimal weights applied.
+          </Typography>
+        </Paper>
+      )}
 
       {portfolios.length === 0 ? (
         <div className="no-portfolios">
@@ -2197,6 +2434,41 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           {analysisResults.blended_result.metrics.sharpe_ratio?.toFixed(
                             2
                           )}
+                        </div>
+                      </div>
+
+                      {/* Beta vs SPX */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Beta (vs SPX)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color:
+                              (analysisResults.blended_result.metrics.beta || 0) > 1
+                                ? theme.palette.error.main
+                                : (analysisResults.blended_result.metrics.beta || 0) > 0.5
+                                ? theme.palette.warning.main
+                                : theme.palette.success.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.beta?.toFixed(2) || "N/A"}
                         </div>
                       </div>
 
@@ -3348,7 +3620,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                       className="plots-grid"
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
+                        gridTemplateColumns: "1fr",
                         gap: "2rem",
                       }}
                     >
@@ -3438,7 +3710,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
             {(() => {
               // Group portfolios by strategy
               const groupedPortfolios = portfolios.reduce((groups, portfolio) => {
-                const strategy = portfolio.strategy || "No Strategy Set";
+                const strategy = portfolio.strategy && portfolio.strategy !== "None" ? portfolio.strategy : "No Strategy Set";
                 if (!groups[strategy]) {
                   groups[strategy] = [];
                 }
@@ -3911,7 +4183,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 startEditingStrategy(portfolio);
                               }}
                             >
-                              {portfolio.strategy || "No Strategy"}
+                              {portfolio.strategy && portfolio.strategy !== "None" ? portfolio.strategy : "No Strategy"}
                             </span>
                             <button
                               onClick={(e) => {
@@ -4028,16 +4300,257 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   ).toLocaleDateString()}
                                 </p>
                               )}
-                            <p
-                              style={{
-                                margin: "0.5rem 0",
-                                fontStyle: "italic",
-                                color: theme.palette.mode === "dark" ? "#d1d5db" : "#6b7280",
-                              }}
-                            >
-                              Click the arrow to expand/collapse portfolio
-                              details
-                            </p>
+
+                            {/* Portfolio Metrics */}
+                            {portfolio.latest_analysis?.metrics && (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                                  gap: "0.75rem",
+                                  margin: "1rem 0",
+                                  padding: "0.75rem",
+                                  backgroundColor:
+                                    theme.palette.mode === "dark"
+                                      ? "#2d3748"
+                                      : "#ffffff",
+                                  borderRadius: "8px",
+                                  border: `1px solid ${
+                                    theme.palette.mode === "dark"
+                                      ? "#4a5568"
+                                      : "#e2e8f0"
+                                  }`,
+                                }}
+                              >
+                                {/* Total Return */}
+                                {portfolio.latest_analysis.metrics.total_return !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Total Return
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: portfolio.latest_analysis.metrics.total_return >= 0 ? "#22c55e" : "#ef4444",
+                                      }}
+                                    >
+                                      {(portfolio.latest_analysis.metrics.total_return * 100).toFixed(2)}%
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Max Drawdown */}
+                                {portfolio.latest_analysis.metrics.max_drawdown_percent !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Max Drawdown
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: "#ef4444",
+                                      }}
+                                    >
+                                      {Math.abs(portfolio.latest_analysis.metrics.max_drawdown_percent * 100).toFixed(2)}%
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Sharpe Ratio */}
+                                {portfolio.latest_analysis.metrics.sharpe_ratio !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Sharpe Ratio
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: portfolio.latest_analysis.metrics.sharpe_ratio >= 0 ? "#22c55e" : "#ef4444",
+                                      }}
+                                    >
+                                      {portfolio.latest_analysis.metrics.sharpe_ratio.toFixed(2)}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Beta vs SPX */}
+                                {portfolio.latest_analysis.metrics.beta !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Beta (SPX)
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: portfolio.latest_analysis.metrics.beta > 1 ? "#ef4444" : portfolio.latest_analysis.metrics.beta > 0.5 ? "#f59e0b" : "#22c55e",
+                                      }}
+                                    >
+                                      {portfolio.latest_analysis.metrics.beta.toFixed(2)}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* CAGR */}
+                                {portfolio.latest_analysis.metrics.cagr !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      CAGR
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: portfolio.latest_analysis.metrics.cagr >= 0 ? "#22c55e" : "#ef4444",
+                                      }}
+                                    >
+                                      {(portfolio.latest_analysis.metrics.cagr * 100).toFixed(2)}%
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Total P/L */}
+                                {portfolio.latest_analysis.metrics.total_pl !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Total P/L
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: portfolio.latest_analysis.metrics.total_pl >= 0 ? "#22c55e" : "#ef4444",
+                                      }}
+                                    >
+                                      ${portfolio.latest_analysis.metrics.total_pl.toLocaleString()}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Final Account Value */}
+                                {portfolio.latest_analysis.metrics.final_account_value !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Final Account Value
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: "#3b82f6",
+                                      }}
+                                    >
+                                      ${portfolio.latest_analysis.metrics.final_account_value.toLocaleString()}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Max Drawdown $ */}
+                                {portfolio.latest_analysis.metrics.max_drawdown_dollar !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Max Drawdown ($)
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: "#ef4444",
+                                      }}
+                                    >
+                                      ${Math.abs(portfolio.latest_analysis.metrics.max_drawdown_dollar).toLocaleString()}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Annual Volatility */}
+                                {portfolio.latest_analysis.metrics.annual_volatility !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Annual Volatility
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: theme.palette.text.primary,
+                                      }}
+                                    >
+                                      {(portfolio.latest_analysis.metrics.annual_volatility * 100).toFixed(2)}%
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {!portfolio.latest_analysis?.metrics && (
+                              <p
+                                style={{
+                                  margin: "0.5rem 0",
+                                  fontStyle: "italic",
+                                  color: theme.palette.mode === "dark" ? "#d1d5db" : "#6b7280",
+                                }}
+                              >
+                                No analysis data available. Upload and analyze this portfolio to see metrics.
+                              </p>
+                            )}
                           </div>
                         </td>
                       </tr>

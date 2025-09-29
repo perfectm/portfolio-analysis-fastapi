@@ -8,6 +8,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import seaborn as sns
 import logging
 import warnings
@@ -16,6 +17,7 @@ import gc
 import psutil
 
 from config import UPLOAD_FOLDER
+from correlation_utils import calculate_correlation_matrix_from_dataframe
 
 # Suppress common warnings
 warnings.filterwarnings('ignore', message='use_inf_as_na option is deprecated')
@@ -119,25 +121,29 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         ax3.set_xticklabels(['${:,.0f}'.format(x) for x in current_values])
         ax3.grid(True)
 
-        # Plot 4: Account Value vs SMA (bottom right)
-        logger.info(f"[create_plots] Creating SMA plot")
+        # Plot 4: Drawdown in Dollars (bottom right)
+        logger.info(f"[create_plots] Creating dollar drawdown plot")
         ax4 = plt.subplot(2, 2, 4)
-        if 'SMA' in df.columns:
-            ax4.plot(df['Date'], df['Account Value'], label='Account Value', alpha=0.7)
-            ax4.plot(df['Date'], df['SMA'], label=f'{sma_window}-day SMA', linewidth=2)
-            ax4.set_title('Account Value vs SMA')
-            ax4.set_xlabel('Date')
-            ax4.set_ylabel('Value ($)')
-            ax4.legend()
-            ax4.grid(True)
-            ax4.tick_params(axis='x', rotation=45)
-            # Format y-axis as currency
-            ax4.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
-        else:
-            ax4.set_title('SMA Analysis Not Available')
-            ax4.text(0.5, 0.5, 'Trading Filter Disabled', 
-                    horizontalalignment='center', verticalalignment='center',
-                    transform=ax4.transAxes)
+        
+        # Calculate rolling peak and drawdown amount for plotting
+        rolling_peak = df['Account Value'].expanding().max()
+        drawdown_amount = df['Account Value'] - rolling_peak
+        
+        ax4.plot(df['Date'], drawdown_amount, color='red', linewidth=1.5)
+        ax4.fill_between(df['Date'], drawdown_amount, 0, alpha=0.3, color='red')
+        ax4.set_title('Drawdown Over Time')
+        ax4.set_xlabel('Date')
+        ax4.set_ylabel('Drawdown ($)')
+        ax4.grid(True)
+        ax4.tick_params(axis='x', rotation=45)
+        # Format y-axis as currency
+        ax4.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
+        
+        # Set y-axis to show drawdowns properly with zero at top
+        ax4.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+        # Set y-axis limits to ensure zero is at top and negatives go down
+        min_drawdown = drawdown_amount.min()
+        ax4.set_ylim(min_drawdown * 1.1, 0)  # Extend bottom slightly, zero at top
 
         # Adjust layout to prevent overlap
         logger.info(f"[create_plots] Finalizing plot layout")
@@ -204,14 +210,12 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
             logger.warning(f"[Correlation Heatmap] Insufficient rows for correlation: {correlation_data.shape[0]}")
             return None
         
-        # Fill NaN values with 0 for correlation calculation
-        correlation_data_filled = correlation_data.fillna(0)
-        logger.info(f"[Correlation Heatmap] Data after filling NaN: shape {correlation_data_filled.shape}")
-        
-        # Calculate correlation matrix
-        correlation_matrix = correlation_data_filled.corr()
+        # Calculate correlation matrix using zero-excluding method
+        value_columns = list(correlation_data.columns)
+        correlation_matrix = calculate_correlation_matrix_from_dataframe(correlation_data, value_columns)
         logger.info(f"[Correlation Heatmap] Correlation matrix shape: {correlation_matrix.shape}")
         logger.info(f"[Correlation Heatmap] Correlation matrix columns: {list(correlation_matrix.columns)}")
+        logger.info(f"[Correlation Heatmap] Using zero-excluding correlation calculation")
         
         # Create the heatmap with reduced figure size
         plt.figure(figsize=(8, 6), dpi=100)  # Reduced from 10x8
@@ -233,18 +237,23 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         
         annotations = np.vectorize(format_correlation)(correlation_matrix_display)
         
-        # Generate the heatmap without automatic annotations first
+        # Create custom colormap: Green at -1, Blue at 0, Red at 1
+        colors = ['green', 'blue', 'red']  # -1 = green, 0 = blue, 1 = red
+        n_bins = 256  # Smooth gradient
+        custom_cmap = mcolors.LinearSegmentedColormap.from_list('correlation', colors, N=n_bins)
+        
+        # Generate the heatmap with custom colormap
         sns.heatmap(correlation_matrix_display, 
                    annot=annotations,
                    fmt='',  # Use empty format since we're providing custom annotations
-                   cmap='RdYlBu_r', 
+                   cmap=custom_cmap, 
                    vmin=-1, 
                    vmax=1,
                    center=0,
                    square=True, 
-                   cbar_kws={"shrink": .8},
+                   cbar_kws={"shrink": .8, "label": "Correlation"},
                    mask=mask,
-                   annot_kws={'size': 10, 'weight': 'bold'},  # Increase font size and make bold
+                   annot_kws={'size': 8, 'weight': 'bold'},  # Smaller font to prevent overlap
                    )
         
         plt.title('Portfolio Correlation Matrix\n(Daily Returns)', fontsize=16, pad=20)
@@ -267,14 +276,15 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         plt.close()  # Explicitly close figure to free memory
         
         logger.info(f"[Correlation Heatmap] Successfully created heatmap: {heatmap_path}")
-        del correlation_data, correlation_data_filled, correlation_matrix, correlation_matrix_clean, correlation_matrix_display, annotations, mask
+        # Clean up memory
+        del correlation_matrix, correlation_matrix_clean, correlation_matrix_display, annotations, mask
         gc.collect()
         log_memory_usage("[create_correlation_heatmap] AFTER plotting")
         return heatmap_path
         
     except Exception as e:
         logger.error(f"[Correlation Heatmap] Error creating correlation heatmap: {str(e)}", exc_info=True)
-        del correlation_data
+        # Clean up memory on exception
         gc.collect()
         log_memory_usage("[create_correlation_heatmap] AFTER EXCEPTION cleanup")
         return None

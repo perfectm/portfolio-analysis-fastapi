@@ -291,6 +291,12 @@ const Upload: React.FC = () => {
                             </span>
                           </div>
                           <div className="metric">
+                            <label>PCR:</label>
+                            <span>
+                              {result.metrics.pcr ? (result.metrics.pcr * 100).toFixed(1) + '%' : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="metric">
                             <label>Final Account Value:</label>
                             <span>
                               $
@@ -376,6 +382,14 @@ const Upload: React.FC = () => {
                           analysisResults.blended_result.metrics.cagr * 100
                         ).toFixed(2)}
                         %
+                      </span>
+                    </div>
+                    <div className="metric">
+                      <label>PCR:</label>
+                      <span>
+                        {analysisResults.blended_result.metrics.pcr ? 
+                          (analysisResults.blended_result.metrics.pcr * 100).toFixed(1) + '%' : 
+                          'N/A'}
                       </span>
                     </div>
                     <div className="metric">

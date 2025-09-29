@@ -21,7 +21,7 @@ MARGIN_COLUMNS = [
     'Margin Requirement', 'Margin', 'Initial Margin', 'Required Margin', 
     'MarginRequirement', 'InitialMargin', 'RequiredMargin', 'TotalMargin',
     # Common trading platform variations
-    'Maintenance Margin', 'MaintenanceMargin', 'Margin Req', 'MarginReq',
+    'Maintenance Margin', 'MaintenanceMargin', 'Margin Req', 'MarginReq', 'margin req', 'Margin Req.',
     'Buying Power Used', 'BuyingPowerUsed', 'Capital Required', 'CapitalRequired',
     'Position Value', 'PositionValue', 'Notional Value', 'NotionalValue',
     'Risk Requirement', 'RiskRequirement', 'Portfolio Margin', 'PortfolioMargin',

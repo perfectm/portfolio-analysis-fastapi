@@ -10,6 +10,7 @@ import json
 from models import Portfolio, BlendedPortfolio, BlendedPortfolioMapping
 from portfolio_service import PortfolioService
 from portfolio_processor import process_portfolio_data, _convert_numpy_types
+from beta_calculator import calculate_blended_portfolio_beta
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,11 @@ def create_blended_portfolio(
     name: str = None,
     description: str = None,
     date_range_start: str = None,
-    date_range_end: str = None
+    date_range_end: str = None,
+    starting_capital: float = 1000000.0,
+    rf_rate: float = 0.043,
+    sma_window: int = 20,
+    use_trading_filter: bool = True
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Create a blended portfolio with memory optimization"""
     import psutil
@@ -120,10 +125,10 @@ def create_blended_portfolio(
     # Process the blended portfolio
     processed_df, metrics = process_portfolio_data(
         blended_trades,
-        rf_rate=0.05,
-        sma_window=20,
-        use_trading_filter=True,
-        starting_capital=1000000.0,
+        rf_rate=rf_rate,
+        sma_window=sma_window,
+        use_trading_filter=use_trading_filter,
+        starting_capital=starting_capital,
         is_blended=True
     )
     
@@ -135,11 +140,11 @@ def create_blended_portfolio(
         name=name,
         weighting_method='custom',
         weights_json=json.dumps(dict(zip(portfolio_names, weights))),
-        rf_rate=0.05,
-        daily_rf_rate=0.000171,
-        sma_window=20,
-        use_trading_filter=True,
-        starting_capital=1000000.0
+        rf_rate=rf_rate,
+        daily_rf_rate=rf_rate / 252,  # Convert annual to daily
+        sma_window=sma_window,
+        use_trading_filter=use_trading_filter,
+        starting_capital=starting_capital
     )
     
     db.add(blended_portfolio)

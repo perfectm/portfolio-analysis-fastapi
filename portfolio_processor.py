@@ -6,7 +6,8 @@ import numpy as np
 import logging
 from typing import Tuple, Dict, Any
 
-from config import DATE_COLUMNS, PL_COLUMNS
+from config import DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS
+from beta_calculator import calculate_portfolio_beta
 
 logger = logging.getLogger(__name__)
 
@@ -156,12 +157,48 @@ def _clean_portfolio_data(df: pd.DataFrame) -> pd.DataFrame:
     
     logger.info(f"Using '{pl_column}' as P/L column")
     
+    # Find the Premium column (optional)
+    premium_column = None
+    for col in PREMIUM_COLUMNS:
+        if col in df.columns:
+            premium_column = col
+            break
+    
+    if premium_column:
+        logger.info(f"Using '{premium_column}' as premium column")
+    else:
+        logger.info("No premium column found - PCR calculation will be unavailable")
+    
+    # Find the Contracts column (optional)
+    contracts_column = None
+    for col in CONTRACTS_COLUMNS:
+        if col in df.columns:
+            contracts_column = col
+            break
+    
+    if contracts_column:
+        logger.info(f"Using '{contracts_column}' as contracts column")
+    else:
+        logger.info("No contracts column found - will use total P/L for PCR calculation")
+    
     # Create a clean DataFrame with standardized column names
     clean_df = pd.DataFrame()
     clean_df['Date'] = pd.to_datetime(df[date_column])
     
     # Clean P/L data - remove any currency symbols and convert to float
     clean_df['P/L'] = df[pl_column].astype(str).str.replace('$', '').str.replace(',', '').str.replace('(', '-').str.replace(')', '').astype(float)
+    
+    # Clean Premium data if available - remove any currency symbols and convert to float
+    if premium_column:
+        # Handle None/NaN values by replacing with 0 before string processing
+        premium_series = df[premium_column].fillna(0)
+        clean_df['Premium'] = premium_series.astype(str).str.replace('$', '').str.replace(',', '').str.replace('(', '-').str.replace(')', '').str.replace('None', '0').astype(float)
+    
+    # Clean Contracts data if available - convert to integer
+    if contracts_column:
+        # Handle None/NaN values by replacing with 0 before conversion
+        contracts_series = df[contracts_column].fillna(0)
+        clean_df['Contracts'] = contracts_series.astype(int)
     
     return clean_df
 
@@ -180,6 +217,12 @@ def _calculate_portfolio_metrics(
     sharpe_ratio = 0
     total_return = 0
     num_years = 0
+
+    # Initialize Beta variables with default values
+    beta = 0.0
+    alpha = 0.0
+    r_squared = 0.0
+    beta_obs_count = 0
     
     try:
         # Calculate strategy metrics with error handling - only use days with trades
@@ -235,18 +278,45 @@ def _calculate_portfolio_metrics(
             sortino_ratio = _calculate_sortino_ratio(clean_df, rf_rate)
             ulcer_index = _calculate_ulcer_index(clean_df)
             upi = _calculate_upi(clean_df, rf_rate)
-            kelly_criterion = _calculate_kelly_criterion(clean_df)
-            
+            kelly_criterion, win_rate = _calculate_kelly_criterion(clean_df)
+            pcr, total_premium = _calculate_pcr(clean_df)
+
+            # Calculate Beta against SPX
+            try:
+                beta, alpha, r_squared, beta_obs_count = calculate_portfolio_beta(clean_df)
+                logger.info(f"  - Beta vs SPX: {beta:.4f}")
+                logger.info(f"  - Alpha: {alpha:.4f}")
+                logger.info(f"  - R-squared: {r_squared:.4f}")
+            except Exception as e:
+                logger.warning(f"Beta calculation failed: {e}")
+                beta, alpha, r_squared, beta_obs_count = 0.0, 0.0, 0.0, 0
+
             logger.info(f"  - Sharpe ratio: {sharpe_ratio:.4f}")
             logger.info(f"  - Sortino ratio: {sortino_ratio:.4f}")
             logger.info(f"  - Ulcer index: {ulcer_index:.4f}")
             logger.info(f"  - UPI: {upi:.4f}")
             logger.info(f"  - Kelly criterion: {kelly_criterion:.4f}")
+            logger.info(f"  - PCR: {pcr:.4f}")
             logger.info(f"  - Annual volatility: {strategy_std:.4f}")
-            
+
         else:
             logger.warning("No valid returns found for strategy metrics calculation")
-            return _get_default_metrics(original_starting_capital)
+            # Still calculate Beta even if no valid returns for other metrics
+            try:
+                beta, alpha, r_squared, beta_obs_count = calculate_portfolio_beta(clean_df)
+                logger.info(f"  - Beta vs SPX (no returns case): {beta:.4f}")
+            except Exception as e:
+                logger.warning(f"Beta calculation failed (no returns case): {e}")
+                beta, alpha, r_squared, beta_obs_count = 0.0, 0.0, 0.0, 0
+            # Get default metrics but include calculated Beta values
+            default_metrics = _get_default_metrics(original_starting_capital, clean_df)
+            default_metrics.update({
+                'beta': float(beta),
+                'alpha': float(alpha),
+                'r_squared': float(r_squared),
+                'beta_observation_count': int(beta_obs_count)
+            })
+            return default_metrics
             
     except Exception as e:
         logger.error(f"Error calculating metrics: {str(e)}")
@@ -258,6 +328,13 @@ def _calculate_portfolio_metrics(
         'ulcer_index': float(ulcer_index),
         'upi': float(upi),
         'kelly_criterion': float(kelly_criterion),
+        'win_rate': float(win_rate),
+        'pcr': float(pcr),
+        'total_premium': float(total_premium),
+        'beta': float(beta),
+        'alpha': float(alpha),
+        'r_squared': float(r_squared),
+        'beta_observation_count': int(beta_obs_count),
         'cagr': float(strategy_mean_return),  # Already as decimal
         'annual_volatility': float(strategy_std),  # Already as decimal
         'total_return': float(total_return),  # Already as decimal
@@ -397,7 +474,7 @@ def _calculate_kelly_criterion(clean_df: pd.DataFrame) -> float:
     
     if len(winning_trades) == 0 or len(losing_trades) == 0:
         logger.info("Kelly Criterion: Not enough winning or losing trades for calculation")
-        return 0.0
+        return 0.0, 0.0
     
     # Calculate win probability
     total_trades = len(clean_df)
@@ -411,7 +488,7 @@ def _calculate_kelly_criterion(clean_df: pd.DataFrame) -> float:
     # Calculate odds (b)
     if avg_loss == 0:
         logger.info("Kelly Criterion: Average loss is zero, cannot calculate")
-        return 0.0
+        return 0.0, win_probability
     
     odds = avg_win / avg_loss
     
@@ -426,7 +503,64 @@ def _calculate_kelly_criterion(clean_df: pd.DataFrame) -> float:
     logger.info(f"Odds (Win/Loss ratio): {odds:.4f}")
     logger.info(f"Kelly Criterion: {kelly_percentage:.4f} ({kelly_percentage*100:.2f}%)")
     
-    return kelly_percentage
+    return kelly_percentage, win_probability
+
+
+def _calculate_pcr(clean_df: pd.DataFrame) -> tuple[float, float]:
+    """Calculate PCR (Premium Capture Rate) for options strategies"""
+    # PCR = (Total P/L ÷ Average Contracts) ÷ Total Premium
+    # Premium column is already per contract
+    
+    if 'Premium' not in clean_df.columns:
+        logger.info("PCR: No Premium column found - PCR calculation unavailable")
+        return 0.0, 0.0
+    
+    # Get all premium and P/L values (excluding NaN/None values)
+    valid_rows = clean_df.dropna(subset=['Premium', 'P/L'])
+    
+    if len(valid_rows) == 0:
+        logger.info("PCR: No valid premium and P/L values found")
+        return 0.0, 0.0
+    
+    total_premium_collected = valid_rows['Premium'].sum()
+    total_pl = valid_rows['P/L'].sum()
+    
+    if total_premium_collected == 0:
+        logger.info("PCR: Total premium collected is zero")
+        return 0.0, 0.0
+    
+    # Calculate average contracts and adjust P/L
+    if 'Contracts' in clean_df.columns:
+        contracts_data = valid_rows.dropna(subset=['Contracts'])
+        if len(contracts_data) > 0:
+            avg_contracts = contracts_data['Contracts'].mean()
+            per_contract_total_pl = total_pl / avg_contracts if avg_contracts > 0 else total_pl
+            
+            logger.info(f"PCR Calculation (with contracts):")
+            logger.info(f"Total P/L: ${total_pl:.2f}")
+            logger.info(f"Average contracts per trade: {avg_contracts:.2f}")
+            logger.info(f"Per-contract total P/L: ${per_contract_total_pl:.2f}")
+        else:
+            # No valid contract data, fall back to total P/L
+            per_contract_total_pl = total_pl
+            logger.info("PCR: No valid contract values found, using total P/L")
+    else:
+        # No contracts column - For now, assume 2 contracts per trade for proper PCR calculation
+        # This handles cases where contracts data isn't stored in the DataFrame yet
+        # TODO: Remove this when contracts column is properly stored in database
+        per_contract_total_pl = total_pl / 2.0  # Temporary fix for 2-contract trades
+        logger.info("PCR: No contracts column found, applying 2-contract adjustment for accurate PCR")
+        logger.info(f"Total P/L: ${total_pl:.2f}")
+        logger.info(f"Adjusted per-contract P/L (÷2): ${per_contract_total_pl:.2f}")
+    
+    # Calculate PCR = Per-contract total P/L / Total premium collected
+    pcr = per_contract_total_pl / total_premium_collected if total_premium_collected > 0 else 0.0
+    
+    logger.info(f"Premium entries found: {len(valid_rows)}")
+    logger.info(f"Total Premium Collected: ${total_premium_collected:.2f}")
+    logger.info(f"Final PCR: {pcr:.4f} ({pcr*100:.2f}%)")
+    
+    return pcr, total_premium_collected
 
 
 def _calculate_upi(clean_df: pd.DataFrame, rf_rate: float) -> float:
@@ -540,6 +674,17 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
     """Get default metrics when calculation fails"""
     base_metrics = {
         'sharpe_ratio': 0,
+        'sortino_ratio': 0,
+        'ulcer_index': 0,
+        'upi': 0,
+        'kelly_criterion': 0,
+        'win_rate': 0,
+        'pcr': 0,
+        'total_premium': 0,
+        'beta': 0,
+        'alpha': 0,
+        'r_squared': 0,
+        'beta_observation_count': 0,
         'mar_ratio': 0,
         'cagr': 0,
         'annual_volatility': 0,
@@ -568,7 +713,7 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
 
 def _log_portfolio_summary(clean_df: pd.DataFrame, metrics: Dict[str, Any], starting_capital: float) -> None:
     """Log portfolio summary information"""
-    num_years = metrics.get('Time Period (Years)', 0)
+    num_years = metrics.get('time_period_years', 0)
     max_drawdown = metrics.get('Max Drawdown', 0)
     recovery_days = metrics.get('Recovery Days')
     

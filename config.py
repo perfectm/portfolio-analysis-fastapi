@@ -24,6 +24,8 @@ DEFAULT_STARTING_CAPITAL = 1000000.0
 # Column name mappings
 DATE_COLUMNS = ['Date Opened', 'Date', 'Trade Date', 'Entry Date', 'Open Date', 'OpenDate', 'FinalTradeClosedDate']
 PL_COLUMNS = ['P/L', 'PnL', 'Profit/Loss', 'Net P/L', 'Realized P/L', 'Total P/L', 'TotalGrossProfitLoss', 'TotalNetProfitLoss']
+PREMIUM_COLUMNS = ['Premium', 'Premium Collected', 'Premium Received', 'Initial Premium', 'Option Premium']
+CONTRACTS_COLUMNS = ['No. of Contracts', 'Contracts', 'Contract Count', 'Number of Contracts', 'Qty', 'Quantity']
 
 # Monte Carlo simulation settings
 DEFAULT_SIMULATIONS = 1000

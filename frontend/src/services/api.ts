@@ -509,6 +509,21 @@ export const portfolioAPI = {
       body: JSON.stringify({ portfolio_ids: portfolioIds }),
     });
   },
+
+  // Optimize portfolio weights for target profit
+  optimizeForProfit: async (portfolioIds: number[], targetAnnualProfit: number): Promise<any> => {
+    return apiCall('/api/profit-optimization/optimize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({ 
+        portfolio_ids: portfolioIds,
+        target_annual_profit: targetAnnualProfit 
+      }),
+    });
+  },
 };
 
 // Margin API methods

@@ -201,15 +201,15 @@ export default function Analysis() {
         {/* Additional Metrics */}
         <MetricCard
           title="Total Premium"
-          value={Math.abs(metrics.total_pl || 0)}
+          value={metrics.total_premium || 0}
           format="currency"
-          color="gray"
+          color="blue"
         />
         <MetricCard
-          title="Capture Rate"
-          value={(metrics.total_return || 0)}
+          title="PCR"
+          value={metrics.pcr || 0}
           format="percentage"
-          color="gray"
+          color="orange"
         />
         <MetricCard
           title="Starting Capital"
@@ -272,6 +272,26 @@ export default function Analysis() {
           value={metrics.max_drawdown_date || "N/A"}
           format="date"
           color="gray"
+        />
+
+        {/* Beta Metrics - Portfolio vs S&P 500 */}
+        <MetricCard
+          title="Beta (vs SPX)"
+          value={metrics.beta || 0}
+          format="number"
+          color={metrics.beta > 1 ? "red" : metrics.beta > 0.5 ? "orange" : "green"}
+        />
+        <MetricCard
+          title="Alpha"
+          value={metrics.alpha || 0}
+          format="percentage"
+          color={metrics.alpha > 0 ? "green" : "red"}
+        />
+        <MetricCard
+          title="R-Squared"
+          value={metrics.r_squared || 0}
+          format="percentage"
+          color="blue"
         />
       </div>
 

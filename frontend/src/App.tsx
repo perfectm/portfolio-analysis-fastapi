@@ -14,6 +14,9 @@ const Portfolios = React.lazy(() => import("./pages/Portfolios"));
 const Analysis = React.lazy(() => import("./pages/Analysis"));
 const MarginManagement = React.lazy(() => import("./pages/MarginManagement"));
 const RegimeAnalysisFixed = React.lazy(() => import("./pages/RegimeAnalysisFixed"));
+const RobustnessTest = React.lazy(() => import("./pages/RobustnessTest"));
+const ProfitOptimization = React.lazy(() => import("./pages/ProfitOptimization"));
+const OptimizationHistory = React.lazy(() => import("./pages/OptimizationHistory"));
 
 // Loading component for lazy-loaded pages
 const PageLoader: React.FC = () => (
@@ -84,6 +87,9 @@ const AppContent: React.FC = () => {
             <Route path="/analysis" element={<Analysis />} />
             <Route path="/margin" element={<MarginManagement />} />
             <Route path="/regime" element={<RegimeAnalysisFixed />} />
+            <Route path="/robustness" element={<RobustnessTest />} />
+            <Route path="/profit-optimization" element={<ProfitOptimization />} />
+            <Route path="/optimization-history" element={<OptimizationHistory />} />
             <Route path="*" element={<Home />} />
           </Routes>
         </Suspense>

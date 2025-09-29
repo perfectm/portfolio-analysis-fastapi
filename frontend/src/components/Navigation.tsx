@@ -32,7 +32,9 @@ const Navigation: React.FC = () => {
     { path: "/upload", label: "Upload" },
     { path: "/portfolios", label: "Portfolios" },
     { path: "/margin", label: "Margin Management" },
-    { path: "/regime", label: "Regime Analysis" },
+    { path: "/robustness", label: "Robustness" },
+    { path: "/profit-optimization", label: "Profit Optimization" },
+    { path: "/optimization-history", label: "Optimization History" },
   ];
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {

@@ -1023,7 +1023,7 @@ class PortfolioOptimizer:
             # No good result found - provide more specific error messages
             error_message = result.message
             if "Maximum number of iterations" in str(result.message):
-                error_message = f"Optimization timeout after {result.nit} iterations with {num_portfolios} portfolios. Try with fewer portfolios (≤6 recommended) or use 'scipy' method."
+                error_message = f"Optimization timeout after {result.nit} iterations with {num_portfolios} portfolios. Try with fewer portfolios (≤10 recommended) or use 'scipy' method."
             elif "convergence" in str(result.message).lower():
                 error_message = f"Failed to converge with {num_portfolios} portfolios. Consider reducing portfolio count or trying 'grid_search' method."
             

@@ -12,8 +12,9 @@ import logging
 import os
 import psutil
 
-from models import Portfolio, PortfolioData, AnalysisResult, AnalysisPlot, BlendedPortfolio, BlendedPortfolioMapping
-from config import DATE_COLUMNS, PL_COLUMNS
+from models import Portfolio, PortfolioData, AnalysisResult, AnalysisPlot, BlendedPortfolio, BlendedPortfolioMapping, PortfolioMarginData
+from config import DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS
+from margin_service import MarginService, MARGIN_COLUMNS
 from portfolio_processor import process_portfolio_data
 
 logger = logging.getLogger(__name__)
@@ -101,14 +102,9 @@ class PortfolioService:
         Create a new portfolio record
         """
         try:
-            # Calculate file hash for duplicate detection
+            # Calculate file hash for tracking (but always create new portfolio)
             file_hash = PortfolioService.calculate_file_hash(file_content)
-            
-            # Check if portfolio with same hash already exists
-            existing = db.query(Portfolio).filter(Portfolio.file_hash == file_hash).first()
-            if existing:
-                logger.info(f"Portfolio with hash {file_hash} already exists: {existing.name}")
-                return existing
+            logger.info(f"Creating new portfolio with hash {file_hash} (duplicate detection disabled)")
             
             # Find the date column using the same logic as portfolio_processor
             date_column = None
@@ -200,10 +196,48 @@ class PortfolioService:
                 logger.error(f"Available columns are: {df.columns.tolist()}")
                 raise ValueError(f"No P/L column found. Expected one of: {PL_COLUMNS}")
             
+            # Find the Premium column (optional)
+            premium_column = None
+            for col in PREMIUM_COLUMNS:
+                if col in df.columns:
+                    premium_column = col
+                    break
+            
+            # Find the Margin column (optional)
+            margin_column = None
+            logger.info(f"[MARGIN DEBUG] Available columns in CSV: {list(df.columns)}")
+            
+            for col in MARGIN_COLUMNS:
+                if col in df.columns:
+                    margin_column = col
+                    logger.info(f"[MARGIN DEBUG] Found margin column: {col}")
+                    break
+            
+            # Find the Contracts column (optional)
+            contracts_column = None
+            for col in CONTRACTS_COLUMNS:
+                if col in df.columns:
+                    contracts_column = col
+                    logger.info(f"Found contracts column: {col}")
+                    break
+            
+            if margin_column is None:
+                logger.warning(f"[MARGIN DEBUG] No margin column found. Searched for: {MARGIN_COLUMNS[:10]}...")
+            
             logger.info(f"Using '{date_column}' as date column and '{pl_column}' as P/L column")
+            if premium_column:
+                logger.info(f"Using '{premium_column}' as premium column")
+            else:
+                logger.info("No premium column found in CSV - PCR calculation will be unavailable")
+                
+            if margin_column:
+                logger.info(f"Using '{margin_column}' as margin column")
+            else:
+                logger.info("No margin column found in CSV - margin calculations will be unavailable")
             
             # Prepare data for bulk insert
             data_records = []
+            margin_records = []  # For storing margin data separately
             cumulative_pl = 0
             starting_capital = 1000000  # Default starting capital
             
@@ -223,6 +257,32 @@ class PortfolioService:
                     logger.warning(f"Could not parse date value: {row[date_column]}, skipping row {idx}")
                     continue
                 
+                # Parse premium value (optional)
+                premium_value = None
+                if premium_column and pd.notna(row[premium_column]):
+                    try:
+                        premium_str = str(row[premium_column]).replace('$', '').replace(',', '').replace('(', '-').replace(')', '')
+                        premium_value = float(premium_str)
+                    except (ValueError, TypeError):
+                        logger.warning(f"Could not parse premium value: {row[premium_column]}, using None for row {idx}")
+                
+                # Parse margin value (optional)
+                margin_value = None
+                if margin_column and pd.notna(row[margin_column]):
+                    try:
+                        margin_str = str(row[margin_column]).replace('$', '').replace(',', '').replace('(', '-').replace(')', '')
+                        margin_value = float(abs(float(margin_str)))  # Ensure positive value for margin requirements
+                    except (ValueError, TypeError):
+                        logger.warning(f"Could not parse margin value: {row[margin_column]}, using None for row {idx}")
+                
+                # Parse contracts value (optional)
+                contracts_value = None
+                if contracts_column and pd.notna(row[contracts_column]):
+                    try:
+                        contracts_value = int(float(row[contracts_column]))  # Convert to int for number of contracts
+                    except (ValueError, TypeError):
+                        logger.warning(f"Could not parse contracts value: {row[contracts_column]}, using None for row {idx}")
+                
                 cumulative_pl += pl_value
                 account_value = starting_capital + cumulative_pl
                 
@@ -236,15 +296,41 @@ class PortfolioService:
                     portfolio_id=portfolio_id,
                     date=date_value,
                     pl=pl_value,
+                    premium=premium_value,
+                    contracts=contracts_value,
                     cumulative_pl=cumulative_pl,
                     account_value=account_value,
                     daily_return=daily_return,
                     row_number=idx + 1
                 )
                 data_records.append(data_record)
+                
+                # Create margin record if margin data exists
+                if margin_value is not None:
+                    margin_record = PortfolioMarginData(
+                        portfolio_id=portfolio_id,
+                        date=date_value,
+                        margin_requirement=margin_value,
+                        margin_type='initial',  # Default type
+                        row_number=idx + 1
+                    )
+                    margin_records.append(margin_record)
             
-            # Bulk insert
+            # Bulk insert portfolio data
             db.bulk_save_objects(data_records)
+            
+            # Bulk insert margin data if available
+            if margin_records:
+                db.bulk_save_objects(margin_records)
+                logger.info(f"Stored {len(margin_records)} margin records for portfolio {portfolio_id}")
+                
+                # Calculate and store daily margin aggregates
+                try:
+                    MarginService.calculate_daily_aggregates(db, starting_capital)
+                    logger.info("Updated daily margin aggregates")
+                except Exception as e:
+                    logger.warning(f"Error calculating margin aggregates: {e}")
+            
             db.commit()
             
             # Save Parquet file after storing data
@@ -340,6 +426,7 @@ class PortfolioService:
             chunk_df = pd.DataFrame([{
                 'Date': record.date,
                 'P/L': record.pl,
+                'Premium': record.premium,
                 'Cumulative P/L': record.cumulative_pl,
                 'Account_Value': record.account_value,
                 'Daily_Return': record.daily_return
@@ -409,7 +496,11 @@ class PortfolioService:
                 final_account_value=metrics.get('final_account_value'),
                 max_drawdown=metrics.get('max_drawdown'),
                 max_drawdown_percent=metrics.get('max_drawdown_percent'),
-                max_drawdown_date=metrics.get('max_drawdown_date')
+                max_drawdown_date=metrics.get('max_drawdown_date'),
+                beta=metrics.get('beta'),
+                alpha=metrics.get('alpha'),
+                r_squared=metrics.get('r_squared'),
+                beta_observation_count=metrics.get('beta_observation_count')
             )
             
             db.add(analysis_result)

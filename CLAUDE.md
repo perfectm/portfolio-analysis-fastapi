@@ -56,15 +56,22 @@ The backend uses FastAPI with a modular router architecture for better code orga
 - **portfolio_blender.py**: Multi-portfolio blending and weighting logic
 - **portfolio_optimizer.py**: Advanced weight optimization algorithms
 - **plotting.py**: Matplotlib/Seaborn chart generation
+- **correlation_utils.py**: Zero-excluding correlation calculations for financial time series
+- **robustness_service.py**: Background robustness testing service and data models
+- **profit_optimizer.py**: Profit optimization and contract sizing algorithms
+- **beta_calculator.py**: Beta, alpha, and R-squared calculations vs S&P 500
+- **margin_service.py**: Margin requirement processing and validation
 
 #### Router Modules (`/routers/`)
 - **auth.py**: User authentication and registration
 - **upload.py**: File upload and processing endpoints
 - **portfolio.py**: Portfolio management operations
 - **strategies.py**: Strategy listing and analysis
-- **optimization.py**: Portfolio weight optimization
+- **optimization.py**: Portfolio weight optimization and analysis endpoints
 - **regime.py**: Market regime analysis
 - **margin.py**: Margin management functionality
+- **robustness.py**: Portfolio robustness testing with random period analysis
+- **profit_optimization.py**: Profit optimization and contract sizing endpoints
 
 ### Frontend Structure (React + TypeScript + Vite + Material-UI)
 Modern React application with Material-UI components and Recharts for data visualization:
@@ -73,10 +80,13 @@ Modern React application with Material-UI components and Recharts for data visua
 - **src/pages/**: Main application pages with advanced features
   - **Home.tsx**: Landing page and overview
   - **Upload.tsx**: File upload interface
-  - **Portfolios.tsx**: Interactive portfolio analysis with date range sliders
-  - **Analysis.tsx**: Comprehensive analysis results
+  - **Portfolios.tsx**: Interactive portfolio analysis with date range sliders and strategy editing
+  - **Analysis.tsx**: Comprehensive analysis results with beta metrics
   - **RegimeAnalysis.tsx**: Market regime analysis interface
-  - **MarginManagement.tsx**: Margin calculation and management
+  - **MarginManagement.tsx**: Margin calculation and management with automatic extraction from CSV
+  - **RobustnessTest.tsx**: Portfolio robustness testing with random period analysis
+  - **ProfitOptimization.tsx**: Profit optimization and contract sizing interface
+  - **OptimizationHistory.tsx**: Historical optimization results and tracking
 - **src/services/api.ts**: Axios-based API client with authentication
 - **Frontend routes**: React Router with protected routes and catch-all backend routing
 
@@ -116,10 +126,23 @@ Modern React application with Material-UI components and Recharts for data visua
 - `POST /api/margin/calculate`: Calculate margin requirements and portfolio multipliers
 - `GET /api/margin/requirements`: Get margin requirement configurations
 
+### Robustness Testing
+- `POST /api/robustness/test`: Create new robustness test with random period analysis
+- `GET /api/robustness/test/{test_id}`: Get robustness test results and status
+- `GET /api/robustness/tests`: List all robustness tests for user
+
+### Profit Optimization
+- `POST /api/profit-optimization/optimize`: Optimize portfolio for maximum profit with contract sizing
+- `GET /api/profit-optimization/history`: Get historical optimization results
+- `GET /api/profit-optimization/{optimization_id}`: Get specific optimization result
+
 ### File Processing
 - **Supported formats**: CSV files with date and P/L columns
 - **Date columns**: 'Date Opened', 'Date', 'Trade Date', 'Entry Date', 'Open Date'
 - **P/L columns**: 'P/L', 'PnL', 'Profit/Loss', 'Net P/L', 'Realized P/L', 'Total P/L'
+- **Premium columns**: 'Premium', 'Premium Collected', 'Premium Received', 'Initial Premium'
+- **Contracts columns**: 'No. of Contracts', 'Contracts', 'Contract Count', 'Quantity'
+- **Margin columns**: 'Margin', 'Margin Requirement', 'Initial Margin', 'Required Margin'
 - **Charts generated**: Combined analysis plots, correlation heatmaps, Monte Carlo simulations
 
 ## Interactive UI Features
@@ -130,6 +153,8 @@ Modern React application with Material-UI components and Recharts for data visua
 - **Persistent User Preferences**: localStorage-based persistence for portfolio selections and analysis parameters
 - **Material-UI Dark/Light Theme**: Responsive theme switching with proper contrast ratios
 - **Real-time Chart Updates**: Recharts integration with dynamic data filtering
+- **Strategy Editing**: Direct inline editing of portfolio strategy/category names in table view
+- **URL-based State Management**: Query parameters for deep linking to specific portfolios and date ranges
 
 ### Portfolio Selection & Weighting
 - **Checkbox-based Portfolio Selection**: Multi-select interface with visual feedback
@@ -191,7 +216,7 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **Grid Search**: Exhaustive search, thorough but slower
 
 ### Usage
-1. Select 2-6 portfolios in the frontend
+1. Select 2-20 portfolios in the frontend
 2. Click "🎯 Optimize Weights" button
 3. Algorithm finds weights that maximize return/drawdown ratio
 4. Optimal weights are automatically applied
@@ -204,6 +229,18 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **Bonus**: Additional scoring for high Sharpe ratios
 
 ## Important Development Notes
+
+### Starting Capital Parameter Flow
+- **Critical**: Both individual and blended portfolio analysis respect user-provided starting capital from UI
+- **Backend Logic**: User starting capital takes precedence over margin-based calculations
+- **Function Signatures**: All portfolio processing functions accept `starting_capital` parameter
+- **Default Fallback**: System defaults to margin-based capital calculation only when user input is invalid
+
+### Correlation Analysis Architecture
+- **Zero-Exclusion**: Custom correlation calculations exclude zero P&L values (non-trading days)
+- **Module**: `correlation_utils.py` provides specialized financial correlation functions
+- **Implementation**: Uses `calculate_correlation_excluding_zeros()` instead of pandas `.corr()`
+- **Color Scheme**: Correlation heatmaps use Red=1, Blue=0, Green=-1 color mapping
 
 ### React Component Performance
 - **Slider Components**: Use cached calculations for `maxSliderValue` to prevent render loops
@@ -224,6 +261,12 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **Memory Management**: Explicit garbage collection for large DataFrame operations
 - **File Uploads**: Streaming file processing for large CSV files
 - **Monte Carlo**: Optimized simulation algorithms with progress tracking
+- **Background Jobs**: Robustness testing runs asynchronously with progress tracking
+
+### Maximum Drawdown Calculations
+- **Standard Definition**: Calculated as percentage decline from highest peak value reached, not from starting capital
+- **Formula**: `(Account Value - Rolling Peak) / Rolling Peak`
+- **Financial Industry Standard**: This approach properly measures peak-to-trough decline as percentage of peak
 
 ### Code Quality
 - **TypeScript**: Strict type checking enabled for frontend components

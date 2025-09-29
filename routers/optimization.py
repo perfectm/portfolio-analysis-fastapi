@@ -6,11 +6,14 @@ from database import get_db
 from portfolio_service import PortfolioService
 from portfolio_blender import create_blended_portfolio, process_individual_portfolios
 from plotting import create_plots, create_correlation_heatmap, create_monte_carlo_simulation
+from correlation_utils import create_correlation_data_for_plotting, calculate_correlation_matrix_from_dataframe
 from models import PortfolioMarginData
 from sqlalchemy import func
 import gc
 import pandas as pd
+import numpy as np
 import os
+from config import UPLOAD_FOLDER
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -90,6 +93,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         weighting_method = body.get("weighting_method", "equal")
         weights = body.get("weights", None)
         user_starting_capital = body.get("starting_capital", 1000000.0)
+        rf_rate = body.get("rf_rate", 0.043)  # Default to 4.3% if not provided
+        sma_window = body.get("sma_window", 20)  # Default to 20 if not provided
+        use_trading_filter = body.get("use_trading_filter", True)  # Default to True if not provided
         date_range_start = body.get("date_range_start", None)
         date_range_end = body.get("date_range_end", None)
         if not portfolio_ids:
@@ -110,13 +116,17 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         else:
             portfolio_weights = [1.0] * len(portfolio_ids)
         
-        starting_capital = calculate_starting_capital_from_margins(db, portfolio_ids, portfolio_weights)
+        # Use user-provided starting capital if available, otherwise calculate from margins
+        margin_based_capital = calculate_starting_capital_from_margins(db, portfolio_ids, portfolio_weights)
+        starting_capital = user_starting_capital if user_starting_capital and user_starting_capital > 0 else margin_based_capital
         
         logger.info(f"[Weighted Analysis] Analyzing portfolios: {portfolio_ids}")
         logger.info(f"[Weighted Analysis] Weighting method: {weighting_method}")
         logger.info(f"[Weighted Analysis] Weights: {weights}")
         logger.info(f"[Weighted Analysis] User provided starting capital: ${user_starting_capital:,.2f}")
-        logger.info(f"[Weighted Analysis] Margin-based starting capital: ${starting_capital:,.2f}")
+        logger.info(f"[Weighted Analysis] Margin-based starting capital: ${margin_based_capital:,.2f}")
+        logger.info(f"[Weighted Analysis] Using starting capital: ${starting_capital:,.2f}")
+        logger.info(f"[Weighted Analysis] RF Rate: {rf_rate:.4f}, SMA Window: {sma_window}, Trading Filter: {use_trading_filter}")
         
         # Re-determine portfolio_weights for the actual analysis (this logic was duplicated)
         portfolio_weights = None
@@ -162,9 +172,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
-                    result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                    result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
                     logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
                 else:
@@ -178,9 +188,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 })
             else:
                 # Run process_individual_portfolios for this portfolio only
-                result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
                 logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                 individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
@@ -250,7 +260,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     name=f"Weighted Blended Portfolio ({len(portfolios_data)} strategies)",
                     description=f"Weighted blend of {len(portfolios_data)} portfolios",
                     date_range_start=date_range_start,
-                    date_range_end=date_range_end
+                    date_range_end=date_range_end,
+                    starting_capital=starting_capital,
+                    rf_rate=rf_rate,
+                    sma_window=sma_window,
+                    use_trading_filter=use_trading_filter
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []
@@ -276,18 +290,53 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         logger.error(f"[Weighted Analysis] Error creating plots for weighted blended portfolio: {str(plot_error)}")
                     try:
                         logger.info("[Weighted Analysis] Creating correlation heatmap")
-                        # Create correlation data from individual portfolios only
+                        # Create correlation data from individual portfolios using proper correlation approach
                         correlation_data = pd.DataFrame()
                         portfolio_names = []
                         
-                        # Only use individual portfolio data for correlation
+                        # Prepare portfolio data for correlation calculation
                         for i, (name, df) in enumerate(portfolios_data):
-                            # Calculate daily returns for each portfolio
-                            df['Daily Return'] = df['P/L'] / starting_capital
-                            correlation_data[name] = df['Daily Return']
-                            portfolio_names.append(name)
+                            # Sum P/L by date first (handle multiple trades per day)
+                            if 'Date' in df.columns:
+                                df_copy = df.copy()
+                                df_copy['Date'] = pd.to_datetime(df_copy['Date'])
+                                # Group by date and sum P/L values
+                                daily_pnl_sum = df_copy.groupby('Date')['P/L'].sum()
+                                daily_pnl_sum.name = name
+                                
+                                # Join with correlation_data using outer join to align dates
+                                if correlation_data.empty:
+                                    correlation_data = daily_pnl_sum.to_frame()
+                                else:
+                                    correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
+                                
+                                portfolio_names.append(name)
+                            else:
+                                # Fallback if no Date column - assume data is already daily
+                                daily_pnl_sum = df['P/L'].fillna(0)
+                                daily_pnl_sum.name = name
+                                
+                                if correlation_data.empty:
+                                    correlation_data = daily_pnl_sum.to_frame()
+                                else:
+                                    correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
+                                
+                                portfolio_names.append(name)
+                        
+                        # Fill NaN values with 0 for days where portfolios don't have trades
+                        correlation_data = correlation_data.fillna(0)
                         
                         if not correlation_data.empty and len(correlation_data.columns) >= 2:
+                            # Save correlation data to CSV for debugging
+                            debug_csv_path = os.path.join(UPLOAD_FOLDER, 'plots', 'correlation_debug_data.csv')
+                            correlation_data.to_csv(debug_csv_path, index=True)
+                            logger.info(f"[Weighted Analysis] Correlation debug data saved to: {debug_csv_path}")
+                            logger.info(f"[Weighted Analysis] Correlation data shape: {correlation_data.shape}")
+                            # Calculate preview using new correlation method
+                            value_columns = list(correlation_data.columns)
+                            correlation_matrix_preview = calculate_correlation_matrix_from_dataframe(correlation_data, value_columns)
+                            logger.info(f"[Weighted Analysis] Correlation matrix preview:\n{correlation_matrix_preview}")
+                            
                             logger.info(f"[Weighted Analysis] Creating correlation heatmap with {len(portfolio_names)} portfolios")
                             heatmap_path = create_correlation_heatmap(correlation_data, portfolio_names)
                             if heatmap_path:
@@ -341,7 +390,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             'annual_volatility': float(blended_metrics.get('annual_volatility', 0)),
                             'mar_ratio': float(blended_metrics.get('mar_ratio', 0)),
                             'time_period_years': float(blended_metrics.get('time_period_years', 0)),
-                            'number_of_trading_days': int(blended_metrics.get('number_of_trading_days', 0))
+                            'number_of_trading_days': int(blended_metrics.get('number_of_trading_days', 0)),
+                            'beta': float(blended_metrics.get('beta', 0)),
+                            'alpha': float(blended_metrics.get('alpha', 0)),
+                            'r_squared': float(blended_metrics.get('r_squared', 0)),
+                            'beta_observation_count': int(blended_metrics.get('beta_observation_count', 0))
                         }
                     }
                     logger.info("[Weighted Analysis] Weighted blended portfolio created successfully")
@@ -370,7 +423,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             },
             "starting_capital_used": starting_capital,
             "user_starting_capital": user_starting_capital,
-            "margin_based_calculation": True
+            "margin_based_calculation": starting_capital == margin_based_capital
         }
     except Exception as e:
         logger.error(f"[Weighted Analysis] Error analyzing portfolios: {str(e)}", exc_info=True)
@@ -789,6 +842,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         body = await request.json()
         portfolio_ids = body.get("portfolio_ids", [])
         user_starting_capital = body.get("starting_capital", 1000000.0)
+        rf_rate = body.get("rf_rate", 0.043)  # Default to 4.3% if not provided
+        sma_window = body.get("sma_window", 20)  # Default to 20 if not provided
+        use_trading_filter = body.get("use_trading_filter", True)  # Default to True if not provided
         date_range_start = body.get("date_range_start", None)
         date_range_end = body.get("date_range_end", None)
         if not portfolio_ids:
@@ -796,13 +852,15 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         if user_starting_capital <= 0:
             return {"success": False, "error": "Starting capital must be greater than 0"}
         
-        # Calculate starting capital based on maximum daily margin requirements (equal weights for basic analysis)
+        # Use user-provided starting capital if available, otherwise calculate from margins (equal weights for basic analysis)
         equal_weights = [1.0] * len(portfolio_ids)
-        starting_capital = calculate_starting_capital_from_margins(db, portfolio_ids, equal_weights)
+        margin_based_capital = calculate_starting_capital_from_margins(db, portfolio_ids, equal_weights)
+        starting_capital = user_starting_capital if user_starting_capital and user_starting_capital > 0 else margin_based_capital
         
         logger.info(f"[Analyze Portfolios] Analyzing portfolios: {portfolio_ids}")
         logger.info(f"[Analyze Portfolios] User provided starting capital: ${user_starting_capital:,.2f}")
-        logger.info(f"[Analyze Portfolios] Margin-based starting capital: ${starting_capital:,.2f}")
+        logger.info(f"[Analyze Portfolios] Margin-based starting capital: ${margin_based_capital:,.2f}")
+        logger.info(f"[Analyze Portfolios] Using starting capital: ${starting_capital:,.2f}")
         portfolios_data = []
         for portfolio_id in portfolio_ids:
             portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
@@ -827,9 +885,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
-                    result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                    result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
                     logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
                 else:
@@ -843,9 +901,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 })
             else:
                 # Run process_individual_portfolios for this portfolio only
-                result = process_individual_portfolios([(name, df)], rf_rate=0.05, sma_window=20, use_trading_filter=True, starting_capital=starting_capital)[0]
+                result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
                 logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": 0.05, "sma_window": 20, "use_trading_filter": True, "starting_capital": starting_capital})
+                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                 individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
@@ -915,7 +973,11 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     name=f"Equal-Weight Blended Portfolio ({len(portfolios_data)} strategies)",
                     description=f"Equal-weight blend of {len(portfolios_data)} portfolios",
                     date_range_start=date_range_start,
-                    date_range_end=date_range_end
+                    date_range_end=date_range_end,
+                    starting_capital=starting_capital,
+                    rf_rate=rf_rate,
+                    sma_window=sma_window,
+                    use_trading_filter=use_trading_filter
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []
@@ -941,15 +1003,51 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                         logger.error(f"[Analyze Portfolios] Error creating plots for blended portfolio: {str(plot_error)}")
                     try:
                         logger.info("[Analyze Portfolios] Creating correlation heatmap")
+                        # Create correlation data using proper correlation approach
                         correlation_data = pd.DataFrame()
                         portfolio_names = []
-                        for i, (name, _) in enumerate(portfolios_data):
+                        for i, (name, orig_df) in enumerate(portfolios_data):
                             if i < len(individual_results) and 'clean_df' in individual_results[i]:
-                                df = individual_results[i]['clean_df']
-                                if 'Daily Return' in df.columns:
-                                    correlation_data[name] = df['Daily Return']
+                                # Sum P/L by date first (handle multiple trades per day)
+                                if 'Date' in orig_df.columns:
+                                    df_copy = orig_df.copy()
+                                    df_copy['Date'] = pd.to_datetime(df_copy['Date'])
+                                    # Group by date and sum P/L values
+                                    daily_pnl_sum = df_copy.groupby('Date')['P/L'].sum()
+                                    daily_pnl_sum.name = name
+                                    
+                                    # Join with correlation_data using outer join to align dates
+                                    if correlation_data.empty:
+                                        correlation_data = daily_pnl_sum.to_frame()
+                                    else:
+                                        correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
+                                    
                                     portfolio_names.append(name)
+                                else:
+                                    # Fallback if no Date column - assume data is already daily
+                                    daily_pnl_sum = orig_df['P/L'].fillna(0)
+                                    daily_pnl_sum.name = name
+                                    
+                                    if correlation_data.empty:
+                                        correlation_data = daily_pnl_sum.to_frame()
+                                    else:
+                                        correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
+                                    
+                                    portfolio_names.append(name)
+                        
+                        # Fill NaN values with 0 for days where portfolios don't have trades
+                        correlation_data = correlation_data.fillna(0)
                         if len(correlation_data.columns) >= 2:
+                            # Save correlation data to CSV for debugging
+                            debug_csv_path = os.path.join(UPLOAD_FOLDER, 'plots', 'correlation_debug_data_equal_weighted.csv')
+                            correlation_data.to_csv(debug_csv_path, index=True)
+                            logger.info(f"[Analyze Portfolios] Correlation debug data saved to: {debug_csv_path}")
+                            logger.info(f"[Analyze Portfolios] Correlation data shape: {correlation_data.shape}")
+                            # Calculate preview using new correlation method
+                            value_columns = list(correlation_data.columns)
+                            correlation_matrix_preview = calculate_correlation_matrix_from_dataframe(correlation_data, value_columns)
+                            logger.info(f"[Analyze Portfolios] Correlation matrix preview:\n{correlation_matrix_preview}")
+                            
                             heatmap_path = create_correlation_heatmap(correlation_data, portfolio_names)
                             if heatmap_path:
                                 heatmap_filename = os.path.basename(heatmap_path)
@@ -986,7 +1084,11 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                             'annual_volatility': float(blended_metrics.get('annual_volatility', 0)),
                             'mar_ratio': float(blended_metrics.get('mar_ratio', 0)),
                             'time_period_years': float(blended_metrics.get('time_period_years', 0)),
-                            'number_of_trading_days': int(blended_metrics.get('number_of_trading_days', 0))
+                            'number_of_trading_days': int(blended_metrics.get('number_of_trading_days', 0)),
+                            'beta': float(blended_metrics.get('beta', 0)),
+                            'alpha': float(blended_metrics.get('alpha', 0)),
+                            'r_squared': float(blended_metrics.get('r_squared', 0)),
+                            'beta_observation_count': int(blended_metrics.get('beta_observation_count', 0))
                         }
                     }
                     logger.info("[Analyze Portfolios] Blended portfolio created successfully")
@@ -1008,7 +1110,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             },
             "starting_capital_used": starting_capital,
             "user_starting_capital": user_starting_capital,
-            "margin_based_calculation": True
+            "margin_based_calculation": starting_capital == margin_based_capital
         }
     except Exception as e:
         logger.error(f"[Analyze Portfolios] Error analyzing portfolios: {str(e)}", exc_info=True)
@@ -1042,6 +1144,242 @@ async def clear_optimization_cache(db: Session = Depends(get_db)):
         logger.error(f"[Cache Clear] Error clearing optimization cache: {str(e)}")
         db.rollback()
         return {
-            "success": False, 
+            "success": False,
             "error": f"Failed to clear optimization cache: {str(e)}"
-        } 
+        }
+
+@router.get("/cached-results")
+async def get_cached_optimization_results(
+    db: Session = Depends(get_db),
+    limit: int = 50,
+    offset: int = 0,
+    order_by: str = "created_at",
+    order_direction: str = "desc"
+):
+    """
+    Get cached portfolio optimization results for browsing
+
+    Args:
+        limit: Maximum number of results to return (default 50)
+        offset: Number of results to skip (default 0)
+        order_by: Field to order by (created_at, portfolio_count, optimal_cagr, optimal_max_drawdown, optimal_return_drawdown_ratio)
+        order_direction: Order direction (asc or desc)
+
+    Returns:
+        JSON response with cached optimization results and portfolio names
+    """
+    try:
+        from models import OptimizationCache
+        import json
+
+        logger.info(f"[Cached Results] Fetching cached optimization results (limit={limit}, offset={offset})")
+
+        # Build query with ordering
+        query = db.query(OptimizationCache).filter(OptimizationCache.success == True)
+
+        # Apply ordering
+        if order_by == "created_at":
+            order_field = OptimizationCache.created_at
+        elif order_by == "portfolio_count":
+            order_field = OptimizationCache.portfolio_count
+        elif order_by == "optimal_cagr":
+            order_field = OptimizationCache.optimal_cagr
+        elif order_by == "optimal_max_drawdown":
+            order_field = OptimizationCache.optimal_max_drawdown
+        elif order_by == "optimal_return_drawdown_ratio":
+            order_field = OptimizationCache.optimal_return_drawdown_ratio
+        elif order_by == "access_count":
+            order_field = OptimizationCache.access_count
+        else:
+            order_field = OptimizationCache.created_at
+
+        if order_direction.lower() == "asc":
+            query = query.order_by(order_field.asc())
+        else:
+            query = query.order_by(order_field.desc())
+
+        # Apply pagination
+        cached_results = query.offset(offset).limit(limit).all()
+        total_count = query.count()
+
+        # Build response with portfolio names
+        results = []
+        for cache_entry in cached_results:
+            try:
+                # Parse portfolio IDs
+                portfolio_ids = [int(pid) for pid in cache_entry.portfolio_ids.split(',')]
+
+                # Get portfolio names
+                portfolio_names = []
+                for pid in portfolio_ids:
+                    portfolio = PortfolioService.get_portfolio_by_id(db, pid)
+                    if portfolio:
+                        portfolio_names.append(portfolio.name)
+                    else:
+                        portfolio_names.append(f"Portfolio {pid} (deleted)")
+
+                # Parse JSON fields
+                optimal_weights = json.loads(cache_entry.optimal_weights)
+                optimal_ratios = json.loads(cache_entry.optimal_ratios)
+
+                result = {
+                    "id": cache_entry.id,
+                    "name": cache_entry.name,
+                    "portfolio_ids": portfolio_ids,
+                    "portfolio_names": portfolio_names,
+                    "portfolio_count": cache_entry.portfolio_count,
+                    "optimization_method": cache_entry.optimization_method,
+                    "optimal_weights": optimal_weights,
+                    "optimal_ratios": optimal_ratios,
+                    "metrics": {
+                        "cagr": cache_entry.optimal_cagr,
+                        "max_drawdown": cache_entry.optimal_max_drawdown,
+                        "return_drawdown_ratio": cache_entry.optimal_return_drawdown_ratio,
+                        "sharpe_ratio": cache_entry.optimal_sharpe_ratio
+                    },
+                    "parameters": {
+                        "rf_rate": cache_entry.rf_rate,
+                        "sma_window": cache_entry.sma_window,
+                        "use_trading_filter": cache_entry.use_trading_filter,
+                        "starting_capital": cache_entry.starting_capital,
+                        "min_weight": cache_entry.min_weight,
+                        "max_weight": cache_entry.max_weight
+                    },
+                    "execution_info": {
+                        "iterations": cache_entry.iterations,
+                        "execution_time_seconds": cache_entry.execution_time_seconds,
+                        "explored_combinations_count": cache_entry.explored_combinations_count,
+                        "access_count": cache_entry.access_count
+                    },
+                    "timestamps": {
+                        "created_at": cache_entry.created_at.isoformat() if cache_entry.created_at else None,
+                        "last_accessed_at": cache_entry.last_accessed_at.isoformat() if cache_entry.last_accessed_at else None
+                    }
+                }
+                results.append(result)
+
+            except Exception as e:
+                logger.warning(f"[Cached Results] Error processing cache entry {cache_entry.id}: {str(e)}")
+                continue
+
+        logger.info(f"[Cached Results] Returning {len(results)} cached optimization results")
+
+        return {
+            "success": True,
+            "results": results,
+            "pagination": {
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_more": offset + limit < total_count
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"[Cached Results] Error fetching cached optimization results: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Failed to fetch cached optimization results: {str(e)}"
+        }
+
+@router.put("/cached-results/{optimization_id}/name")
+async def update_optimization_name(
+    optimization_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Update the name of an optimization result
+
+    Args:
+        optimization_id: ID of the optimization to update
+        request: Request body containing the new name
+
+    Returns:
+        JSON response indicating success or failure
+    """
+    try:
+        from models import OptimizationCache
+
+        # Parse request body
+        body = await request.json()
+        new_name = body.get('name', '').strip()
+
+        if not new_name:
+            return {
+                "success": False,
+                "error": "Name cannot be empty"
+            }
+
+        if len(new_name) > 200:
+            return {
+                "success": False,
+                "error": "Name must be 200 characters or less"
+            }
+
+        logger.info(f"[Update Name] Updating optimization {optimization_id} name to: {new_name}")
+
+        # Find the optimization entry
+        optimization = db.query(OptimizationCache).filter(
+            OptimizationCache.id == optimization_id
+        ).first()
+
+        if not optimization:
+            return {
+                "success": False,
+                "error": f"Optimization {optimization_id} not found"
+            }
+
+        # Update the name
+        old_name = optimization.name
+        optimization.name = new_name
+        db.commit()
+
+        logger.info(f"[Update Name] Successfully updated optimization {optimization_id} name from '{old_name}' to '{new_name}'")
+
+        return {
+            "success": True,
+            "message": f"Optimization name updated to '{new_name}'",
+            "old_name": old_name,
+            "new_name": new_name
+        }
+
+    except Exception as e:
+        logger.error(f"[Update Name] Error updating optimization name: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": f"Failed to update optimization name: {str(e)}"
+        }
+
+@router.delete("/cached-results/{optimization_id}")
+async def delete_optimization_result(
+    optimization_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a cached optimization result"""
+    try:
+        from models import OptimizationCache
+
+        # Find the optimization cache entry
+        cache_entry = db.query(OptimizationCache).filter(
+            OptimizationCache.id == optimization_id
+        ).first()
+
+        if not cache_entry:
+            return {"success": False, "error": "Optimization result not found"}
+
+        # Log the deletion
+        logger.info(f"[Delete Optimization] Deleting optimization {optimization_id}: {cache_entry.name or f'Optimization #{optimization_id}'}")
+
+        # Delete the entry
+        db.delete(cache_entry)
+        db.commit()
+
+        logger.info(f"[Delete Optimization] Successfully deleted optimization cache entry {optimization_id}")
+        return {"success": True, "message": "Optimization result deleted successfully"}
+
+    except Exception as e:
+        logger.error(f"[Delete Optimization] Error deleting optimization result {optimization_id}: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": f"Failed to delete optimization result: {str(e)}"} 

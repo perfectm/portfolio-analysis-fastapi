@@ -59,6 +59,8 @@ class PortfolioData(Base):
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
     date = Column(DateTime, nullable=False, index=True)
     pl = Column(Float, nullable=False)  # Profit/Loss value
+    premium = Column(Float)             # Premium collected (from CSV)
+    contracts = Column(Integer)         # Number of contracts (from CSV)
     cumulative_pl = Column(Float)       # Cumulative P/L (calculated)
     account_value = Column(Float)       # Account value (calculated)
     daily_return = Column(Float)        # Daily return percentage
@@ -112,6 +114,12 @@ class AnalysisResult(Base):
     max_drawdown = Column(Float)
     max_drawdown_percent = Column(Float)
     max_drawdown_date = Column(String(20))  # Date when max drawdown occurred
+
+    # Beta metrics (Portfolio vs S&P 500)
+    beta = Column(Float)  # Beta coefficient vs SPX
+    alpha = Column(Float)  # Alpha (excess return vs expected return based on beta)
+    r_squared = Column(Float)  # R-squared (correlation strength)
+    beta_observation_count = Column(Integer)  # Number of observations used in beta calculation
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -311,7 +319,10 @@ class OptimizationCache(Base):
     __tablename__ = "optimization_cache"
     
     id = Column(Integer, primary_key=True, index=True)
-    
+
+    # User-defined name for this optimization (optional)
+    name = Column(String(200), nullable=True)  # e.g., "Conservative Mix", "High Growth Strategy"
+
     # Portfolio combination identifier (sorted portfolio IDs as comma-separated string)
     portfolio_ids_hash = Column(String(64), nullable=False, index=True)  # SHA-256 hash of sorted portfolio IDs
     portfolio_ids = Column(String(500), nullable=False)  # Comma-separated sorted portfolio IDs (e.g., "1,3,5")
@@ -423,3 +434,128 @@ class MarginValidationRule(Base):
     
     def __repr__(self):
         return f"<MarginValidationRule(name='{self.rule_name}', type='{self.rule_type}', threshold={self.threshold_value})>"
+
+
+class RobustnessTest(Base):
+    """
+    Model for storing robustness test configurations and overall results
+    """
+    __tablename__ = "robustness_tests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    test_date = Column(DateTime(timezone=True), server_default=func.now())
+    num_periods = Column(Integer, nullable=False, default=10)
+    min_period_length_days = Column(Integer, nullable=False, default=252)
+    overall_robustness_score = Column(Float)
+    
+    # Analysis parameters used
+    rf_rate = Column(Float)
+    daily_rf_rate = Column(Float)
+    sma_window = Column(Integer)
+    use_trading_filter = Column(Boolean)
+    starting_capital = Column(Float)
+    
+    # Status tracking
+    status = Column(String(20), nullable=False, default="pending")  # pending, running, completed, failed
+    progress = Column(Integer, default=0)  # Progress percentage
+    error_message = Column(Text)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    
+    # Relationships
+    portfolio = relationship("Portfolio")
+    periods = relationship("RobustnessPeriod", back_populates="robustness_test", cascade="all, delete-orphan")
+    statistics = relationship("RobustnessStatistic", back_populates="robustness_test", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<RobustnessTest(id={self.id}, portfolio_id={self.portfolio_id}, num_periods={self.num_periods}, score={self.overall_robustness_score})>"
+
+
+class RobustnessPeriod(Base):
+    """
+    Model for storing individual robustness test period results
+    """
+    __tablename__ = "robustness_periods"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    robustness_test_id = Column(Integer, ForeignKey("robustness_tests.id"), nullable=False)
+    period_number = Column(Integer, nullable=False)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    
+    # Performance metrics for this period
+    cagr = Column(Float)
+    sharpe_ratio = Column(Float)
+    sortino_ratio = Column(Float)
+    max_drawdown = Column(Float)
+    max_drawdown_percent = Column(Float)
+    volatility = Column(Float)
+    win_rate = Column(Float)
+    profit_factor = Column(Float)
+    avg_trade_return = Column(Float)
+    total_return = Column(Float)
+    total_pl = Column(Float)
+    final_account_value = Column(Float)
+    ulcer_index = Column(Float)
+    upi = Column(Float)  # Ulcer Performance Index
+    kelly_criterion = Column(Float)
+    mar_ratio = Column(Float)
+    pcr = Column(Float)  # Premium Capture Rate
+    
+    # Additional metrics
+    trade_count = Column(Integer)
+    winning_trades = Column(Integer)
+    losing_trades = Column(Integer)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    robustness_test = relationship("RobustnessTest", back_populates="periods")
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_robustness_test_period', 'robustness_test_id', 'period_number'),
+    )
+    
+    def __repr__(self):
+        return f"<RobustnessPeriod(id={self.id}, test_id={self.robustness_test_id}, period={self.period_number}, cagr={self.cagr})>"
+
+
+class RobustnessStatistic(Base):
+    """
+    Model for storing descriptive statistics for robustness test metrics
+    """
+    __tablename__ = "robustness_statistics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    robustness_test_id = Column(Integer, ForeignKey("robustness_tests.id"), nullable=False)
+    metric_name = Column(String(50), nullable=False)
+    
+    # Descriptive statistics
+    max_value = Column(Float)
+    min_value = Column(Float)
+    mean_value = Column(Float)
+    median_value = Column(Float)
+    std_deviation = Column(Float)
+    q1_value = Column(Float)  # 25th percentile
+    q3_value = Column(Float)  # 75th percentile
+    
+    # Comparison with full dataset
+    full_dataset_value = Column(Float)
+    robustness_component_score = Column(Float)
+    relative_deviation = Column(Float)  # (mean_value - full_dataset_value) / full_dataset_value
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    robustness_test = relationship("RobustnessTest", back_populates="statistics")
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_robustness_test_metric', 'robustness_test_id', 'metric_name'),
+    )
+    
+    def __repr__(self):
+        return f"<RobustnessStatistic(id={self.id}, test_id={self.robustness_test_id}, metric='{self.metric_name}', score={self.robustness_component_score})>"
