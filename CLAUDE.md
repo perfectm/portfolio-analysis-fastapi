@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a full-stack portfolio analysis application that provides Monte Carlo simulations, risk metrics calculation, and interactive visualizations for trading strategies. It consists of a FastAPI backend with a React frontend, featuring both individual portfolio analysis and multi-portfolio blending capabilities with custom weighting.
 
+### Deployment Architecture
+
+**IMPORTANT**: Both development and production environments are hosted on the same local machine.
+
+- **Production URL**: `https://portfolio.cottonmike.com`
+- **Development**: Same codebase, same database (`portfolio_analysis.db`)
+- **Server**: Single uvicorn instance serves both environments
+- **No separate deployment needed**: Changes made locally are immediately available in production after:
+  1. Rebuilding frontend: `cd frontend && npm run build`
+  2. Restarting backend server: `pkill -f uvicorn && uvicorn app:app --reload --host 0.0.0.0 --port 8000`
+  3. Hard refresh browser to clear cached assets (Cmd+Shift+R on Mac, Ctrl+F5 on Windows)
+
+**Note**: The `render.yaml` and Docker files are legacy and not currently used for deployment.
+
 ## Development Commands
 
 ### Quick Start
@@ -35,10 +49,12 @@ This is a full-stack portfolio analysis application that provides Monte Carlo si
 - **Check database connection**: Use the `/api/debug/database` endpoint
 - **Database migrations**: Uses SQLAlchemy with automatic table creation
 
-#### Docker & Deployment
+#### Docker & Deployment (Legacy - Not Currently Used)
 - **Local Docker**: `docker-compose up` (builds and runs the full stack)
-- **Build for production**: `bash build.sh` (Render deployment script)
-- **Dockerfile**: Multi-stage build (Node.js for frontend, Python for backend)
+- **Build for production**: `bash build.sh` (Render deployment script - legacy)
+- **Dockerfile**: Multi-stage build (Node.js for frontend, Python for backend - legacy)
+
+**Note**: These Docker/Render deployment files are legacy and not actively used. The application runs directly on the local machine and serves both dev and production.
 
 ## Architecture Overview
 
