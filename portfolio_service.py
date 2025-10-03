@@ -489,6 +489,7 @@ class PortfolioService:
                 upi=metrics.get('upi'),
                 kelly_criterion=metrics.get('kelly_criterion'),
                 mar_ratio=metrics.get('mar_ratio'),
+                cvar=metrics.get('cvar'),
                 cagr=metrics.get('cagr'),
                 annual_volatility=metrics.get('annual_volatility'),
                 total_return=metrics.get('total_return'),

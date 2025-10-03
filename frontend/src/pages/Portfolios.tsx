@@ -2806,6 +2806,38 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         </div>
                       </div>
 
+                      {/* CVaR (Conditional Value at Risk) */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          CVaR (5%)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.error.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.cvar !== undefined && analysisResults.blended_result.metrics.cvar !== null
+                            ? analysisResults.blended_result.metrics.cvar.toFixed(2) + '%'
+                            : 'N/A'}
+                        </div>
+                      </div>
+
                       <div
                         className="metric-card"
                         style={{
@@ -3528,6 +3560,30 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {result.metrics.upi?.toFixed(3)}
+                                </div>
+                              </div>
+
+                              {/* CVaR (Conditional Value at Risk) */}
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  CVaR (5%)
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.error.main,
+                                  }}
+                                >
+                                  {result.metrics.cvar !== undefined && result.metrics.cvar !== null
+                                    ? result.metrics.cvar.toFixed(2) + '%'
+                                    : 'N/A'}
                                 </div>
                               </div>
 
@@ -4537,6 +4593,30 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     </div>
                                   </div>
                                 )}
+
+                                {/* CVaR (Conditional Value at Risk) */}
+                                <div style={{ textAlign: "center" }}>
+                                  <div
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      color: theme.palette.text.secondary,
+                                      marginBottom: "0.25rem",
+                                    }}
+                                  >
+                                    CVaR (5%)
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "0.9rem",
+                                      fontWeight: "600",
+                                      color: "#ef4444",
+                                    }}
+                                  >
+                                    {portfolio.latest_analysis.metrics.cvar !== undefined && portfolio.latest_analysis.metrics.cvar !== null
+                                      ? portfolio.latest_analysis.metrics.cvar.toFixed(2) + '%'
+                                      : 'N/A'}
+                                  </div>
+                                </div>
                               </div>
                             )}
 

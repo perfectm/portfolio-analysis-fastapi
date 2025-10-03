@@ -106,6 +106,7 @@ class AnalysisResult(Base):
     upi = Column(Float)  # Ulcer Performance Index
     kelly_criterion = Column(Float)
     mar_ratio = Column(Float)
+    cvar = Column(Float)  # Conditional Value at Risk (mean of worst 5%)
     cagr = Column(Float)
     annual_volatility = Column(Float)
     total_return = Column(Float)
@@ -503,6 +504,7 @@ class RobustnessPeriod(Base):
     kelly_criterion = Column(Float)
     mar_ratio = Column(Float)
     pcr = Column(Float)  # Premium Capture Rate
+    cvar = Column(Float)  # Conditional Value at Risk (mean of worst 5%)
     
     # Additional metrics
     trade_count = Column(Integer)

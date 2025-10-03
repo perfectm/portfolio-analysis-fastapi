@@ -428,6 +428,7 @@ class RobustnessTestService:
             'kelly_criterion': float(metrics.get('kelly_criterion', 0)),
             'mar_ratio': float(metrics.get('mar_ratio', 0)),
             'pcr': float(metrics.get('pcr', 0)),
+            'cvar': float(metrics.get('cvar', 0)),
             'trade_count': trade_count,
             'winning_trades': winning_trades,
             'losing_trades': losing_trades

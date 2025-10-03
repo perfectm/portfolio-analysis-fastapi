@@ -293,6 +293,14 @@ export default function Analysis() {
           format="percentage"
           color="blue"
         />
+
+        {/* CVaR (Conditional Value at Risk) */}
+        <MetricCard
+          title="CVaR (5%)"
+          value={metrics.cvar !== undefined && metrics.cvar !== null ? metrics.cvar : "N/A"}
+          format="percentage"
+          color="red"
+        />
       </div>
 
       {/* Analysis Details */}

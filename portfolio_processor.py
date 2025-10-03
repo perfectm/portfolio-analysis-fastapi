@@ -280,6 +280,7 @@ def _calculate_portfolio_metrics(
             upi = _calculate_upi(clean_df, rf_rate)
             kelly_criterion, win_rate = _calculate_kelly_criterion(clean_df)
             pcr, total_premium = _calculate_pcr(clean_df)
+            cvar = _calculate_cvar(clean_df, actual_starting_capital)
 
             # Calculate Beta against SPX
             try:
@@ -297,6 +298,7 @@ def _calculate_portfolio_metrics(
             logger.info(f"  - UPI: {upi:.4f}")
             logger.info(f"  - Kelly criterion: {kelly_criterion:.4f}")
             logger.info(f"  - PCR: {pcr:.4f}")
+            logger.info(f"  - CVaR (5%): {cvar:.4f}")
             logger.info(f"  - Annual volatility: {strategy_std:.4f}")
 
         else:
@@ -331,6 +333,7 @@ def _calculate_portfolio_metrics(
         'win_rate': float(win_rate),
         'pcr': float(pcr),
         'total_premium': float(total_premium),
+        'cvar': float(cvar),
         'beta': float(beta),
         'alpha': float(alpha),
         'r_squared': float(r_squared),
@@ -602,6 +605,60 @@ def _calculate_upi(clean_df: pd.DataFrame, rf_rate: float) -> float:
     return upi
 
 
+def _calculate_cvar(clean_df: pd.DataFrame, starting_capital: float, confidence_level: float = 0.05) -> float:
+    """
+    Calculate Conditional Value at Risk (CVaR) - mean of the worst 5% of outcomes
+
+    CVaR measures the expected loss in the worst case scenarios, providing a more
+    comprehensive risk measure than VaR alone.
+
+    Args:
+        clean_df: DataFrame with portfolio data including Account Value
+        starting_capital: Initial capital amount
+        confidence_level: Confidence level (default 0.05 for worst 5%)
+
+    Returns:
+        CVaR as a percentage of starting capital (negative value indicates loss)
+    """
+    # Calculate daily returns
+    daily_returns = clean_df['Account Value'].pct_change().dropna()
+
+    if len(daily_returns) == 0:
+        logger.info("CVaR: No returns data available")
+        return 0.0
+
+    # Sort returns to find the worst outcomes
+    sorted_returns = daily_returns.sort_values()
+
+    # Calculate the number of observations in the tail (worst 5%)
+    n_tail = int(np.ceil(len(sorted_returns) * confidence_level))
+
+    if n_tail == 0:
+        logger.info("CVaR: Not enough data points for tail analysis")
+        return 0.0
+
+    # Get the worst returns (bottom 5%)
+    worst_returns = sorted_returns.iloc[:n_tail]
+
+    # Calculate the mean of the worst returns
+    cvar_return = worst_returns.mean()
+
+    # Convert to dollar loss based on starting capital
+    cvar_dollar = cvar_return * starting_capital
+
+    # Express as percentage of starting capital
+    cvar_percent = (cvar_dollar / starting_capital) * 100
+
+    logger.info(f"CVaR Calculation:")
+    logger.info(f"Confidence Level: {confidence_level*100:.1f}%")
+    logger.info(f"Number of tail observations: {n_tail}")
+    logger.info(f"Mean of worst {confidence_level*100:.1f}% returns: {cvar_return:.6f}")
+    logger.info(f"CVaR (dollar): ${cvar_dollar:,.2f}")
+    logger.info(f"CVaR (% of capital): {cvar_percent:.4f}%")
+
+    return cvar_percent
+
+
 def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
     """Calculate drawdown metrics with memory optimization"""
     clean_df['Rolling Peak'] = clean_df['Account Value'].expanding().max()
@@ -681,6 +738,7 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
         'win_rate': 0,
         'pcr': 0,
         'total_premium': 0,
+        'cvar': 0,
         'beta': 0,
         'alpha': 0,
         'r_squared': 0,
