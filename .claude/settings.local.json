@@ -22,7 +22,9 @@
       "Bash(kill:*)",
       "Bash(sqlite3:*)",
       "Read(//Users/closet/projects/**)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python3:*)",
+      "Bash(cat:*)"
     ],
     "deny": []
   }

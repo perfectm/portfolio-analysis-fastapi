@@ -18,6 +18,7 @@ from datetime import datetime
 def calculate_cvar(daily_returns: pd.Series, starting_capital: float, confidence_level: float = 0.05) -> float:
     """
     Calculate Conditional Value at Risk (CVaR) - mean of the worst 5% of outcomes
+    Returns dollar amount (negative value indicates expected loss)
     """
     if len(daily_returns) == 0:
         return 0.0
@@ -37,10 +38,10 @@ def calculate_cvar(daily_returns: pd.Series, starting_capital: float, confidence
     # Calculate the mean of the worst returns
     cvar_return = worst_returns.mean()
 
-    # Express as percentage of starting capital
-    cvar_percent = (cvar_return * starting_capital / starting_capital) * 100
+    # Convert to dollar loss based on starting capital
+    cvar_dollar = cvar_return * starting_capital
 
-    return cvar_percent
+    return cvar_dollar
 
 
 def backfill_cvar(db_path: str):
@@ -53,10 +54,10 @@ def backfill_cvar(db_path: str):
         cursor = conn.cursor()
 
         # Get all analysis results that need CVaR calculation
+        # Force recalculation for all records (not just NULL or 0) since we changed from % to $
         cursor.execute("""
             SELECT ar.id, ar.portfolio_id, ar.starting_capital, ar.cvar
             FROM analysis_results ar
-            WHERE ar.cvar IS NULL OR ar.cvar = 0.0
             ORDER BY ar.id
         """)
 
@@ -135,7 +136,7 @@ def backfill_cvar(db_path: str):
                     except json.JSONDecodeError:
                         pass  # Skip if JSON is invalid
 
-                print(f"✅ CVaR = {cvar_value:.4f}%")
+                print(f"✅ CVaR = ${cvar_value:,.2f}")
                 updated_count += 1
 
                 # Commit every 10 records

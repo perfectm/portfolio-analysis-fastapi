@@ -2833,7 +2833,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           }}
                         >
                           {analysisResults.blended_result.metrics.cvar !== undefined && analysisResults.blended_result.metrics.cvar !== null
-                            ? analysisResults.blended_result.metrics.cvar.toFixed(2) + '%'
+                            ? '$' + analysisResults.blended_result.metrics.cvar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                             : 'N/A'}
                         </div>
                       </div>
@@ -3582,7 +3582,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {result.metrics.cvar !== undefined && result.metrics.cvar !== null
-                                    ? result.metrics.cvar.toFixed(2) + '%'
+                                    ? '$' + result.metrics.cvar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                     : 'N/A'}
                                 </div>
                               </div>
@@ -4613,7 +4613,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     }}
                                   >
                                     {portfolio.latest_analysis.metrics.cvar !== undefined && portfolio.latest_analysis.metrics.cvar !== null
-                                      ? portfolio.latest_analysis.metrics.cvar.toFixed(2) + '%'
+                                      ? '$' + portfolio.latest_analysis.metrics.cvar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                       : 'N/A'}
                                   </div>
                                 </div>

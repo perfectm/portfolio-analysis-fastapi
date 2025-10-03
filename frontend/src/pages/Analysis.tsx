@@ -298,7 +298,7 @@ export default function Analysis() {
         <MetricCard
           title="CVaR (5%)"
           value={metrics.cvar !== undefined && metrics.cvar !== null ? metrics.cvar : "N/A"}
-          format="percentage"
+          format="currency"
           color="red"
         />
       </div>

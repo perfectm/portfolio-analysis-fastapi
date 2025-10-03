@@ -609,7 +609,7 @@ def _calculate_cvar(clean_df: pd.DataFrame, starting_capital: float, confidence_
     """
     Calculate Conditional Value at Risk (CVaR) - mean of the worst 5% of outcomes
 
-    CVaR measures the expected loss in the worst case scenarios, providing a more
+    CVaR measures the expected dollar loss in the worst case scenarios, providing a more
     comprehensive risk measure than VaR alone.
 
     Args:
@@ -618,7 +618,7 @@ def _calculate_cvar(clean_df: pd.DataFrame, starting_capital: float, confidence_
         confidence_level: Confidence level (default 0.05 for worst 5%)
 
     Returns:
-        CVaR as a percentage of starting capital (negative value indicates loss)
+        CVaR as dollar amount (negative value indicates expected loss)
     """
     # Calculate daily returns
     daily_returns = clean_df['Account Value'].pct_change().dropna()
@@ -646,17 +646,14 @@ def _calculate_cvar(clean_df: pd.DataFrame, starting_capital: float, confidence_
     # Convert to dollar loss based on starting capital
     cvar_dollar = cvar_return * starting_capital
 
-    # Express as percentage of starting capital
-    cvar_percent = (cvar_dollar / starting_capital) * 100
-
     logger.info(f"CVaR Calculation:")
     logger.info(f"Confidence Level: {confidence_level*100:.1f}%")
     logger.info(f"Number of tail observations: {n_tail}")
     logger.info(f"Mean of worst {confidence_level*100:.1f}% returns: {cvar_return:.6f}")
-    logger.info(f"CVaR (dollar): ${cvar_dollar:,.2f}")
-    logger.info(f"CVaR (% of capital): {cvar_percent:.4f}%")
+    logger.info(f"CVaR (dollar amount): ${cvar_dollar:,.2f}")
+    logger.info(f"CVaR (% of capital): {(cvar_return * 100):.4f}%")
 
-    return cvar_percent
+    return cvar_dollar
 
 
 def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
