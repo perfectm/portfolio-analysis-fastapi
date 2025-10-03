@@ -86,7 +86,7 @@ class TestPortfolioOptimizer:
         assert optimizer.rf_rate == 0.05
         assert optimizer.sma_window == 20
         assert optimizer.use_trading_filter == True
-        assert optimizer.starting_capital == 100000.0
+        assert optimizer.starting_capital == 1000000.0  # Default is 1M
         assert optimizer.objective is not None
     
     def test_optimize_weights_insufficient_portfolios(self):
@@ -116,10 +116,10 @@ class TestPortfolioOptimizer:
         weight_sum = sum(result.optimal_weights)
         assert abs(weight_sum - 1.0) < 0.01
         
-        # Check weight constraints
+        # Check weight constraints (min/max weights are now on the optimizer, not objective)
         for weight in result.optimal_weights:
-            assert weight >= self.objective.min_weight - 0.01
-            assert weight <= self.objective.max_weight + 0.01
+            assert weight >= self.optimizer.min_weight - 0.01
+            assert weight <= self.optimizer.max_weight + 0.01
         
         # Check that we have some metrics
         if result.success:
@@ -168,10 +168,10 @@ class TestPortfolioOptimizer:
         weight_sum = sum(result.optimal_weights)
         assert abs(weight_sum - 1.0) < 0.01
         
-        # Check weight constraints
+        # Check weight constraints (min/max weights are now on the optimizer, not objective)
         for weight in result.optimal_weights:
-            assert weight >= self.objective.min_weight - 0.01
-            assert weight <= self.objective.max_weight + 0.01
+            assert weight >= self.optimizer.min_weight - 0.01
+            assert weight <= self.optimizer.max_weight + 0.01
     
     def test_invalid_optimization_method(self):
         """Test optimization with invalid method"""

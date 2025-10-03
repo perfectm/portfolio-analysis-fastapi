@@ -614,9 +614,12 @@ class PortfolioOptimizer:
         
         logger.info(f"Optimizing weights for {num_portfolios} portfolios using {method}")
         logger.info(f"Portfolio names: {[name for name, _ in portfolios_data]}")
-        
+
+        # Update dynamic weight constraints based on portfolio count
+        self.set_dynamic_constraints(num_portfolios)
+
         self.explored_combinations = []
-        
+
         try:
             if method == 'scipy':
                 return self._optimize_with_scipy(portfolios_data, subset_caches, resume_from_weights)
