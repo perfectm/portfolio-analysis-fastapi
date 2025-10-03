@@ -343,39 +343,52 @@ class TestRegimeService:
         """Test allocation recommendations"""
         mock_db = self.create_mock_db_session()
         portfolio_ids = [1, 2]
-        
+
         # Mock current regime
         mock_regime = MarketRegimeHistory(
             regime='bull',
             confidence=0.8,
             date=datetime.now()
         )
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = mock_regime
-        
+
         # Mock portfolios
-        mock_portfolios = [
-            self.create_mock_portfolio(1, "Strategy A"),
-            self.create_mock_portfolio(2, "Strategy B")
-        ]
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_portfolios
-        
+        mock_portfolio1 = self.create_mock_portfolio(1, "Strategy A")
+        mock_portfolio2 = self.create_mock_portfolio(2, "Strategy B")
+        mock_portfolios = [mock_portfolio1, mock_portfolio2]
+
         # Mock regime performance data
-        mock_perf = RegimePerformance(
+        mock_perf1 = RegimePerformance(
             portfolio_id=1,
             regime='bull',
             total_return=0.15,
             sharpe_ratio=1.2,
-            max_drawdown=-0.05
+            max_drawdown=-0.05,
+            avg_daily_return=0.001,
+            volatility=0.02,
+            win_rate=0.6
         )
+        mock_perf2 = RegimePerformance(
+            portfolio_id=2,
+            regime='bull',
+            total_return=0.12,
+            sharpe_ratio=1.0,
+            max_drawdown=-0.08,
+            avg_daily_return=0.0008,
+            volatility=0.025,
+            win_rate=0.55
+        )
+
+        # Set up mocks with proper side_effect for all filter calls
         mock_db.query.return_value.filter.side_effect = [
-            MagicMock(order_by=lambda x: MagicMock(first=lambda: mock_regime)),
-            MagicMock(all=lambda: mock_portfolios),
-            MagicMock(first=lambda: mock_perf),
-            MagicMock(first=lambda: mock_perf)
+            MagicMock(order_by=lambda x: MagicMock(first=lambda: mock_regime)),  # get_current_regime
+            MagicMock(first=lambda: mock_portfolio1),  # First portfolio lookup
+            MagicMock(first=lambda: mock_perf1),       # First regime performance
+            MagicMock(first=lambda: mock_portfolio2),  # Second portfolio lookup
+            MagicMock(first=lambda: mock_perf2)        # Second regime performance
         ]
-        
+
         result = self.service.get_regime_allocation_recommendations(mock_db, portfolio_ids)
-        
+
         assert isinstance(result, dict)
         assert len(result) >= 0
     
