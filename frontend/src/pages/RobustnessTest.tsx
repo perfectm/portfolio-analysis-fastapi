@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Box,
   Paper,
@@ -28,6 +28,8 @@ import {
   DialogActions,
   Tabs,
   Tab,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import {
   BarChart,
@@ -108,7 +110,7 @@ const RobustnessTest: React.FC = () => {
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
   const [numPeriods, setNumPeriods] = useState(10);
   const [periodType, setPeriodType] = useState<'month' | 'year'>('year');
-  const [periodLength, setPeriodLength] = useState(252);
+  const [periodLength, setPeriodLength] = useState(365);
   const [rfRate, setRfRate] = useState(0.043);
   const [smaWindow, setSmaWindow] = useState(20);
   const [startingCapital, setStartingCapital] = useState(1000000);
@@ -121,6 +123,7 @@ const RobustnessTest: React.FC = () => {
   const [portfolioTests, setPortfolioTests] = useState<RobustnessTest[]>([]);
   const [resultsDialogOpen, setResultsDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState(0);
+  const [chartMetric, setChartMetric] = useState<'pcr' | 'totalPL'>('pcr');
 
   // Load available portfolios
   useEffect(() => {
@@ -132,12 +135,16 @@ const RobustnessTest: React.FC = () => {
     loadPortfolios(periodLength);
   }, []);
 
-  // Load portfolio tests when portfolio is selected
+  // Load portfolio tests and metrics when portfolio is selected
   useEffect(() => {
     if (selectedPortfolioId) {
-      loadPortfolioTests(selectedPortfolioId);
+      // Set the selected portfolio immediately from the list (without metrics)
       const portfolio = portfolios.find(p => p.id === selectedPortfolioId);
       setSelectedPortfolio(portfolio || null);
+
+      // Then load tests and metrics in the background
+      loadPortfolioTests(selectedPortfolioId);
+      loadPortfolioMetrics(selectedPortfolioId);
     }
   }, [selectedPortfolioId, portfolios]);
 
@@ -148,9 +155,9 @@ const RobustnessTest: React.FC = () => {
         try {
           const response = await fetch(`/api/robustness/test/${currentTestId}/status`);
           const status = await response.json();
-          
+
           setTestProgress(status.progress || 0);
-          
+
           if (status.status === 'completed') {
             setTestInProgress(false);
             setTestProgress(100);
@@ -171,12 +178,36 @@ const RobustnessTest: React.FC = () => {
 
   const loadPortfolios = async (minPeriodLength: number = 30) => {
     try {
-      const response = await fetch(`/api/robustness/portfolios?period_length=${minPeriodLength}`);
+      // Load portfolios WITHOUT metrics for faster initial load
+      const response = await fetch(`/api/robustness/portfolios?period_length=${minPeriodLength}&include_metrics=false`);
       const data = await response.json();
       setPortfolios(data.filter((p: Portfolio) => p.available_for_testing));
     } catch (error) {
       console.error('Error loading portfolios:', error);
       setError('Failed to load portfolios');
+    }
+  };
+
+  const loadPortfolioMetrics = async (portfolioId: number) => {
+    try {
+      // Load full metrics for the selected portfolio
+      const response = await fetch(`/api/robustness/portfolio/${portfolioId}/metrics`);
+      const metrics = await response.json();
+
+      // Update the portfolio in the list with metrics
+      setPortfolios(prevPortfolios =>
+        prevPortfolios.map(p =>
+          p.id === portfolioId ? { ...p, full_dataset_metrics: metrics } : p
+        )
+      );
+
+      // Update selected portfolio with metrics
+      setSelectedPortfolio(prev =>
+        prev && prev.id === portfolioId ? { ...prev, full_dataset_metrics: metrics } : prev
+      );
+    } catch (error) {
+      console.error('Error loading portfolio metrics:', error);
+      // Don't show error to user - metrics are optional
     }
   };
 
@@ -288,7 +319,7 @@ const RobustnessTest: React.FC = () => {
   const renderStatisticsTable = () => {
     if (!testResults?.statistics) return null;
 
-    const metrics = ['max_drawdown', 'win_rate', 'total_pl', 'pcr'];
+    const metrics = ['cagr', 'max_drawdown', 'win_rate', 'total_pl', 'pcr'];
     
     return (
       <TableContainer component={Paper}>
@@ -351,71 +382,105 @@ const RobustnessTest: React.FC = () => {
     );
   };
 
-  const renderPeriodsChart = () => {
-    if (!testResults?.periods) return null;
-
-    const chartData = testResults.periods.map(period => ({
+  // Memoize chart data to prevent infinite re-renders
+  const chartData = useMemo(() => {
+    if (!testResults?.periods) return [];
+    return testResults.periods.map(period => ({
       period: `P${period.period_number}`,
       pcr: (period.pcr || 0) * 100, // Convert to percentage
+      totalPL: period.total_pl, // Total P/L
       drawdown: Math.abs(period.max_drawdown), // Make drawdown positive for better display
       startDate: period.start_date,
       endDate: period.end_date,
     }));
+  }, [testResults?.periods]);
+
+  const hasValidPCR = useMemo(() => {
+    if (!testResults?.periods) return false;
+    return testResults.periods.some(period =>
+      period.pcr !== null && period.pcr !== undefined && period.pcr !== 0
+    );
+  }, [testResults?.periods]);
+
+  const displayMetric = useMemo(() => {
+    return (chartMetric === 'pcr' && !hasValidPCR) ? 'totalPL' : chartMetric;
+  }, [chartMetric, hasValidPCR]);
+
+  // Memoize formatter callbacks
+  const leftAxisFormatter = useCallback((value: number) => {
+    return `$${Math.abs(value).toLocaleString('en-US')}`;
+  }, []);
+
+  const rightAxisFormatter = useCallback((value: number) => {
+    return displayMetric === 'pcr' ? `${value.toFixed(1)}%` : `$${value.toLocaleString('en-US')}`;
+  }, [displayMetric]);
+
+  const tooltipFormatter = useCallback((value: any, name: string) => {
+    const numValue = Array.isArray(value) ? value[0] :
+                   typeof value === 'string' ? parseFloat(value) : value;
+    if (name === 'PCR') return [`${(numValue as number).toFixed(1)}%`, name];
+    if (name === 'Total P/L') return [`$${(numValue as number).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, name];
+    if (name === 'Max Drawdown') return [`$${(numValue as number).toFixed(0)}`, name];
+    return [(numValue as number).toFixed(3), name];
+  }, []);
+
+  const labelFormatter = useCallback((label: string, payload: any) => {
+    if (payload && payload.length > 0) {
+      const data = payload[0].payload;
+      const startDate = new Date(data.startDate).toLocaleDateString();
+      const endDate = new Date(data.endDate).toLocaleDateString();
+      return `${label} (${startDate} - ${endDate})`;
+    }
+    return label;
+  }, []);
+
+  // Memoize the entire chart component
+  const PeriodsChart = useMemo(() => {
+    if (!testResults?.periods || chartData.length === 0) return null;
+
+    const secondaryMetricLabel = displayMetric === 'pcr' ? 'PCR' : 'Total P/L';
+    const secondaryMetricDataKey = displayMetric;
 
     return (
       <ResponsiveContainer width="100%" height={400}>
         <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="period" />
-          <YAxis 
-            yAxisId="left" 
-            orientation="left" 
-            tickFormatter={(value) => `$${Math.abs(value).toLocaleString('en-US')}`}
+          <YAxis
+            yAxisId="left"
+            orientation="left"
+            tickFormatter={leftAxisFormatter}
           />
-          <YAxis 
-            yAxisId="right" 
-            orientation="right" 
-            tickFormatter={(value) => `${value.toFixed(1)}%`}
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tickFormatter={rightAxisFormatter}
           />
-          <Tooltip 
-            formatter={(value, name) => {
-              const numValue = Array.isArray(value) ? value[0] : 
-                             typeof value === 'string' ? parseFloat(value) : value;
-              if (name === 'PCR') return [`${(numValue as number).toFixed(1)}%`, name];
-              if (name === 'Max Drawdown') return [`$${(numValue as number).toFixed(0)}`, name];
-              return [(numValue as number).toFixed(3), name];
-            }}
-            labelFormatter={(label, payload) => {
-              if (payload && payload.length > 0) {
-                const data = payload[0].payload;
-                const startDate = new Date(data.startDate).toLocaleDateString();
-                const endDate = new Date(data.endDate).toLocaleDateString();
-                return `${label} (${startDate} - ${endDate})`;
-              }
-              return label;
-            }}
+          <Tooltip
+            formatter={tooltipFormatter}
+            labelFormatter={labelFormatter}
           />
           <Legend />
-          <Line 
-            yAxisId="right" 
-            type="monotone" 
-            dataKey="pcr" 
-            stroke="#8884d8" 
-            name="PCR" 
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey={secondaryMetricDataKey}
+            stroke="#8884d8"
+            name={secondaryMetricLabel}
             strokeWidth={2}
           />
-          <Line 
-            yAxisId="left" 
-            type="monotone" 
-            dataKey="drawdown" 
-            stroke="#ffc658" 
-            name="Max Drawdown" 
+          <Line
+            yAxisId="left"
+            type="monotone"
+            dataKey="drawdown"
+            stroke="#ffc658"
+            name="Max Drawdown"
             strokeWidth={2}
           />
         </LineChart>
       </ResponsiveContainer>
     );
-  };
+  }, [testResults, chartData, displayMetric, leftAxisFormatter, rightAxisFormatter, tooltipFormatter, labelFormatter]);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -470,11 +535,11 @@ const RobustnessTest: React.FC = () => {
                   onChange={(e) => {
                     const newType = e.target.value as 'month' | 'year';
                     setPeriodType(newType);
-                    setPeriodLength(newType === 'month' ? 30 : 252);
+                    setPeriodLength(newType === 'month' ? 30 : 365);
                   }}
                 >
                   <MenuItem value="month">1 Month (30 days)</MenuItem>
-                  <MenuItem value="year">1 Year (252 days)</MenuItem>
+                  <MenuItem value="year">1 Year (365 days)</MenuItem>
                 </Select>
               </FormControl>
 
@@ -718,14 +783,32 @@ const RobustnessTest: React.FC = () => {
         <DialogContent>
           {testResults && (
             <Box>
-              <Tabs value={selectedTab} onChange={(_, newValue) => setSelectedTab(newValue)}>
-                <Tab label="Summary Statistics" />
-                <Tab label="Period Performance" />
-              </Tabs>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Tabs value={selectedTab} onChange={(_, newValue) => setSelectedTab(newValue)}>
+                  <Tab label="Summary Statistics" />
+                  <Tab label="Period Performance" />
+                </Tabs>
+
+                {selectedTab === 1 && (
+                  <ToggleButtonGroup
+                    value={chartMetric}
+                    exclusive
+                    onChange={(_, newValue) => {
+                      if (newValue !== null) {
+                        setChartMetric(newValue);
+                      }
+                    }}
+                    size="small"
+                  >
+                    <ToggleButton value="pcr">PCR</ToggleButton>
+                    <ToggleButton value="totalPL">Total P/L</ToggleButton>
+                  </ToggleButtonGroup>
+                )}
+              </Box>
 
               <Box sx={{ mt: 2 }}>
                 {selectedTab === 0 && renderStatisticsTable()}
-                {selectedTab === 1 && renderPeriodsChart()}
+                {selectedTab === 1 && PeriodsChart}
               </Box>
             </Box>
           )}

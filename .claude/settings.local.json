@@ -24,7 +24,8 @@
       "Read(//Users/closet/projects/**)",
       "WebSearch",
       "Bash(python3:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Read(//private/tmp/**)"
     ],
     "deny": []
   }

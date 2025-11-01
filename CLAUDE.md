@@ -232,7 +232,7 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **Grid Search**: Exhaustive search, thorough but slower
 
 ### Usage
-1. Select 2-20 portfolios in the frontend
+1. Select 2 or more portfolios in the frontend
 2. Click "🎯 Optimize Weights" button
 3. Algorithm finds weights that maximize return/drawdown ratio
 4. Optimal weights are automatically applied

@@ -22,19 +22,24 @@ class RobustnessTestService:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_available_portfolios(self, min_period_days: int = 30) -> List[Dict[str, Any]]:
-        """Get all portfolios available for robustness testing with metadata"""
+    def get_available_portfolios(self, min_period_days: int = 30, include_metrics: bool = False) -> List[Dict[str, Any]]:
+        """Get all portfolios available for robustness testing with metadata
+
+        Args:
+            min_period_days: Minimum period length in days for eligibility
+            include_metrics: Whether to include full dataset metrics (expensive, set to False for faster loading)
+        """
         portfolios = self.db.query(Portfolio).all()
         result = []
-        
+
         for portfolio in portfolios:
             # Check if portfolio has sufficient data for testing
             min_date = portfolio.date_range_start
             max_date = portfolio.date_range_end
-            
+
             if not min_date or not max_date:
                 continue
-                
+
             # Check both calendar days and actual trading days
             max_start_date = max_date - timedelta(days=min_period_days)  # Use minimum period for eligibility
 
@@ -46,10 +51,10 @@ class RobustnessTestService:
             unique_trading_days = self.db.query(PortfolioData.date).filter(
                 PortfolioData.portfolio_id == portfolio.id
             ).distinct().count()
-            
-            # Get full dataset metrics if available
-            full_metrics = self._get_full_dataset_metrics(portfolio.id)
-            
+
+            # Only get full dataset metrics if explicitly requested (expensive operation)
+            full_metrics = self._get_full_dataset_metrics(portfolio.id) if include_metrics else None
+
             result.append({
                 'id': portfolio.id,
                 'name': portfolio.name,
@@ -266,62 +271,50 @@ class RobustnessTestService:
             raise
     
     def _generate_random_periods(
-        self, 
-        portfolio_id: int, 
-        num_periods: int, 
+        self,
+        portfolio_id: int,
+        num_periods: int,
         period_length_days: int
     ) -> List[Tuple[datetime, datetime]]:
-        """Generate random test periods for the portfolio"""
-        
+        """Generate random test periods for the portfolio using calendar dates"""
+
         # Get portfolio date range
         portfolio = self.db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
         if not portfolio:
+            logger.error(f"Portfolio {portfolio_id} not found")
             return []
-        
-        start_date = portfolio.date_range_start
-        end_date = portfolio.date_range_end
-        
-        # Calculate valid range for period start dates
-        # Only constraint is that the period must fit within the dataset
-        max_start_date = end_date - timedelta(days=period_length_days)
-        
-        if start_date > max_start_date:
-            logger.warning(f"Insufficient data range for portfolio {portfolio_id}")
-            return []
-        
+
         # Get all available trading dates for this portfolio
         all_dates_query = self.db.query(PortfolioData.date).filter(
             PortfolioData.portfolio_id == portfolio_id
         ).order_by(PortfolioData.date).distinct()
         all_dates = [row.date for row in all_dates_query.all()]
-        
-        if len(all_dates) < 10:  # Need at least 10 trading days for any meaningful analysis
-            logger.warning(f"Portfolio {portfolio_id} has too few trading days: {len(all_dates)} < 10")
-            return []
-        
-        # Generate periods based on calendar date ranges
-        periods = []
 
-        # Create periods by calendar date ranges, not by trading day count
+        if not all_dates:
+            logger.warning(f"Portfolio {portfolio_id} has no trading data")
+            return []
+
         min_date = all_dates[0]
         max_date = all_dates[-1]
 
-        # Calculate the latest possible start date for a period of the given length
+        logger.info(f"Portfolio {portfolio_id}: {len(all_dates)} unique trading days from {min_date.date()} to {max_date.date()}")
+
+        # Calculate the latest possible start date (must leave room for full period)
         latest_start_date = max_date - timedelta(days=period_length_days)
 
-        # Check if we have enough calendar date range for the requested period length
         if min_date > latest_start_date:
-            logger.warning(f"Portfolio {portfolio_id} date range too short: {min_date} to {max_date}, need {period_length_days} day periods")
+            logger.warning(f"Portfolio {portfolio_id} date range too short: need {period_length_days} days, only have {(max_date - min_date).days} days")
             return []
 
-        # Generate random periods based on calendar dates
+        # Generate periods using simple calendar date arithmetic
+        periods = []
         attempts = 0
-        max_attempts = num_periods * 50  # More attempts for calendar-based generation
+        max_attempts = num_periods * 50
 
         while len(periods) < num_periods and attempts < max_attempts:
             attempts += 1
 
-            # Generate random start date within valid range
+            # Pick a random start date within the valid range
             total_range_days = (latest_start_date - min_date).days
             if total_range_days <= 0:
                 random_start_date = min_date
@@ -329,29 +322,29 @@ class RobustnessTestService:
                 random_offset = random.randint(0, total_range_days)
                 random_start_date = min_date + timedelta(days=random_offset)
 
-            # Calculate end date based on period length
+            # Calculate end date as exactly period_length_days later
             period_end_date = random_start_date + timedelta(days=period_length_days)
 
-            # Check if this period has some overlap with existing periods (to avoid too much overlap)
+            # Check for significant overlap with existing periods (>50% calendar overlap)
             has_significant_overlap = False
             for existing_start, existing_end in periods:
-                # Calculate overlap days
                 overlap_start = max(random_start_date, existing_start)
                 overlap_end = min(period_end_date, existing_end)
                 if overlap_start < overlap_end:
                     overlap_days = (overlap_end - overlap_start).days
-                    if overlap_days > period_length_days * 0.5:  # More than 50% overlap
+                    if overlap_days > period_length_days * 0.5:
                         has_significant_overlap = True
                         break
 
             # Add period if no significant overlap, or if we've tried many times
             if not has_significant_overlap or attempts > max_attempts // 2:
                 periods.append((random_start_date, period_end_date))
-        
+                logger.info(f"Added period {len(periods)}/{num_periods}: {random_start_date.date()} to {period_end_date.date()} ({period_length_days} calendar days)")
+
         # Sort periods chronologically by start date
         periods.sort(key=lambda period: period[0])
-        
-        logger.info(f"Generated {len(periods)} random periods for portfolio {portfolio_id}")
+
+        logger.info(f"Generated {len(periods)} random periods for portfolio {portfolio_id} after {attempts} attempts")
         return periods
     
     def _analyze_period(

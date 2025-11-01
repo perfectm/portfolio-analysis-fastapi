@@ -46,17 +46,22 @@ def run_robustness_test_background(test_id: int, db: Session):
 @router.get("/portfolios", response_model=List[Dict[str, Any]])
 async def get_available_portfolios(
     period_length: Optional[int] = 30,
+    include_metrics: Optional[bool] = False,
     db: Session = Depends(get_db)
 ):
     """
     Get all portfolios available for robustness testing with metadata
-    
+
     Args:
         period_length: Minimum period length in days to check eligibility (default: 30)
+        include_metrics: Whether to include full dataset metrics (default: False for faster loading)
     """
     try:
         service = RobustnessTestService(db)
-        portfolios = service.get_available_portfolios(min_period_days=period_length or 30)
+        portfolios = service.get_available_portfolios(
+            min_period_days=period_length or 30,
+            include_metrics=include_metrics or False
+        )
         return portfolios
     except Exception as e:
         logger.error(f"Error getting available portfolios: {e}")

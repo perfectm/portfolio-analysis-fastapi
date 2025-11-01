@@ -27,7 +27,16 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, format = "number"
       case "percentage":
         return `${(numVal * 100).toFixed(1)}%`;
       case "date":
-        return new Date(val).toLocaleDateString();
+        // Parse date string without timezone conversion (e.g., "2024-09-03")
+        const dateStr = String(val);
+        if (dateStr.includes('T')) {
+          // If it has a time component, use normal parsing
+          return new Date(val).toLocaleDateString();
+        } else {
+          // Date-only string - parse manually to avoid timezone issues
+          const [year, month, day] = dateStr.split('-').map(Number);
+          return new Date(year, month - 1, day).toLocaleDateString();
+        }
       default:
         return typeof numVal === 'number' ? numVal.toLocaleString() : String(val);
     }
