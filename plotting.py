@@ -134,17 +134,23 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
 
         # Plot 4: Drawdown in Dollars (bottom right)
         logger.info(f"[create_plots] Creating dollar drawdown plot")
+        logger.info(f"[create_plots] DataFrame shape: {df.shape}")
+        logger.info(f"[create_plots] DataFrame date range: {df['Date'].min()} to {df['Date'].max()}")
+        logger.info(f"[create_plots] Available columns: {df.columns.tolist()}")
+
         ax4 = plt.subplot(2, 2, 4)
 
         # Use pre-calculated drawdown amount if available, otherwise calculate it
         if 'Drawdown Amount' in df.columns:
             drawdown_amount = df['Drawdown Amount']
-            logger.info(f"[create_plots] Using pre-calculated Drawdown Amount column (min: ${drawdown_amount.min():,.2f})")
+            logger.info(f"[create_plots] Using pre-calculated Drawdown Amount column")
+            logger.info(f"[create_plots] Drawdown Amount range: ${drawdown_amount.min():,.2f} to ${drawdown_amount.max():,.2f}")
         else:
             # Fallback: calculate rolling peak and drawdown amount for plotting
+            logger.info(f"[create_plots] 'Drawdown Amount' column not found, calculating from Account Value")
             rolling_peak = df['Account Value'].expanding().max()
             drawdown_amount = df['Account Value'] - rolling_peak
-            logger.info(f"[create_plots] Calculated drawdown amount (min: ${drawdown_amount.min():,.2f})")
+            logger.info(f"[create_plots] Calculated drawdown range: ${drawdown_amount.min():,.2f} to ${drawdown_amount.max():,.2f}")
 
         ax4.plot(df['Date'], drawdown_amount, color='red', linewidth=1.5)
         ax4.fill_between(df['Date'], drawdown_amount, 0, alpha=0.3, color='red')

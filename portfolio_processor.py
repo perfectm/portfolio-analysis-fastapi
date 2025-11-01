@@ -669,39 +669,47 @@ def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
 
 def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     """Calculate detailed drawdown metrics"""
-    # Get maximum drawdown info
-    max_drawdown_idx = clean_df['Drawdown Pct'].idxmin()
-    max_drawdown = clean_df.loc[max_drawdown_idx, 'Drawdown Amount']
-    max_drawdown_pct = clean_df.loc[max_drawdown_idx, 'Drawdown Pct']
-    
-    # Get detailed drawdown information
-    max_drawdown_date = clean_df.loc[max_drawdown_idx, 'Date']
-    max_drawdown_account_value = clean_df.loc[max_drawdown_idx, 'Account Value']
-    
-    # Calculate peak value at time of max drawdown
+    # Log data shape and date range for debugging
+    logger.info(f"[Drawdown Metrics] DataFrame shape: {clean_df.shape}")
+    logger.info(f"[Drawdown Metrics] Date range: {clean_df['Date'].min()} to {clean_df['Date'].max()}")
+    logger.info(f"[Drawdown Metrics] Drawdown Amount range: ${clean_df['Drawdown Amount'].min():,.2f} to ${clean_df['Drawdown Amount'].max():,.2f}")
+
+    # Get maximum drawdown by PERCENTAGE (worst percentage drop from peak)
+    max_drawdown_pct_idx = clean_df['Drawdown Pct'].idxmin()
+    max_drawdown_pct = clean_df.loc[max_drawdown_pct_idx, 'Drawdown Pct']
+    max_drawdown_pct_date = clean_df.loc[max_drawdown_pct_idx, 'Date']
+
+    # Get maximum drawdown by DOLLAR AMOUNT (worst dollar drop from peak)
+    max_drawdown_dollar_idx = clean_df['Drawdown Amount'].idxmin()
+    max_drawdown = clean_df.loc[max_drawdown_dollar_idx, 'Drawdown Amount']
+    max_drawdown_date = clean_df.loc[max_drawdown_dollar_idx, 'Date']
+    max_drawdown_account_value = clean_df.loc[max_drawdown_dollar_idx, 'Account Value']
+
+    logger.info(f"[Drawdown Metrics] Max drawdown by %: {max_drawdown_pct:.2%} on {max_drawdown_pct_date}")
+    logger.info(f"[Drawdown Metrics] Max drawdown by $: ${max_drawdown:,.2f} on {max_drawdown_date}")
+
+    # Calculate peak value at time of max dollar drawdown
     peak_value = max_drawdown_account_value - max_drawdown
-    
-    # Find the date when the drawdown began
-    pre_drawdown_data = clean_df.loc[:max_drawdown_idx]
+
+    # Find the date when the drawdown began (for dollar drawdown)
+    pre_drawdown_data = clean_df.loc[:max_drawdown_dollar_idx]
     drawdown_peak_idx = pre_drawdown_data[pre_drawdown_data['Account Value'] == peak_value].index[-1]
     drawdown_start_date = clean_df.loc[drawdown_peak_idx, 'Date']
-    
-    # Calculate recovery info
+
+    # Calculate recovery info (for dollar drawdown)
     recovery_days = None
-    if max_drawdown_idx < len(clean_df) - 1:
-        recovery_series = clean_df.loc[max_drawdown_idx:, 'Account Value']
+    if max_drawdown_dollar_idx < len(clean_df) - 1:
+        recovery_series = clean_df.loc[max_drawdown_dollar_idx:, 'Account Value']
         recovered_points = recovery_series[recovery_series >= peak_value]
         if not recovered_points.empty:
             recovery_idx = recovered_points.index[0]
-            recovery_days = (clean_df.loc[recovery_idx, 'Date'] - clean_df.loc[max_drawdown_idx, 'Date']).days
+            recovery_days = (clean_df.loc[recovery_idx, 'Date'] - clean_df.loc[max_drawdown_dollar_idx, 'Date']).days
 
     # Calculate MAR ratio (Annualized Return / Maximum Drawdown)
     cagr = _calculate_cagr_from_df(clean_df)
     mar_ratio = abs(cagr / abs(max_drawdown_pct)) if max_drawdown_pct != 0 else 0
 
-    # Clean up the Drawdown Amount column after metrics calculation without inplace
-    clean_df = clean_df.drop(['Drawdown Amount'], axis=1)
-
+    # Note: We keep 'Drawdown Amount' column for use in plotting
     return {
         'mar_ratio': float(mar_ratio),
         'max_drawdown': float(max_drawdown),

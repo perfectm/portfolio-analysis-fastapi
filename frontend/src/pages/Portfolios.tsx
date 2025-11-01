@@ -249,6 +249,10 @@ export default function Portfolios() {
   const [marginCapital, setMarginCapital] = useState<number | null>(null);
   const [marginCalculating, setMarginCalculating] = useState<boolean>(false);
 
+  // Favorite settings state
+  const [savingFavorites, setSavingFavorites] = useState<boolean>(false);
+  const [loadingFavorites, setLoadingFavorites] = useState<boolean>(false);
+
   // localStorage persistence helpers
   const saveSelectedPortfolios = (selections: number[]) => {
     try {
@@ -1219,6 +1223,122 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
     }
   };
 
+  // Save favorite settings
+  const saveFavoriteSettings = async () => {
+    if (selectedPortfolios.length === 0) {
+      alert("Please select at least one portfolio before saving");
+      return;
+    }
+
+    // Get auth token
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert("Please log in to save favorites");
+      return;
+    }
+
+    setSavingFavorites(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/favorites/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          portfolio_ids: selectedPortfolios,
+          weights: portfolioWeights,
+          starting_capital: startingCapital,
+          risk_free_rate: riskFreeRate,
+          sma_window: 20,
+          use_trading_filter: true,
+          date_range_start: dateRangeStart,
+          date_range_end: dateRangeEnd,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to save favorite settings");
+      }
+
+      const result = await response.json();
+      alert("✅ Favorite settings saved successfully!");
+      console.log("Saved favorite settings:", result);
+    } catch (error) {
+      console.error("Failed to save favorite settings:", error);
+      alert(
+        `Failed to save favorite settings: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setSavingFavorites(false);
+    }
+  };
+
+  // Load favorite settings
+  const loadFavoriteSettings = async () => {
+    // Get auth token
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      alert("Please log in to load favorites");
+      return;
+    }
+
+    setLoadingFavorites(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/favorites/load`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to load favorite settings");
+      }
+
+      const result = await response.json();
+
+      if (!result.has_favorites) {
+        alert("No favorite settings found. Save your current settings first!");
+        return;
+      }
+
+      // Apply the loaded settings
+      const settings = result.settings;
+      setSelectedPortfolios(settings.portfolio_ids);
+      setPortfolioWeights(settings.weights);
+      setStartingCapital(settings.starting_capital);
+      setRiskFreeRate(settings.risk_free_rate);
+      if (settings.date_range_start) {
+        setDateRangeStart(settings.date_range_start.split('T')[0]);
+      }
+      if (settings.date_range_end) {
+        setDateRangeEnd(settings.date_range_end.split('T')[0]);
+      }
+
+      // Update weighting method based on loaded weights
+      const hasCustomWeights = Object.values(settings.weights).some((w: any) => w !== 1.0);
+      setWeightingMethod(hasCustomWeights ? "custom" : "equal");
+
+      alert(`✅ Favorite settings loaded successfully!\n\nLoaded ${settings.portfolio_ids.length} portfolio(s)`);
+      console.log("Loaded favorite settings:", settings);
+    } catch (error) {
+      console.error("Failed to load favorite settings:", error);
+      alert(
+        `Failed to load favorite settings: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
+
   // Generate daily net liquidity chart data
   const generateDailyLiquidityData = () => {
     try {
@@ -1418,6 +1538,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
             sx={{
               display: "flex",
               alignItems: "center",
+              flexWrap: "wrap",
               gap: "1rem",
               mb: "1.5rem",
               p: "1rem",
@@ -1585,38 +1706,62 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           >
             Clear Selection
           </button>
+          <button
+            onClick={saveFavoriteSettings}
+            disabled={selectedPortfolios.length === 0 || savingFavorites || analyzing || optimizing}
+            className="btn btn-primary"
+            style={{
+              padding: "0.5rem 1rem",
+              fontSize: "0.9rem",
+              opacity: selectedPortfolios.length === 0 || savingFavorites || analyzing || optimizing ? 0.5 : 1,
+            }}
+            title="Save current settings as favorites"
+          >
+            {savingFavorites ? "Saving..." : "⭐ Save Favorites"}
+          </button>
+          <button
+            onClick={loadFavoriteSettings}
+            disabled={loadingFavorites || analyzing || optimizing}
+            className="btn btn-success"
+            style={{
+              padding: "0.5rem 1rem",
+              fontSize: "0.9rem",
+              opacity: loadingFavorites || analyzing || optimizing ? 0.5 : 1,
+            }}
+            title="Load your favorite settings"
+          >
+            {loadingFavorites ? "Loading..." : "📂 Load Favorites"}
+          </button>
           {selectedPortfolios.length >= 2 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginRight: "0.5rem" }}>
-              {/* Progressive Optimization Controls */}
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  onClick={() => optimizePortfolioWeights(false)}
-                  disabled={optimizing || analyzing}
-                  className="btn btn-success"
-                  style={{
-                    padding: "0.5rem 1.5rem",
-                    fontSize: "0.9rem",
-                    opacity: optimizing || analyzing ? 0.5 : 1,
-                  }}
-                  title="Find optimal weights to maximize return while minimizing drawdown"
-                >
-                  {optimizing 
-                    ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
-                    : "🎯 Optimize Weights"}
-                </button>
-                
-                {/* Clear Cache button */}
-                <button
-                  onClick={clearOptimizationCache}
-                  className="btn btn-secondary"
-                  style={{
-                    padding: "0.5rem 1rem",
-                    fontSize: "0.9rem"
-                  }}
-                  title="Clear optimization cache and reset state"
-                >
-                  🗑️ Clear Cache
-                </button>
+            <>
+              <button
+                onClick={() => optimizePortfolioWeights(false)}
+                disabled={optimizing || analyzing}
+                className="btn btn-success"
+                style={{
+                  padding: "0.5rem 1rem",
+                  fontSize: "0.9rem",
+                  opacity: optimizing || analyzing ? 0.5 : 1,
+                }}
+                title="Find optimal weights to maximize return while minimizing drawdown"
+              >
+                {optimizing
+                  ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
+                  : "🎯 Optimize Weights"}
+              </button>
+
+              {/* Clear Cache button */}
+              <button
+                onClick={clearOptimizationCache}
+                className="btn btn-secondary"
+                style={{
+                  padding: "0.5rem 1rem",
+                  fontSize: "0.9rem"
+                }}
+                title="Clear optimization cache and reset state"
+              >
+                🗑️ Clear Cache
+              </button>
                 
                 {/* Continue and Accept buttons for partial results */}
                 {isPartialResult && optimizing && (
@@ -1653,20 +1798,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                     </button>
                   </>
                 )}
-              </div>
-              
-              {/* Progress indicator for partial results */}
-              {isPartialResult && optimizing && canContinue && (
-                <div style={{ 
-                  fontSize: "0.8rem", 
-                  color: theme.palette.mode === "dark" ? "#fbbf24" : "#d97706",
-                  fontStyle: "italic" 
-                }}>
-                  Partial optimization complete ({optimizationProgress.toFixed(1)}% explored). 
-                  Continue for better results or use current weights.
-                </div>
-              )}
-            </div>
+            </>
           )}
           <button
             onClick={analyzeSelectedPortfolios}
@@ -2131,7 +2263,16 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                   marginBottom: "1rem",
                 }}
               >
-                {selectedPortfolios.map((portfolioId) => {
+                {selectedPortfolios
+                  .slice()
+                  .sort((a, b) => {
+                    const portfolioA = portfolios.find((p) => p.id === a);
+                    const portfolioB = portfolios.find((p) => p.id === b);
+                    const nameA = portfolioA?.name || `Portfolio ${a}`;
+                    const nameB = portfolioB?.name || `Portfolio ${b}`;
+                    return nameA.localeCompare(nameB);
+                  })
+                  .map((portfolioId) => {
                   const portfolio = portfolios.find(
                     (p) => p.id === portfolioId
                   );

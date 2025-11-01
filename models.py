@@ -25,6 +25,37 @@ class User(Base):
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
 
+class FavoriteSettings(Base):
+    """
+    Model for storing user's favorite portfolio analysis settings
+    """
+    __tablename__ = "favorite_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False, default="My Favorite Settings")
+
+    # Portfolio selection and weights
+    portfolio_ids_json = Column(Text, nullable=False)  # JSON array of portfolio IDs
+    weights_json = Column(Text, nullable=False)  # JSON array of weights
+
+    # Analysis parameters
+    starting_capital = Column(Float, nullable=False, default=500000.0)
+    risk_free_rate = Column(Float, nullable=False, default=0.043)
+    sma_window = Column(Integer, nullable=False, default=20)
+    use_trading_filter = Column(Boolean, nullable=False, default=True)
+
+    # Date range (optional - null means use all data)
+    date_range_start = Column(DateTime, nullable=True)
+    date_range_end = Column(DateTime, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<FavoriteSettings(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
+
 class Portfolio(Base):
     """
     Model for storing portfolio metadata
