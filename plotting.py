@@ -94,7 +94,18 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         # Plot 2: Drawdown (top right)
         logger.info(f"[create_plots] Creating drawdown plot")
         ax2 = plt.subplot(2, 2, 2)
-        ax2.plot(df['Date'], df['Drawdown Pct'] * 100)
+
+        # Use pre-calculated drawdown percentage if available
+        if 'Drawdown Pct' in df.columns:
+            drawdown_pct = df['Drawdown Pct'] * 100
+            logger.info(f"[create_plots] Using pre-calculated Drawdown Pct column (min: {df['Drawdown Pct'].min():.4%})")
+        else:
+            # Fallback: calculate from account value
+            rolling_peak = df['Account Value'].expanding().max()
+            drawdown_pct = ((df['Account Value'] - rolling_peak) / rolling_peak) * 100
+            logger.info(f"[create_plots] Calculated drawdown percentage (min: {(drawdown_pct/100).min():.4%})")
+
+        ax2.plot(df['Date'], drawdown_pct)
         ax2.set_title('Drawdown Over Time')
         ax2.set_xlabel('Date')
         ax2.set_ylabel('Drawdown (%)')
@@ -124,11 +135,17 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         # Plot 4: Drawdown in Dollars (bottom right)
         logger.info(f"[create_plots] Creating dollar drawdown plot")
         ax4 = plt.subplot(2, 2, 4)
-        
-        # Calculate rolling peak and drawdown amount for plotting
-        rolling_peak = df['Account Value'].expanding().max()
-        drawdown_amount = df['Account Value'] - rolling_peak
-        
+
+        # Use pre-calculated drawdown amount if available, otherwise calculate it
+        if 'Drawdown Amount' in df.columns:
+            drawdown_amount = df['Drawdown Amount']
+            logger.info(f"[create_plots] Using pre-calculated Drawdown Amount column (min: ${drawdown_amount.min():,.2f})")
+        else:
+            # Fallback: calculate rolling peak and drawdown amount for plotting
+            rolling_peak = df['Account Value'].expanding().max()
+            drawdown_amount = df['Account Value'] - rolling_peak
+            logger.info(f"[create_plots] Calculated drawdown amount (min: ${drawdown_amount.min():,.2f})")
+
         ax4.plot(df['Date'], drawdown_amount, color='red', linewidth=1.5)
         ax4.fill_between(df['Date'], drawdown_amount, 0, alpha=0.3, color='red')
         ax4.set_title('Drawdown Over Time')
@@ -138,11 +155,12 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         ax4.tick_params(axis='x', rotation=45)
         # Format y-axis as currency
         ax4.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
-        
+
         # Set y-axis to show drawdowns properly with zero at top
         ax4.axhline(y=0, color='black', linestyle='-', alpha=0.3)
         # Set y-axis limits to ensure zero is at top and negatives go down
         min_drawdown = drawdown_amount.min()
+        logger.info(f"[create_plots] Setting y-axis limits: {min_drawdown * 1.1:.2f} to 0")
         ax4.set_ylim(min_drawdown * 1.1, 0)  # Extend bottom slightly, zero at top
 
         # Adjust layout to prevent overlap

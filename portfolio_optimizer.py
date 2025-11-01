@@ -829,15 +829,16 @@ class PortfolioOptimizer:
             logger.warning(f"Scipy optimization failed: {error_message}")
             return self._create_result_from_weights(initial_weights, portfolios_data, 'scipy', result.nit, False, error_message)
     
-    def _optimize_with_differential_evolution(self, portfolios_data: List[Tuple[str, pd.DataFrame]], 
+    def _optimize_with_differential_evolution(self, portfolios_data: List[Tuple[str, pd.DataFrame]],
                                             subset_caches: List[Dict] = None,
                                             resume_from_weights: List[float] = None) -> OptimizationResult:
         """Optimize using differential evolution (global optimizer)"""
         num_portfolios = len(portfolios_data)
-        
+
         # Initialize optimization tracking
         self.start_time = time.time()
-        
+        self.optimization_stopped = False  # Flag to track if we stopped due to timeout
+
         # For continuation, don't reset iteration counter - keep accumulating progress
         if not resume_from_weights:
             self.current_iteration = 0
@@ -852,14 +853,14 @@ class PortfolioOptimizer:
             self.weight_precision = 0.005  # 0.5% increments for continuation
             logger.info(f"Continuing optimization from {self.cumulative_iterations} cumulative iterations")
             logger.info(f"Continuation: using finer precision ({self.weight_precision * 100:.1f}% increments)")
-        
+
         self.best_result_so_far = None
-        
+
         # Bounds for each weight using dynamic constraints
         bounds = [(self.min_weight, self.max_weight) for _ in range(num_portfolios)]
-        
+
         logger.info(f"Starting differential evolution optimization (timeout: {self.max_time_seconds}s)...")
-        
+
         # Prepare initial guess if resume weights are provided
         initial_guess = None
         if resume_from_weights and len(resume_from_weights) == num_portfolios:
@@ -869,60 +870,83 @@ class PortfolioOptimizer:
             # Ensure weights are within bounds
             initial_guess = np.clip(initial_guess, self.min_weight, self.max_weight)
             logger.info(f"Using resume weights as initial guess: {initial_guess}")
-        
+
         def constrained_objective(weights):
             # Check for timeout before evaluating
             if self._is_timeout_reached():
-                # Return a high value to signal stopping, but don't raise exception
+                # Set flag and return high value to discourage this solution
+                self.optimization_stopped = True
                 return 1000
-            
+
             # Discretize weights to practical increments (reduces search space)
             # This dramatically reduces the search space and speeds up convergence
             discretized_weights = np.round(weights / self.weight_precision) * self.weight_precision
-            
-            # Log discretization effect occasionally for debugging  
+
+            # Log discretization effect occasionally for debugging
             if self.current_iteration % 50 == 0:
                 logger.info(f"Weight discretization example: {weights[:2]} → {discretized_weights[:2]}")
-            
+
             # Normalize discretized weights to sum to 1
             normalized_weights = discretized_weights / np.sum(discretized_weights)
-            
+
             # Ensure weights are within bounds after discretization
             normalized_weights = np.clip(normalized_weights, self.min_weight, self.max_weight)
-            
+
             # Re-normalize after clipping
             normalized_weights = normalized_weights / np.sum(normalized_weights)
-            
+
             return self._objective_function(normalized_weights, portfolios_data)
-        
+
+        def optimization_callback(xk, convergence):
+            """Callback to check for timeout and stop optimization early if needed"""
+            if self._is_timeout_reached():
+                logger.info(f"Timeout reached ({self.max_time_seconds}s), stopping optimization early")
+                self.optimization_stopped = True
+                return True  # Return True to stop optimization
+            return False  # Continue optimization
+
         # Suppress warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            
-            # Adjust parameters based on portfolio count
-            base_maxiter = min(100 + num_portfolios * 10, 300)  # Scale iterations with complexity
-            base_popsize = min(15 + num_portfolios, 30)  # Scale population with complexity
-            
+
+            # Adjust parameters based on portfolio count and timeout
+            # For large portfolios, reduce iterations to ensure we can complete within timeout
+            if num_portfolios <= 5:
+                base_maxiter = 100
+                base_popsize = 15
+            elif num_portfolios <= 10:
+                base_maxiter = 80
+                base_popsize = 20
+            elif num_portfolios <= 15:
+                base_maxiter = 50
+                base_popsize = 20
+            elif num_portfolios <= 20:
+                base_maxiter = 30
+                base_popsize = 15
+            else:  # 20+ portfolios
+                base_maxiter = 20
+                base_popsize = 10
+
             # For continuations, reduce iterations since we're starting from a better point
             if resume_from_weights:
                 # Reduce iterations for continuation (30% of original) since we start from good point
-                maxiter = max(int(base_maxiter * 0.3), 20)
-                popsize = max(int(base_popsize * 0.5), 10)  # Smaller population for focused search
+                maxiter = max(int(base_maxiter * 0.3), 10)
+                popsize = max(int(base_popsize * 0.5), 8)  # Smaller population for focused search
                 logger.info(f"Continuation optimization: reduced maxiter={maxiter}, popsize={popsize}")
             else:
                 maxiter = base_maxiter
                 popsize = base_popsize
-                logger.info(f"Fresh optimization: maxiter={maxiter}, popsize={popsize}")
-            
+                logger.info(f"Fresh optimization: maxiter={maxiter}, popsize={popsize} for {num_portfolios} portfolios")
+
             # Update total iterations estimate accounting for cumulative runs
             if hasattr(self, 'cumulative_iterations') and self.cumulative_iterations > 0:
-                # Add to existing total estimate  
+                # Add to existing total estimate
                 additional_iterations = maxiter * popsize
                 self.total_iterations = getattr(self, 'total_iterations', base_maxiter * base_popsize) + additional_iterations
                 logger.info(f"Updated total iterations estimate: {self.total_iterations}")
             else:
                 self.total_iterations = maxiter * popsize  # Fresh start
-            
+
             # Build parameters for differential evolution
             de_params = {
                 'func': constrained_objective,
@@ -931,39 +955,44 @@ class PortfolioOptimizer:
                 'popsize': popsize,
                 'seed': 42,
                 'polish': True,
-                'atol': 1e-4
+                'atol': 1e-4,
+                'callback': optimization_callback  # Add callback for early stopping
             }
-            
+
             # Add initial guess if resuming from previous weights
             if initial_guess is not None:
                 de_params['x0'] = initial_guess
-                
+
             result = differential_evolution(**de_params)
         
         # Calculate execution time and progress
         execution_time = time.time() - self.start_time
-        
+
         # Use cumulative iterations for progress calculation when continuing
         iterations_for_progress = getattr(self, 'cumulative_iterations', self.current_iteration)
         progress_percentage = min((iterations_for_progress / max(self.total_iterations, 1)) * 100, 100.0)
-        
+
         logger.info(f"Progress calculation: {iterations_for_progress} / {self.total_iterations} = {progress_percentage:.1f}%")
-        
+        logger.info(f"Optimization completed in {execution_time:.1f}s, stopped={self.optimization_stopped}")
+
         # Check if we have a good result (either from success or timeout with best result)
         has_good_result = result.success or (self.best_result_so_far is not None)
-        
+
+        # Determine if this is a partial result (stopped due to timeout)
+        timed_out = self.optimization_stopped or self._is_timeout_reached()
+
         if has_good_result:
-            # Use best result if we have one, otherwise use scipy result
-            if self.best_result_so_far is not None and (not result.success or self._is_timeout_reached()):
+            # Use best result if we have one, especially if we timed out
+            if self.best_result_so_far is not None and (not result.success or timed_out):
                 optimal_weights = self.best_result_so_far['weights']
-                # Consider complete if progress >= 100%, even if timeout reached
-                timed_out = self._is_timeout_reached()
                 is_partial = timed_out and progress_percentage < 100.0
                 message = "Partial optimization completed (timeout reached)" if is_partial else "Optimization successful"
+                logger.info(f"Using best result found (timed_out={timed_out}, is_partial={is_partial})")
             else:
                 optimal_weights = result.x / np.sum(result.x)  # Normalize
                 is_partial = False
                 message = "Optimization successful"
+                logger.info(f"Using scipy result (success={result.success})")
             
             # Apply final discretization to ensure results match trading unit precision
             logger.info(f"Raw optimal weights before discretization: {optimal_weights}")

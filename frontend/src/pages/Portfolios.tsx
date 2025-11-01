@@ -40,6 +40,20 @@ const loadFromLocalStorage = (key: string, defaultValue: any = null) => {
   }
 };
 
+// Helper function to format date strings without timezone issues
+const formatDateString = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return "N/A";
+
+  // If it has a time component (contains 'T'), use normal parsing
+  if (dateStr.includes('T')) {
+    return new Date(dateStr).toLocaleDateString();
+  }
+
+  // Date-only string - parse manually to avoid timezone issues
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString();
+};
+
 interface Portfolio {
   id: number;
   name: string;
@@ -665,13 +679,6 @@ export default function Portfolios() {
       // Initial validation for new optimization
       if (selectedPortfolios.length < 2) {
         alert("Please select at least 2 portfolios for weight optimization");
-        return;
-      }
-
-      if (selectedPortfolios.length > 20) {
-        alert(
-          "Maximum 20 portfolios allowed for optimization to prevent performance issues"
-        );
         return;
       }
 
@@ -1468,12 +1475,12 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     onClick={() => optimizePortfolioWeights(false)}
-                    disabled={optimizing || analyzing || selectedPortfolios.length > 20}
+                    disabled={optimizing || analyzing}
                     className="btn btn-success"
                     style={{
                       padding: "0.5rem 1.5rem",
                       fontSize: "0.9rem",
-                      opacity: optimizing || analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
+                      opacity: optimizing || analyzing ? 0.5 : 1,
                     }}
                     title="Find optimal weights to maximize return while minimizing drawdown"
                   >
@@ -1584,12 +1591,12 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
                   onClick={() => optimizePortfolioWeights(false)}
-                  disabled={optimizing || analyzing || selectedPortfolios.length > 20}
+                  disabled={optimizing || analyzing}
                   className="btn btn-success"
                   style={{
                     padding: "0.5rem 1.5rem",
                     fontSize: "0.9rem",
-                    opacity: optimizing || analyzing || selectedPortfolios.length > 20 ? 0.5 : 1,
+                    opacity: optimizing || analyzing ? 0.5 : 1,
                   }}
                   title="Find optimal weights to maximize return while minimizing drawdown"
                 >
@@ -2326,7 +2333,9 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             {Object.entries(
                               analysisResults.blended_result
                                 .portfolio_composition
-                            ).map(([name, weight]) => (
+                            )
+                              .sort(([nameA], [nameB]) => nameA.localeCompare(nameB))
+                              .map(([name, weight]) => (
                               <div
                                 key={name}
                                 style={{
@@ -2863,12 +2872,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             color: theme.palette.text.secondary,
                           }}
                         >
-                          {analysisResults.blended_result.metrics
-                            .max_drawdown_date
-                            ? new Date(
-                                analysisResults.blended_result.metrics.max_drawdown_date
-                              ).toLocaleDateString()
-                            : "N/A"}
+                          {formatDateString(analysisResults.blended_result.metrics.max_drawdown_date)}
                         </div>
                       </div>
 
@@ -3604,11 +3608,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     color: theme.palette.text.secondary,
                                   }}
                                 >
-                                  {result.metrics.max_drawdown_date
-                                    ? new Date(
-                                        result.metrics.max_drawdown_date
-                                      ).toLocaleDateString()
-                                    : "N/A"}
+                                  {formatDateString(result.metrics.max_drawdown_date)}
                                 </div>
                               </div>
                             </div>

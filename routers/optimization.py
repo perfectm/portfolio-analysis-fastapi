@@ -102,8 +102,6 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             return {"success": False, "error": "No portfolio IDs provided"}
         if user_starting_capital <= 0:
             return {"success": False, "error": "Starting capital must be greater than 0"}
-        if len(portfolio_ids) > 20:
-            return {"success": False, "error": "Maximum 20 portfolios allowed for analysis to prevent memory issues"}
         
         # Calculate starting capital based on maximum daily margin requirements
         # For weighted analysis, we need to determine the weights first to calculate proper margin requirements
@@ -254,7 +252,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         if len(portfolios_data) > 1:
             try:
                 logger.info("[Weighted Analysis] Creating weighted blended portfolio analysis")
-                blended_df, blended_metrics = create_blended_portfolio(
+                blended_df, blended_metrics, _ = create_blended_portfolio(
                     db=db,
                     portfolio_ids=portfolio_ids,
                     weights=portfolio_weights,
@@ -460,9 +458,7 @@ async def optimize_portfolio_weights_progressive(request: Request, db: Session =
             return {"success": False, "error": "No portfolio IDs provided"}
         if len(portfolio_ids) < 2:
             return {"success": False, "error": "Need at least 2 portfolios for weight optimization"}
-        if len(portfolio_ids) > 20:
-            return {"success": False, "error": "Maximum 20 portfolios allowed for optimization to prevent performance issues"}
-        
+
         logger.info(f"[Progressive Optimization] Optimizing weights for portfolios: {portfolio_ids}")
         logger.info(f"[Progressive Optimization] Method: {method}, timeout: {max_time_seconds}s")
         if resume_from_weights:
@@ -567,8 +563,6 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
             return {"success": False, "error": "No portfolio IDs provided"}
         if len(portfolio_ids) < 2:
             return {"success": False, "error": "Need at least 2 portfolios for weight optimization"}
-        if len(portfolio_ids) > 20:
-            return {"success": False, "error": "Maximum 20 portfolios allowed for optimization to prevent performance issues"}
         logger.info(f"[Weight Optimization] Optimizing weights for portfolios: {portfolio_ids}")
         logger.info(f"[Weight Optimization] Using optimization method: {method}")
         
@@ -968,8 +962,8 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 # Use 1x multiplier for each portfolio
                 equal_weights = [1.0] * len(portfolio_ids)
                 logger.info(f"[Analyze Portfolios] Using equal weights (1x each): {equal_weights}")
-                
-                blended_df, blended_metrics = create_blended_portfolio(
+
+                blended_df, blended_metrics, _ = create_blended_portfolio(
                     db=db,
                     portfolio_ids=portfolio_ids,
                     weights=equal_weights,

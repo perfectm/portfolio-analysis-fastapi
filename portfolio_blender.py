@@ -28,7 +28,7 @@ def create_blended_portfolio(
     rf_rate: float = 0.043,
     sma_window: int = 20,
     use_trading_filter: bool = True
-) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+) -> Tuple[pd.DataFrame, Dict[str, Any], Dict[str, Any]]:
     """Create a blended portfolio with memory optimization"""
     import psutil
     process = psutil.Process()
@@ -76,10 +76,16 @@ def create_blended_portfolio(
         if df.empty:
             logger.warning(f"Portfolio {portfolio_id}: No data remaining after date filtering")
             continue
-        
+
+        # Drop pre-calculated columns that are invalid after date filtering
+        # These columns were calculated on full historical data and need to be recalculated
+        columns_to_drop = ['Cumulative P/L', 'Account Value', 'Account_Value', 'Drawdown Pct', 'Drawdown Amount', 'Rolling Peak', 'Daily Return']
+        df = df.drop(columns=[col for col in columns_to_drop if col in df.columns], errors='ignore')
+        logger.info(f"Portfolio {portfolio_id}: Dropped pre-calculated columns for recalculation after filtering")
+
         # Aggregate P/L by date in case of duplicates
         df = df.groupby('Date')['P/L'].sum().reset_index()
-        
+
         # Scale P/L by weight (multiplier)
         df['P/L'] = df['P/L'] * weight
         
@@ -161,9 +167,13 @@ def create_blended_portfolio(
         db.add(mapping)
     
     db.commit()
-    
+
     logger.info(f"[MEMORY] End blending - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
-    return processed_df, metrics
+
+    # Create correlation data (simplified)
+    correlation_data = {"correlation_matrix": {}}
+
+    return processed_df, metrics, correlation_data
 
 
 def create_blended_portfolio_from_files(
@@ -247,9 +257,15 @@ def create_blended_portfolio_from_files(
     if blended_df.empty:
         logger.warning("Blended portfolio: No data remaining after date filtering")
         return None, None, None
-    
+
     blended_df = blended_df.reset_index(drop=True)
-    
+
+    # Drop pre-calculated columns that are invalid after date filtering
+    # These columns were calculated on full historical data and need to be recalculated
+    columns_to_drop = ['Cumulative P/L', 'Account Value', 'Account_Value', 'Drawdown Pct', 'Drawdown Amount', 'Rolling Peak', 'Daily Return']
+    blended_df = blended_df.drop(columns=[col for col in columns_to_drop if col in blended_df.columns], errors='ignore')
+    logger.info(f"Blended portfolio: Dropped pre-calculated columns for recalculation after filtering")
+
     # Process the blended portfolio to get metrics
     try:
         processed_df, blended_metrics = process_portfolio_data(
