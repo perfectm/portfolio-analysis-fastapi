@@ -240,51 +240,88 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         logger.info(f"[Correlation Heatmap] Correlation matrix shape: {correlation_matrix.shape}")
         logger.info(f"[Correlation Heatmap] Correlation matrix columns: {list(correlation_matrix.columns)}")
         logger.info(f"[Correlation Heatmap] Using zero-excluding correlation calculation")
-        
-        # Create the heatmap with reduced figure size
-        plt.figure(figsize=(8, 6), dpi=100)  # Reduced from 10x8
-        
+
+        # Dynamic sizing based on number of portfolios
+        n_portfolios = len(correlation_matrix)
+
+        # Scale figure size with number of portfolios (min 10, max 30)
+        base_size = max(10, min(30, 0.5 * n_portfolios))
+        fig_width = base_size
+        fig_height = base_size * 0.9  # Slightly rectangular for better label spacing
+
+        # Dynamic font sizes based on portfolio count
+        if n_portfolios <= 10:
+            title_size = 18
+            label_size = 14
+            tick_size = 12
+            annot_size = 10
+            show_annotations = True
+        elif n_portfolios <= 20:
+            title_size = 16
+            label_size = 12
+            tick_size = 10
+            annot_size = 8
+            show_annotations = True
+        else:
+            title_size = 14
+            label_size = 10
+            tick_size = 8
+            annot_size = 6
+            show_annotations = False  # Hide numbers for large matrices
+
+        logger.info(f"[Correlation Heatmap] Using figure size: {fig_width}x{fig_height}, show_annotations={show_annotations}")
+
+        # Create the heatmap with dynamic figure size
+        plt.figure(figsize=(fig_width, fig_height), dpi=100)
+
         # Create a mask for the upper triangle to show only lower triangle + diagonal
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
-        
+
         # Clean correlation matrix for seaborn - replace infinite values with NaN
         correlation_matrix_clean = correlation_matrix.replace([np.inf, -np.inf], np.nan)
-        
+
         # Fill NaN values in correlation matrix with 0 for display
         correlation_matrix_display = correlation_matrix_clean.fillna(0)
-        
-        # Create custom annotation array with better number formatting
-        def format_correlation(x):
-            if abs(x) < 0.001:  # Very small correlations show as 0
-                return "0.00"
-            return f"{x:.2f}"  # Show 2 decimal places for all other values
-        
-        annotations = np.vectorize(format_correlation)(correlation_matrix_display)
-        
+
         # Create custom colormap: Green at -1, Blue at 0, Red at 1
         colors = ['green', 'blue', 'red']  # -1 = green, 0 = blue, 1 = red
         n_bins = 256  # Smooth gradient
         custom_cmap = mcolors.LinearSegmentedColormap.from_list('correlation', colors, N=n_bins)
-        
+
+        # Prepare annotations if needed
+        if show_annotations:
+            # Create custom annotation array with better number formatting
+            def format_correlation(x):
+                if abs(x) < 0.001:  # Very small correlations show as 0
+                    return "0"
+                return f"{x:.2f}"  # Show 2 decimal places for all other values
+
+            annotations = np.vectorize(format_correlation)(correlation_matrix_display)
+            annot_kws = {'size': annot_size, 'weight': 'normal'}
+        else:
+            annotations = False
+            annot_kws = {}
+
         # Generate the heatmap with custom colormap
-        sns.heatmap(correlation_matrix_display, 
+        sns.heatmap(correlation_matrix_display,
                    annot=annotations,
-                   fmt='',  # Use empty format since we're providing custom annotations
-                   cmap=custom_cmap, 
-                   vmin=-1, 
+                   fmt='' if show_annotations else None,
+                   cmap=custom_cmap,
+                   vmin=-1,
                    vmax=1,
                    center=0,
-                   square=True, 
+                   square=True,
+                   linewidths=0.5 if n_portfolios <= 15 else 0,  # Remove gridlines for large matrices
                    cbar_kws={"shrink": .8, "label": "Correlation"},
                    mask=mask,
-                   annot_kws={'size': 8, 'weight': 'bold'},  # Smaller font to prevent overlap
+                   annot_kws=annot_kws
                    )
-        
-        plt.title('Portfolio Correlation Matrix\n(Daily Returns)', fontsize=16, pad=20)
-        plt.xlabel('Portfolios', fontsize=12)
-        plt.ylabel('Portfolios', fontsize=12)
-        plt.xticks(rotation=45, ha='right', fontsize=10)  # Increase tick label size
-        plt.yticks(rotation=0, fontsize=10)  # Increase tick label size
+
+        plt.title('Portfolio Correlation Matrix\n(Daily Returns)', fontsize=title_size, pad=20)
+        plt.xlabel('Portfolios', fontsize=label_size, labelpad=10)
+        plt.ylabel('Portfolios', fontsize=label_size, labelpad=10)
+        plt.xticks(rotation=90, ha='center', fontsize=tick_size)  # Vertical rotation for better readability
+        plt.yticks(rotation=0, fontsize=tick_size)
         
         # Adjust layout to ensure all labels are visible
         plt.tight_layout()
@@ -294,14 +331,18 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         timestamp = str(int(time.time()))[-6:]  # Last 6 chars of timestamp
         heatmap_filename = f'correlation_heatmap_{len(correlation_data.columns)}portfolios_{portfolio_hash}_{timestamp}.png'
         
-        # Save the heatmap with reduced DPI
+        # Save the heatmap with appropriate DPI (higher for larger matrices)
+        save_dpi = 200 if n_portfolios > 15 else 150
         heatmap_path = os.path.join(plots_dir, heatmap_filename)
-        plt.savefig(heatmap_path, dpi=150, bbox_inches='tight')  # Reduced from 300 DPI
+        plt.savefig(heatmap_path, dpi=save_dpi, bbox_inches='tight')
         plt.close()  # Explicitly close figure to free memory
+        logger.info(f"[Correlation Heatmap] Saved with DPI={save_dpi}")
         
         logger.info(f"[Correlation Heatmap] Successfully created heatmap: {heatmap_path}")
         # Clean up memory
-        del correlation_matrix, correlation_matrix_clean, correlation_matrix_display, annotations, mask
+        del correlation_matrix, correlation_matrix_clean, correlation_matrix_display, mask
+        if show_annotations and annotations is not False:
+            del annotations
         gc.collect()
         log_memory_usage("[create_correlation_heatmap] AFTER plotting")
         return heatmap_path
