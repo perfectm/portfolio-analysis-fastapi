@@ -301,18 +301,6 @@ def _calculate_portfolio_metrics(
             logger.info(f"  - CVaR (5%): {cvar:.4f}")
             logger.info(f"  - Annual volatility: {strategy_std:.4f}")
 
-            # Find worst and best P/L days
-            worst_pl_idx = clean_df['P/L'].idxmin()
-            worst_pl = clean_df.loc[worst_pl_idx, 'P/L']
-            worst_pl_date = clean_df.loc[worst_pl_idx, 'Date']
-
-            best_pl_idx = clean_df['P/L'].idxmax()
-            best_pl = clean_df.loc[best_pl_idx, 'P/L']
-            best_pl_date = clean_df.loc[best_pl_idx, 'Date']
-
-            logger.info(f"  - Worst P/L day: ${worst_pl:,.2f} on {worst_pl_date}")
-            logger.info(f"  - Best P/L day: ${best_pl:,.2f} on {best_pl_date}")
-
         else:
             logger.warning("No valid returns found for strategy metrics calculation")
             # Still calculate Beta even if no valid returns for other metrics
@@ -331,11 +319,23 @@ def _calculate_portfolio_metrics(
                 'beta_observation_count': int(beta_obs_count)
             })
             return default_metrics
-            
+
+        # Calculate worst and best P/L days (always, regardless of valid returns)
+        worst_pl_idx = clean_df['P/L'].idxmin()
+        worst_pl = clean_df.loc[worst_pl_idx, 'P/L']
+        worst_pl_date = clean_df.loc[worst_pl_idx, 'Date']
+
+        best_pl_idx = clean_df['P/L'].idxmax()
+        best_pl = clean_df.loc[best_pl_idx, 'P/L']
+        best_pl_date = clean_df.loc[best_pl_idx, 'Date']
+
+        logger.info(f"  - Worst P/L day: ${worst_pl:,.2f} on {worst_pl_date}")
+        logger.info(f"  - Best P/L day: ${best_pl:,.2f} on {best_pl_date}")
+
     except Exception as e:
         logger.error(f"Error calculating metrics: {str(e)}")
         return _get_default_metrics(original_starting_capital, clean_df)
-    
+
     return {
         'sharpe_ratio': float(sharpe_ratio),
         'sortino_ratio': float(sortino_ratio),
