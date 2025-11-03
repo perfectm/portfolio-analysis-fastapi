@@ -241,7 +241,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         'annual_volatility': float(result['metrics'].get('annual_volatility', 0)),
                         'mar_ratio': float(result['metrics'].get('mar_ratio', 0)),
                         'time_period_years': float(result['metrics'].get('time_period_years', 0)),
-                        'number_of_trading_days': int(result['metrics'].get('number_of_trading_days', 0))
+                        'number_of_trading_days': int(result['metrics'].get('number_of_trading_days', 0)),
+                        'worst_pl_day': float(result['metrics'].get('worst_pl_day', 0)),
+                        'worst_pl_date': result['metrics'].get('worst_pl_date', ''),
+                        'best_pl_day': float(result['metrics'].get('best_pl_day', 0)),
+                        'best_pl_date': result['metrics'].get('best_pl_date', '')
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -394,7 +398,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             'beta': float(blended_metrics.get('beta', 0)),
                             'alpha': float(blended_metrics.get('alpha', 0)),
                             'r_squared': float(blended_metrics.get('r_squared', 0)),
-                            'beta_observation_count': int(blended_metrics.get('beta_observation_count', 0))
+                            'beta_observation_count': int(blended_metrics.get('beta_observation_count', 0)),
+                            'worst_pl_day': float(blended_metrics.get('worst_pl_day', 0)),
+                            'worst_pl_date': blended_metrics.get('worst_pl_date', ''),
+                            'best_pl_day': float(blended_metrics.get('best_pl_day', 0)),
+                            'best_pl_date': blended_metrics.get('best_pl_date', '')
                         }
                     }
                     logger.info("[Weighted Analysis] Weighted blended portfolio created successfully")
@@ -949,7 +957,11 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                         'annual_volatility': float(result['metrics'].get('annual_volatility', 0)),
                         'mar_ratio': float(result['metrics'].get('mar_ratio', 0)),
                         'time_period_years': float(result['metrics'].get('time_period_years', 0)),
-                        'number_of_trading_days': int(result['metrics'].get('number_of_trading_days', 0))
+                        'number_of_trading_days': int(result['metrics'].get('number_of_trading_days', 0)),
+                        'worst_pl_day': float(result['metrics'].get('worst_pl_day', 0)),
+                        'worst_pl_date': result['metrics'].get('worst_pl_date', ''),
+                        'best_pl_day': float(result['metrics'].get('best_pl_day', 0)),
+                        'best_pl_date': result['metrics'].get('best_pl_date', '')
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -1086,7 +1098,11 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                             'beta': float(blended_metrics.get('beta', 0)),
                             'alpha': float(blended_metrics.get('alpha', 0)),
                             'r_squared': float(blended_metrics.get('r_squared', 0)),
-                            'beta_observation_count': int(blended_metrics.get('beta_observation_count', 0))
+                            'beta_observation_count': int(blended_metrics.get('beta_observation_count', 0)),
+                            'worst_pl_day': float(blended_metrics.get('worst_pl_day', 0)),
+                            'worst_pl_date': blended_metrics.get('worst_pl_date', ''),
+                            'best_pl_day': float(blended_metrics.get('best_pl_day', 0)),
+                            'best_pl_date': blended_metrics.get('best_pl_date', '')
                         }
                     }
                     logger.info("[Analyze Portfolios] Blended portfolio created successfully")
