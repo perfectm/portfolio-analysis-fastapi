@@ -235,7 +235,19 @@ def _calculate_portfolio_metrics(
         logger.info(f"  - Valid returns count: {len(valid_returns)}")
         logger.info(f"  - Account value range: {clean_df['Account Value'].min():.2f} to {clean_df['Account Value'].max():.2f}")
         logger.info(f"  - Cumulative P/L final: {clean_df['Cumulative P/L'].iloc[-1]:.2f}")
-        
+
+        # Calculate worst and best P/L days (always, regardless of valid returns)
+        worst_pl_idx = clean_df['P/L'].idxmin()
+        worst_pl = clean_df.loc[worst_pl_idx, 'P/L']
+        worst_pl_date = clean_df.loc[worst_pl_idx, 'Date']
+
+        best_pl_idx = clean_df['P/L'].idxmax()
+        best_pl = clean_df.loc[best_pl_idx, 'P/L']
+        best_pl_date = clean_df.loc[best_pl_idx, 'Date']
+
+        logger.info(f"  - Worst P/L day: ${worst_pl:,.2f} on {worst_pl_date}")
+        logger.info(f"  - Best P/L day: ${best_pl:,.2f} on {best_pl_date}")
+
         if len(valid_returns) > 0:
             # Debug: Let's trace the calculation step by step
             final_account_value = clean_df['Account Value'].iloc[-1]
@@ -310,27 +322,19 @@ def _calculate_portfolio_metrics(
             except Exception as e:
                 logger.warning(f"Beta calculation failed (no returns case): {e}")
                 beta, alpha, r_squared, beta_obs_count = 0.0, 0.0, 0.0, 0
-            # Get default metrics but include calculated Beta values
+            # Get default metrics but include calculated Beta and P/L day values
             default_metrics = _get_default_metrics(original_starting_capital, clean_df)
             default_metrics.update({
                 'beta': float(beta),
                 'alpha': float(alpha),
                 'r_squared': float(r_squared),
-                'beta_observation_count': int(beta_obs_count)
+                'beta_observation_count': int(beta_obs_count),
+                'worst_pl_day': float(worst_pl),
+                'worst_pl_date': worst_pl_date.strftime('%Y-%m-%d'),
+                'best_pl_day': float(best_pl),
+                'best_pl_date': best_pl_date.strftime('%Y-%m-%d'),
             })
             return default_metrics
-
-        # Calculate worst and best P/L days (always, regardless of valid returns)
-        worst_pl_idx = clean_df['P/L'].idxmin()
-        worst_pl = clean_df.loc[worst_pl_idx, 'P/L']
-        worst_pl_date = clean_df.loc[worst_pl_idx, 'Date']
-
-        best_pl_idx = clean_df['P/L'].idxmax()
-        best_pl = clean_df.loc[best_pl_idx, 'P/L']
-        best_pl_date = clean_df.loc[best_pl_idx, 'Date']
-
-        logger.info(f"  - Worst P/L day: ${worst_pl:,.2f} on {worst_pl_date}")
-        logger.info(f"  - Best P/L day: ${best_pl:,.2f} on {best_pl_date}")
 
     except Exception as e:
         logger.error(f"Error calculating metrics: {str(e)}")
