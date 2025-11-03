@@ -282,6 +282,30 @@ export default function Analysis() {
           format="date"
           color="gray"
         />
+        <MetricCard
+          title="Worst P/L Day"
+          value={metrics.worst_pl_day || 0}
+          format="currency"
+          color="red"
+        />
+        <MetricCard
+          title="Worst P/L Date"
+          value={metrics.worst_pl_date || "N/A"}
+          format="date"
+          color="gray"
+        />
+        <MetricCard
+          title="Best P/L Day"
+          value={metrics.best_pl_day || 0}
+          format="currency"
+          color="green"
+        />
+        <MetricCard
+          title="Best P/L Date"
+          value={metrics.best_pl_date || "N/A"}
+          format="date"
+          color="gray"
+        />
 
         {/* Beta Metrics - Portfolio vs S&P 500 */}
         <MetricCard

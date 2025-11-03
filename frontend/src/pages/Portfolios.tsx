@@ -3033,6 +3033,132 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
+                          Worst P/L Day
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.error.main,
+                          }}
+                        >
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(analysisResults.blended_result.metrics.worst_pl_day || 0)}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Worst P/L Date
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.text.secondary,
+                          }}
+                        >
+                          {formatDateString(analysisResults.blended_result.metrics.worst_pl_date)}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Best P/L Day
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          {new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(analysisResults.blended_result.metrics.best_pl_day || 0)}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Best P/L Date
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.text.secondary,
+                          }}
+                        >
+                          {formatDateString(analysisResults.blended_result.metrics.best_pl_date)}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
                           Kelly Criterion
                         </div>
                         <div
@@ -3750,6 +3876,100 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {formatDateString(result.metrics.max_drawdown_date)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Worst P/L Day
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.error.main,
+                                  }}
+                                >
+                                  {new Intl.NumberFormat("en-US", {
+                                    style: "currency",
+                                    currency: "USD",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 0,
+                                  }).format(result.metrics.worst_pl_day || 0)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Worst P/L Date
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.text.secondary,
+                                  }}
+                                >
+                                  {formatDateString(result.metrics.worst_pl_date)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Best P/L Day
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  {new Intl.NumberFormat("en-US", {
+                                    style: "currency",
+                                    currency: "USD",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 0,
+                                  }).format(result.metrics.best_pl_day || 0)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Best P/L Date
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.text.secondary,
+                                  }}
+                                >
+                                  {formatDateString(result.metrics.best_pl_date)}
                                 </div>
                               </div>
                             </div>
