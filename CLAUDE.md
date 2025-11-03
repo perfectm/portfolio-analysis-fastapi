@@ -15,20 +15,57 @@ This is a full-stack portfolio analysis application that provides Monte Carlo si
 - **Server**: Single uvicorn instance serves both environments
 - **No separate deployment needed**: Changes made locally are immediately available in production after:
   1. Rebuilding frontend: `cd frontend && npm run build`
-  2. Restarting backend server: `pkill -f uvicorn && uvicorn app:app --reload --host 0.0.0.0 --port 8000`
+  2. Restarting servers using scripts: `./stop.sh && ./start.sh`
   3. Hard refresh browser to clear cached assets (Cmd+Shift+R on Mac, Ctrl+F5 on Windows)
 
 **Note**: The `render.yaml` and Docker files are legacy and not currently used for deployment.
+
+### Server Management Best Practices
+
+**ALWAYS use the provided shell scripts for server management:**
+
+- **Start servers**: `./start.sh` (dev mode) or `./start.sh prod` (production mode)
+- **Stop servers**: `./stop.sh` (dev mode) or `./stop.sh prod` (production mode)
+- **Stop everything**: `./stop.sh all` (stops all services and cleans up)
+
+**Why use scripts instead of manual commands?**
+- Scripts handle PID tracking automatically (.backend.pid, .frontend.pid)
+- Graceful shutdown with timeout and force kill if needed
+- Automatic log rotation when logs exceed 50MB
+- Port conflict detection before starting
+- Proper cleanup of resources
+- Consistent behavior across all environments
+
+**NEVER manually kill processes with pkill or kill commands unless the scripts fail.**
 
 ## Development Commands
 
 ### Quick Start
 - **First-time setup**: `./install.sh` (installs all dependencies and initializes database)
-- **Start development**: `./start.sh` (lightweight startup - starts both backend and frontend)
+- **Start development**: `./start.sh` (starts both backend and frontend with log rotation)
 - **Start production**: `./start.sh prod` (Docker-based production mode)
-- **Stop all services**: `./stop.sh` (stops dev or prod services)
+- **Stop all services**: `./stop.sh` (gracefully stops dev or prod services)
+- **Stop everything**: `./stop.sh all` (stops all services and cleans up logs)
 
-### Manual Commands (if needed)
+### Script Details
+
+**start.sh Features:**
+- Checks for port conflicts before starting (8000 for backend, 5173 for frontend)
+- Validates dependencies are installed
+- Rotates log files if they exceed 50MB (compresses with gzip)
+- Stores PIDs in `.backend.pid` and `.frontend.pid` for tracking
+- Waits for services to be ready before reporting success
+- Logs output to `backend.log` and `frontend.log`
+
+**stop.sh Features:**
+- Stops processes using PID files first (graceful)
+- Falls back to port-based process killing if needed
+- Waits up to 10 seconds for graceful shutdown
+- Force kills processes that don't respond
+- Cleans up log files in dev mode
+- Removes PID tracking files
+
+### Manual Commands (fallback only - use scripts when possible)
 
 #### Backend (FastAPI)
 - **Start development server**: `uvicorn app:app --reload`
@@ -278,6 +315,19 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **File Uploads**: Streaming file processing for large CSV files
 - **Monte Carlo**: Optimized simulation algorithms with progress tracking
 - **Background Jobs**: Robustness testing runs asynchronously with progress tracking
+
+### Server Management Protocol
+- **CRITICAL**: Always use `./start.sh` and `./stop.sh` scripts for server lifecycle management
+- **Never Manually Kill**: Do not use `pkill -f uvicorn` or `kill` commands directly
+- **Why Scripts Matter**:
+  - Track PIDs in `.backend.pid` and `.frontend.pid` files for proper cleanup
+  - Automatic log rotation prevents disk space issues
+  - Port conflict detection prevents startup failures
+  - Graceful shutdown prevents data corruption
+  - Consistent environment across development and production
+- **Emergency Only**: Manual process killing is acceptable only if scripts fail to work
+- **After Code Changes**: Always restart with `./stop.sh && ./start.sh` to apply changes
+- **Log Locations**: Check `backend.log` and `frontend.log` for debugging
 
 ### Maximum Drawdown Calculations
 - **Standard Definition**: Calculated as percentage decline from highest peak value reached, not from starting capital
