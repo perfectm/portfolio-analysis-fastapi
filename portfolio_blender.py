@@ -268,13 +268,22 @@ def create_blended_portfolio_from_files(
 
     # Process the blended portfolio to get metrics
     try:
+        # Calculate daily risk-free rate from annual rate
+        daily_rf_rate = ((1 + rf_rate) ** (1/252)) - 1
+
         processed_df, blended_metrics = process_portfolio_data(
-            blended_df, float(rf_rate), int(sma_window), bool(use_trading_filter), float(starting_capital)
+            blended_df,
+            rf_rate=float(rf_rate),
+            daily_rf_rate=float(daily_rf_rate),
+            sma_window=int(sma_window),
+            use_trading_filter=bool(use_trading_filter),
+            starting_capital=float(starting_capital),
+            is_blended=True
         )
-        
+
         # Create correlation data (simplified)
         correlation_data = {"correlation_matrix": {}}
-        
+
         return processed_df, blended_metrics, correlation_data
         
     except Exception as e:
