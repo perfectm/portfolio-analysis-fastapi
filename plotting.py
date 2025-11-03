@@ -241,6 +241,11 @@ def create_correlation_heatmap(correlation_data: pd.DataFrame, portfolio_names: 
         logger.info(f"[Correlation Heatmap] Correlation matrix columns: {list(correlation_matrix.columns)}")
         logger.info(f"[Correlation Heatmap] Using zero-excluding correlation calculation")
 
+        # Sort both axes alphabetically for easier lookup
+        sorted_portfolios = sorted(correlation_matrix.columns.tolist())
+        correlation_matrix = correlation_matrix.loc[sorted_portfolios, sorted_portfolios]
+        logger.info(f"[Correlation Heatmap] Sorted portfolios alphabetically")
+
         # Dynamic sizing based on number of portfolios
         n_portfolios = len(correlation_matrix)
 
