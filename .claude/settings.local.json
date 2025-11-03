@@ -25,7 +25,8 @@
       "WebSearch",
       "Bash(python3:*)",
       "Bash(cat:*)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(timeout 5 uvicorn:*)"
     ],
     "deny": []
   }
