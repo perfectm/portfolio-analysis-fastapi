@@ -3125,12 +3125,14 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             color: theme.palette.error.main,
                           }}
                         >
-                          {new Intl.NumberFormat("en-US", {
-                            style: "currency",
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          }).format(analysisResults.blended_result.metrics.worst_pl_day || 0)}
+                          {analysisResults.blended_result.metrics.worst_pl_day !== undefined && analysisResults.blended_result.metrics.worst_pl_day !== null
+                            ? new Intl.NumberFormat("en-US", {
+                                style: "currency",
+                                currency: "USD",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              }).format(analysisResults.blended_result.metrics.worst_pl_day)
+                            : 'N/A'}
                         </div>
                       </div>
 
@@ -3188,12 +3190,14 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             color: theme.palette.success.main,
                           }}
                         >
-                          {new Intl.NumberFormat("en-US", {
-                            style: "currency",
-                            currency: "USD",
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          }).format(analysisResults.blended_result.metrics.best_pl_day || 0)}
+                          {analysisResults.blended_result.metrics.best_pl_day !== undefined && analysisResults.blended_result.metrics.best_pl_day !== null
+                            ? new Intl.NumberFormat("en-US", {
+                                style: "currency",
+                                currency: "USD",
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              }).format(analysisResults.blended_result.metrics.best_pl_day)
+                            : 'N/A'}
                         </div>
                       </div>
 
@@ -3897,12 +3901,14 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     color: theme.palette.error.main,
                                   }}
                                 >
-                                  {new Intl.NumberFormat("en-US", {
-                                    style: "currency",
-                                    currency: "USD",
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 0,
-                                  }).format(result.metrics.worst_pl_day || 0)}
+                                  {result.metrics.worst_pl_day !== undefined && result.metrics.worst_pl_day !== null
+                                    ? new Intl.NumberFormat("en-US", {
+                                        style: "currency",
+                                        currency: "USD",
+                                        minimumFractionDigits: 0,
+                                        maximumFractionDigits: 0,
+                                      }).format(result.metrics.worst_pl_day)
+                                    : 'N/A'}
                                 </div>
                               </div>
 
@@ -3944,12 +3950,14 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     color: theme.palette.success.main,
                                   }}
                                 >
-                                  {new Intl.NumberFormat("en-US", {
-                                    style: "currency",
-                                    currency: "USD",
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 0,
-                                  }).format(result.metrics.best_pl_day || 0)}
+                                  {result.metrics.best_pl_day !== undefined && result.metrics.best_pl_day !== null
+                                    ? new Intl.NumberFormat("en-US", {
+                                        style: "currency",
+                                        currency: "USD",
+                                        minimumFractionDigits: 0,
+                                        maximumFractionDigits: 0,
+                                      }).format(result.metrics.best_pl_day)
+                                    : 'N/A'}
                                 </div>
                               </div>
 
