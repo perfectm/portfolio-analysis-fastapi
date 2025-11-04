@@ -3001,6 +3001,9 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         </div>
                       </div>
 
+                      {/* Horizontal Divider */}
+                      <div style={{ gridColumn: "1 / -1", margin: "1rem 0", borderTop: `2px solid ${theme.palette.divider}` }} />
+
                       {/* Drawdown Metrics - Bottom Row */}
                       <div
                         className="metric-card"
@@ -3832,6 +3835,9 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     : 'N/A'}
                                 </div>
                               </div>
+
+                              {/* Horizontal Divider */}
+                              <div style={{ gridColumn: "1 / -1", margin: "0.75rem 0", borderTop: `2px solid ${theme.palette.divider}` }} />
 
                               <div className="metric">
                                 <div
