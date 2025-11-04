@@ -2638,39 +2638,6 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
-                          Max Drawdown
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "1.4rem",
-                            fontWeight: "bold",
-                            color: theme.palette.error.main,
-                          }}
-                        >
-                          {(
-                            analysisResults.blended_result.metrics
-                              .max_drawdown_percent * 100
-                          )?.toFixed(2)}
-                          %
-                        </div>
-                      </div>
-
-                      <div
-                        className="metric-card"
-                        style={{
-                          padding: "1rem",
-                          background: theme.palette.background.paper,
-                          borderRadius: "6px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
-                            marginBottom: "0.5rem",
-                          }}
-                        >
                           CAGR
                         </div>
                         <div
@@ -2763,42 +2730,6 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                               maximumFractionDigits: 2,
                             }
                           )}
-                        </div>
-                      </div>
-
-                      <div
-                        className="metric-card"
-                        style={{
-                          padding: "1rem",
-                          background: theme.palette.background.paper,
-                          borderRadius: "6px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
-                            marginBottom: "0.5rem",
-                          }}
-                        >
-                          Max Drawdown ($)
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "1.4rem",
-                            fontWeight: "bold",
-                            color: theme.palette.error.main,
-                          }}
-                        >
-                          $
-                          {Math.abs(
-                            analysisResults.blended_result.metrics
-                              .max_drawdown || 0
-                          ).toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
                         </div>
                       </div>
 
@@ -3004,35 +2935,6 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
-                          Max Drawdown Date
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "1.4rem",
-                            fontWeight: "bold",
-                            color: theme.palette.text.secondary,
-                          }}
-                        >
-                          {formatDateString(analysisResults.blended_result.metrics.max_drawdown_date)}
-                        </div>
-                      </div>
-
-                      <div
-                        className="metric-card"
-                        style={{
-                          padding: "1rem",
-                          background: theme.palette.background.paper,
-                          borderRadius: "6px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
-                            marginBottom: "0.5rem",
-                          }}
-                        >
                           Kelly Criterion
                         </div>
                         <div
@@ -3099,7 +3001,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         </div>
                       </div>
 
-                      {/* Best/Worst P/L Days - Last Row */}
+                      {/* Drawdown Metrics - Bottom Row */}
                       <div
                         className="metric-card"
                         style={{
@@ -3116,7 +3018,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
-                          Worst P/L Day
+                          Max Drawdown %
                         </div>
                         <div
                           style={{
@@ -3125,14 +3027,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             color: theme.palette.error.main,
                           }}
                         >
-                          {analysisResults.blended_result.metrics.worst_pl_day !== undefined && analysisResults.blended_result.metrics.worst_pl_day !== null
-                            ? new Intl.NumberFormat("en-US", {
-                                style: "currency",
-                                currency: "USD",
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0,
-                              }).format(analysisResults.blended_result.metrics.worst_pl_day)
-                            : 'N/A'}
+                          {(analysisResults.blended_result.metrics.max_drawdown_percent * 100)?.toFixed(2)}%
                         </div>
                       </div>
 
@@ -3152,16 +3047,19 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
-                          Worst P/L Date
+                          Max Drawdown $
                         </div>
                         <div
                           style={{
                             fontSize: "1.4rem",
                             fontWeight: "bold",
-                            color: theme.palette.text.secondary,
+                            color: theme.palette.error.main,
                           }}
                         >
-                          {formatDateString(analysisResults.blended_result.metrics.worst_pl_date)}
+                          ${Math.abs(analysisResults.blended_result.metrics.max_drawdown || 0).toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })}
                         </div>
                       </div>
 
@@ -3181,23 +3079,16 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
-                          Best P/L Day
+                          Days in Drawdown
                         </div>
                         <div
                           style={{
                             fontSize: "1.4rem",
                             fontWeight: "bold",
-                            color: theme.palette.success.main,
+                            color: theme.palette.warning.main,
                           }}
                         >
-                          {analysisResults.blended_result.metrics.best_pl_day !== undefined && analysisResults.blended_result.metrics.best_pl_day !== null
-                            ? new Intl.NumberFormat("en-US", {
-                                style: "currency",
-                                currency: "USD",
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0,
-                              }).format(analysisResults.blended_result.metrics.best_pl_day)
-                            : 'N/A'}
+                          {analysisResults.blended_result.metrics.days_in_drawdown?.toLocaleString() || 0}
                         </div>
                       </div>
 
@@ -3217,16 +3108,16 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
-                          Best P/L Date
+                          Avg Drawdown Length
                         </div>
                         <div
                           style={{
                             fontSize: "1.4rem",
                             fontWeight: "bold",
-                            color: theme.palette.text.secondary,
+                            color: theme.palette.warning.main,
                           }}
                         >
-                          {formatDateString(analysisResults.blended_result.metrics.best_pl_date)}
+                          {analysisResults.blended_result.metrics.avg_drawdown_length?.toFixed(1) || 0} days
                         </div>
                       </div>
                     </div>
