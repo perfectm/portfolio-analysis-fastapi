@@ -729,6 +729,34 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     cagr = _calculate_cagr_from_df(clean_df)
     mar_ratio = abs(cagr / abs(max_drawdown_pct)) if max_drawdown_pct != 0 else 0
 
+    # Calculate total days in drawdown (when Drawdown Pct < 0)
+    days_in_drawdown = int((clean_df['Drawdown Pct'] < 0).sum())
+
+    # Calculate average drawdown length
+    # Identify all drawdown periods (consecutive days where Drawdown Pct < 0)
+    in_drawdown = clean_df['Drawdown Pct'] < 0
+    drawdown_periods = []
+    current_period_length = 0
+
+    for is_dd in in_drawdown:
+        if is_dd:
+            current_period_length += 1
+        else:
+            if current_period_length > 0:
+                drawdown_periods.append(current_period_length)
+                current_period_length = 0
+
+    # Don't forget to add the last period if it ends in drawdown
+    if current_period_length > 0:
+        drawdown_periods.append(current_period_length)
+
+    avg_drawdown_length = float(sum(drawdown_periods) / len(drawdown_periods)) if drawdown_periods else 0.0
+    num_drawdown_periods = len(drawdown_periods)
+
+    logger.info(f"[Drawdown Metrics] Total days in drawdown: {days_in_drawdown}")
+    logger.info(f"[Drawdown Metrics] Number of drawdown periods: {num_drawdown_periods}")
+    logger.info(f"[Drawdown Metrics] Average drawdown length: {avg_drawdown_length:.1f} days")
+
     # Note: We keep 'Drawdown Amount' column for use in plotting
     return {
         'mar_ratio': float(mar_ratio),
@@ -739,7 +767,10 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
         'account_value_at_drawdown_start': float(peak_value),
         'account_value_at_max_drawdown': float(max_drawdown_account_value),
         'recovery_days': float(recovery_days) if recovery_days is not None else 0.0,
-        'has_recovered': recovery_days is not None
+        'has_recovered': recovery_days is not None,
+        'days_in_drawdown': int(days_in_drawdown),
+        'avg_drawdown_length': float(avg_drawdown_length),
+        'num_drawdown_periods': int(num_drawdown_periods)
     }
 
 
@@ -780,7 +811,10 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
         'number_of_trading_days': 0,
         'time_period_years': 0,
         'recovery_days': 0,
-        'has_recovered': False
+        'has_recovered': False,
+        'days_in_drawdown': 0,
+        'avg_drawdown_length': 0,
+        'num_drawdown_periods': 0
     }
     
     if clean_df is not None:

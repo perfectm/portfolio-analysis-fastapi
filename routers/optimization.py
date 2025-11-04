@@ -245,7 +245,10 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         'worst_pl_day': float(result['metrics'].get('worst_pl_day', 0)),
                         'worst_pl_date': result['metrics'].get('worst_pl_date', ''),
                         'best_pl_day': float(result['metrics'].get('best_pl_day', 0)),
-                        'best_pl_date': result['metrics'].get('best_pl_date', '')
+                        'best_pl_date': result['metrics'].get('best_pl_date', ''),
+                        'days_in_drawdown': int(result['metrics'].get('days_in_drawdown', 0)),
+                        'avg_drawdown_length': float(result['metrics'].get('avg_drawdown_length', 0)),
+                        'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0))
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -402,7 +405,10 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             'worst_pl_day': float(blended_metrics.get('worst_pl_day', 0)),
                             'worst_pl_date': blended_metrics.get('worst_pl_date', ''),
                             'best_pl_day': float(blended_metrics.get('best_pl_day', 0)),
-                            'best_pl_date': blended_metrics.get('best_pl_date', '')
+                            'best_pl_date': blended_metrics.get('best_pl_date', ''),
+                            'days_in_drawdown': int(blended_metrics.get('days_in_drawdown', 0)),
+                            'avg_drawdown_length': float(blended_metrics.get('avg_drawdown_length', 0)),
+                            'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0))
                         }
                     }
                     logger.info("[Weighted Analysis] Weighted blended portfolio created successfully")
@@ -961,7 +967,10 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                         'worst_pl_day': float(result['metrics'].get('worst_pl_day', 0)),
                         'worst_pl_date': result['metrics'].get('worst_pl_date', ''),
                         'best_pl_day': float(result['metrics'].get('best_pl_day', 0)),
-                        'best_pl_date': result['metrics'].get('best_pl_date', '')
+                        'best_pl_date': result['metrics'].get('best_pl_date', ''),
+                        'days_in_drawdown': int(result['metrics'].get('days_in_drawdown', 0)),
+                        'avg_drawdown_length': float(result['metrics'].get('avg_drawdown_length', 0)),
+                        'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0))
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -1102,7 +1111,10 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                             'worst_pl_day': float(blended_metrics.get('worst_pl_day', 0)),
                             'worst_pl_date': blended_metrics.get('worst_pl_date', ''),
                             'best_pl_day': float(blended_metrics.get('best_pl_day', 0)),
-                            'best_pl_date': blended_metrics.get('best_pl_date', '')
+                            'best_pl_date': blended_metrics.get('best_pl_date', ''),
+                            'days_in_drawdown': int(blended_metrics.get('days_in_drawdown', 0)),
+                            'avg_drawdown_length': float(blended_metrics.get('avg_drawdown_length', 0)),
+                            'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0))
                         }
                     }
                     logger.info("[Analyze Portfolios] Blended portfolio created successfully")
