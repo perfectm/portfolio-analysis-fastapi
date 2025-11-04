@@ -334,6 +334,35 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **Formula**: `(Account Value - Rolling Peak) / Rolling Peak`
 - **Financial Industry Standard**: This approach properly measures peak-to-trough decline as percentage of peak
 
+### Drawdown Metrics Architecture
+- **Days in Drawdown**: Total trading days where portfolio is below peak value (Drawdown Pct < 0)
+- **Avg Drawdown Length**: Average duration of consecutive drawdown periods
+- **Num Drawdown Periods**: Count of separate drawdown episodes
+- **Calculation**: Identifies consecutive days in drawdown state, tracks individual periods
+- **Backend Location**: `_calculate_drawdown_metrics()` in `portfolio_processor.py`
+- **API Inclusion**: All three metrics included in every analysis response (individual and blended)
+
+### Metrics Display Organization
+- **Bottom Row Convention**: Portfolios.tsx displays 8 metrics in final row separated by horizontal divider:
+  1. Max Drawdown % (red)
+  2. Max Drawdown $ (red)
+  3. Days in Drawdown (orange)
+  4. Avg Drawdown Length (orange)
+  5. Worst P/L Day (red)
+  6. Worst P/L Date (gray)
+  7. Best P/L Day (green)
+  8. Best P/L Date (gray)
+- **Visual Separator**: 2px horizontal divider (`theme.palette.divider`) before bottom row metrics
+- **Consistent Layout**: Same organization for both blended and individual portfolio results
+
+### Visualization Best Practices
+- **Correlation Heatmaps**: Dynamic sizing based on portfolio count (0.5 × n portfolios, max 30 inches)
+- **Adaptive Fonts**: Scale automatically based on matrix size (≤10: large, 11-20: medium, >20: small)
+- **Annotation Control**: Hide correlation numbers for >20 portfolios (color-only)
+- **Label Rotation**: 90° vertical for x-axis to prevent overlap
+- **Alphabetical Sorting**: Portfolios sorted alphabetically on both axes for easier lookup
+- **Module**: `plotting.py` - `create_correlation_heatmap()`
+
 ### Code Quality
 - **TypeScript**: Strict type checking enabled for frontend components
 - **Error Handling**: Comprehensive error boundaries and validation
