@@ -3253,6 +3253,64 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           {formatDateString(analysisResults.blended_result.metrics.best_pl_date)}
                         </div>
                       </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Loss &gt; 0.5%
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.warning.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_loss_over_half_pct?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Loss &gt; 1%
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.error.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_loss_over_one_pct?.toLocaleString() || 0}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Blended Portfolio Plots */}
@@ -4021,6 +4079,48 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {formatDateString(result.metrics.best_pl_date)}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Days Loss &gt; 0.5%
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.warning.main,
+                                  }}
+                                >
+                                  {result.metrics.days_loss_over_half_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Days Loss &gt; 1%
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.error.main,
+                                  }}
+                                >
+                                  {result.metrics.days_loss_over_one_pct?.toLocaleString() || 0}
                                 </div>
                               </div>
                             </div>
