@@ -757,6 +757,22 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     logger.info(f"[Drawdown Metrics] Number of drawdown periods: {num_drawdown_periods}")
     logger.info(f"[Drawdown Metrics] Average drawdown length: {avg_drawdown_length:.1f} days")
 
+    # Calculate tail risk metrics - days with significant losses
+    # Daily Return is already calculated as pct_change of Account Value
+    if 'Daily Return' in clean_df.columns:
+        # Count days where loss > 0.5% of net liq (Daily Return < -0.005)
+        days_loss_over_half_pct = int((clean_df['Daily Return'] < -0.005).sum())
+
+        # Count days where loss > 1% of net liq (Daily Return < -0.01)
+        days_loss_over_one_pct = int((clean_df['Daily Return'] < -0.01).sum())
+
+        logger.info(f"[Drawdown Metrics] Days with loss > 0.5%: {days_loss_over_half_pct}")
+        logger.info(f"[Drawdown Metrics] Days with loss > 1.0%: {days_loss_over_one_pct}")
+    else:
+        days_loss_over_half_pct = 0
+        days_loss_over_one_pct = 0
+        logger.warning(f"[Drawdown Metrics] 'Daily Return' column not found, tail risk metrics set to 0")
+
     # Note: We keep 'Drawdown Amount' column for use in plotting
     return {
         'mar_ratio': float(mar_ratio),
@@ -770,7 +786,9 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
         'has_recovered': recovery_days is not None,
         'days_in_drawdown': int(days_in_drawdown),
         'avg_drawdown_length': float(avg_drawdown_length),
-        'num_drawdown_periods': int(num_drawdown_periods)
+        'num_drawdown_periods': int(num_drawdown_periods),
+        'days_loss_over_half_pct': int(days_loss_over_half_pct),
+        'days_loss_over_one_pct': int(days_loss_over_one_pct)
     }
 
 
@@ -814,7 +832,9 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
         'has_recovered': False,
         'days_in_drawdown': 0,
         'avg_drawdown_length': 0,
-        'num_drawdown_periods': 0
+        'num_drawdown_periods': 0,
+        'days_loss_over_half_pct': 0,
+        'days_loss_over_one_pct': 0
     }
     
     if clean_df is not None:

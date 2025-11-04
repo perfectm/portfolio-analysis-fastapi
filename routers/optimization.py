@@ -248,7 +248,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         'best_pl_date': result['metrics'].get('best_pl_date', ''),
                         'days_in_drawdown': int(result['metrics'].get('days_in_drawdown', 0)),
                         'avg_drawdown_length': float(result['metrics'].get('avg_drawdown_length', 0)),
-                        'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0))
+                        'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0)),
+                        'days_loss_over_half_pct': int(result['metrics'].get('days_loss_over_half_pct', 0)),
+                        'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0))
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -408,7 +410,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             'best_pl_date': blended_metrics.get('best_pl_date', ''),
                             'days_in_drawdown': int(blended_metrics.get('days_in_drawdown', 0)),
                             'avg_drawdown_length': float(blended_metrics.get('avg_drawdown_length', 0)),
-                            'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0))
+                            'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0)),
+                            'days_loss_over_half_pct': int(blended_metrics.get('days_loss_over_half_pct', 0)),
+                            'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0))
                         }
                     }
                     logger.info("[Weighted Analysis] Weighted blended portfolio created successfully")
@@ -970,7 +974,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                         'best_pl_date': result['metrics'].get('best_pl_date', ''),
                         'days_in_drawdown': int(result['metrics'].get('days_in_drawdown', 0)),
                         'avg_drawdown_length': float(result['metrics'].get('avg_drawdown_length', 0)),
-                        'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0))
+                        'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0)),
+                        'days_loss_over_half_pct': int(result['metrics'].get('days_loss_over_half_pct', 0)),
+                        'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0))
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -1114,7 +1120,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                             'best_pl_date': blended_metrics.get('best_pl_date', ''),
                             'days_in_drawdown': int(blended_metrics.get('days_in_drawdown', 0)),
                             'avg_drawdown_length': float(blended_metrics.get('avg_drawdown_length', 0)),
-                            'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0))
+                            'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0)),
+                            'days_loss_over_half_pct': int(blended_metrics.get('days_loss_over_half_pct', 0)),
+                            'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0))
                         }
                     }
                     logger.info("[Analyze Portfolios] Blended portfolio created successfully")
