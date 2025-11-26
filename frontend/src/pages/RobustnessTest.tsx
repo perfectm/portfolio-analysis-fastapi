@@ -523,7 +523,7 @@ const RobustnessTest: React.FC = () => {
                 type="number"
                 value={numPeriods}
                 onChange={(e) => setNumPeriods(Number(e.target.value))}
-                inputProps={{ min: 5, max: 50 }}
+                inputProps={{ min: 5, max: 99 }}
                 fullWidth
                 sx={{ mb: 2 }}
               />

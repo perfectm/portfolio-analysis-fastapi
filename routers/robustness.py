@@ -17,7 +17,7 @@ router = APIRouter()
 
 class RobustnessTestRequest(BaseModel):
     """Request model for creating a robustness test"""
-    num_periods: int = Field(default=10, ge=5, le=50, description="Number of random periods to test")
+    num_periods: int = Field(default=10, ge=5, le=99, description="Number of random periods to test")
     period_length_days: int = Field(default=252, ge=30, le=1000, description="Length of each test period in days")
     rf_rate: float = Field(default=0.043, ge=0, le=1, description="Risk-free rate")
     sma_window: int = Field(default=20, ge=1, le=100, description="SMA window for analysis")
@@ -33,14 +33,18 @@ class RobustnessTestResponse(BaseModel):
     message: str
 
 
-def run_robustness_test_background(test_id: int, db: Session):
+def run_robustness_test_background(test_id: int):
     """Background task to run robustness test"""
+    from database import SessionLocal
+    db = SessionLocal()
     try:
         service = RobustnessTestService(db)
         service.run_robustness_test(test_id)
         logger.info(f"Completed robustness test {test_id}")
     except Exception as e:
         logger.error(f"Failed to complete robustness test {test_id}: {e}")
+    finally:
+        db.close()
 
 
 @router.get("/portfolios", response_model=List[Dict[str, Any]])
@@ -93,7 +97,7 @@ async def create_robustness_test(
         )
         
         # Start the test in the background
-        background_tasks.add_task(run_robustness_test_background, test.id, db)
+        background_tasks.add_task(run_robustness_test_background, test.id)
         
         return RobustnessTestResponse(
             test_id=test.id,

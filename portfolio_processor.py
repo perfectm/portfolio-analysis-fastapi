@@ -111,8 +111,8 @@ def process_portfolio_data(
     )
     
     # Calculate drawdown inplace
-    clean_df = _calculate_drawdown(clean_df)
-    
+    clean_df = _calculate_drawdown(clean_df, starting_capital)
+
     # Update metrics with drawdown information
     drawdown_metrics = _calculate_drawdown_metrics(clean_df)
     metrics.update(drawdown_metrics)
@@ -676,12 +676,21 @@ def _calculate_cvar(clean_df: pd.DataFrame, starting_capital: float, confidence_
     return cvar_dollar
 
 
-def _calculate_drawdown(clean_df: pd.DataFrame) -> pd.DataFrame:
-    """Calculate drawdown metrics with memory optimization"""
+def _calculate_drawdown(clean_df: pd.DataFrame, starting_capital: float) -> pd.DataFrame:
+    """Calculate drawdown metrics with memory optimization
+
+    Args:
+        clean_df: DataFrame with Account Value column
+        starting_capital: Initial capital to use as the first peak
+    """
+    # Calculate rolling peak, ensuring it starts at starting_capital
+    # This ensures we measure drawdown from the initial investment
     clean_df['Rolling Peak'] = clean_df['Account Value'].expanding().max()
+    clean_df['Rolling Peak'] = clean_df['Rolling Peak'].clip(lower=starting_capital)
+
     clean_df['Drawdown Amount'] = clean_df['Account Value'] - clean_df['Rolling Peak']
     clean_df['Drawdown Pct'] = clean_df['Drawdown Amount'] / clean_df['Rolling Peak']
-    
+
     # Free memory from intermediate columns without inplace
     clean_df = clean_df.drop(['Rolling Peak'], axis=1)  # Keep Drawdown Amount for metrics
     return clean_df
@@ -757,7 +766,7 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
     logger.info(f"[Drawdown Metrics] Number of drawdown periods: {num_drawdown_periods}")
     logger.info(f"[Drawdown Metrics] Average drawdown length: {avg_drawdown_length:.1f} days")
 
-    # Calculate tail risk metrics - days with significant losses
+    # Calculate tail risk metrics - days with significant losses and gains
     # Daily Return is already calculated as pct_change of Account Value
     if 'Daily Return' in clean_df.columns:
         # Count days where loss > 0.5% of net liq (Daily Return < -0.005)
@@ -766,12 +775,33 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
         # Count days where loss > 1% of net liq (Daily Return < -0.01)
         days_loss_over_one_pct = int((clean_df['Daily Return'] < -0.01).sum())
 
+        # Count days where gain > 0.5% of net liq (Daily Return > 0.005)
+        days_gain_over_half_pct = int((clean_df['Daily Return'] > 0.005).sum())
+
+        # Count days where gain > 1% of net liq (Daily Return > 0.01)
+        days_gain_over_one_pct = int((clean_df['Daily Return'] > 0.01).sum())
+
         logger.info(f"[Drawdown Metrics] Days with loss > 0.5%: {days_loss_over_half_pct}")
         logger.info(f"[Drawdown Metrics] Days with loss > 1.0%: {days_loss_over_one_pct}")
+        logger.info(f"[Drawdown Metrics] Days with gain > 0.5%: {days_gain_over_half_pct}")
+        logger.info(f"[Drawdown Metrics] Days with gain > 1.0%: {days_gain_over_one_pct}")
     else:
         days_loss_over_half_pct = 0
         days_loss_over_one_pct = 0
+        days_gain_over_half_pct = 0
+        days_gain_over_one_pct = 0
         logger.warning(f"[Drawdown Metrics] 'Daily Return' column not found, tail risk metrics set to 0")
+
+    # Calculate largest single-day profit and its date
+    if 'P/L' in clean_df.columns and not clean_df['P/L'].empty:
+        max_profit_idx = clean_df['P/L'].idxmax()
+        largest_profit_day = float(clean_df.loc[max_profit_idx, 'P/L'])
+        largest_profit_date = clean_df.loc[max_profit_idx, 'Date']
+        logger.info(f"[Drawdown Metrics] Largest single-day profit: ${largest_profit_day:,.2f} on {largest_profit_date.strftime('%Y-%m-%d')}")
+    else:
+        largest_profit_day = 0.0
+        largest_profit_date = clean_df['Date'].iloc[0] if 'Date' in clean_df.columns and not clean_df.empty else pd.Timestamp.now()
+        logger.warning(f"[Drawdown Metrics] 'P/L' column not found, largest profit day set to 0")
 
     # Note: We keep 'Drawdown Amount' column for use in plotting
     return {
@@ -788,7 +818,11 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
         'avg_drawdown_length': float(avg_drawdown_length),
         'num_drawdown_periods': int(num_drawdown_periods),
         'days_loss_over_half_pct': int(days_loss_over_half_pct),
-        'days_loss_over_one_pct': int(days_loss_over_one_pct)
+        'days_loss_over_one_pct': int(days_loss_over_one_pct),
+        'days_gain_over_half_pct': int(days_gain_over_half_pct),
+        'days_gain_over_one_pct': int(days_gain_over_one_pct),
+        'largest_profit_day': float(largest_profit_day),
+        'largest_profit_date': largest_profit_date.strftime('%Y-%m-%d')
     }
 
 
@@ -834,7 +868,11 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
         'avg_drawdown_length': 0,
         'num_drawdown_periods': 0,
         'days_loss_over_half_pct': 0,
-        'days_loss_over_one_pct': 0
+        'days_loss_over_one_pct': 0,
+        'days_gain_over_half_pct': 0,
+        'days_gain_over_one_pct': 0,
+        'largest_profit_day': 0,
+        'largest_profit_date': ''
     }
     
     if clean_df is not None:

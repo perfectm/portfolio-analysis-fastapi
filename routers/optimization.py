@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Any, List
 import logging
@@ -13,6 +14,7 @@ import gc
 import pandas as pd
 import numpy as np
 import os
+import io
 from config import UPLOAD_FOLDER
 
 router = APIRouter()
@@ -170,7 +172,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
-                    result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
+                    result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
                     logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
                     PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
@@ -186,7 +188,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 })
             else:
                 # Run process_individual_portfolios for this portfolio only
-                result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
+                result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
                 logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
                 PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                 individual_results.append(result)
@@ -250,7 +252,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         'avg_drawdown_length': float(result['metrics'].get('avg_drawdown_length', 0)),
                         'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0)),
                         'days_loss_over_half_pct': int(result['metrics'].get('days_loss_over_half_pct', 0)),
-                        'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0))
+                        'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0)),
+                        'days_gain_over_half_pct': int(result['metrics'].get('days_gain_over_half_pct', 0)),
+                        'days_gain_over_one_pct': int(result['metrics'].get('days_gain_over_one_pct', 0)),
+                        'largest_profit_day': float(result['metrics'].get('largest_profit_day', 0)),
+                        'largest_profit_date': result['metrics'].get('largest_profit_date', '')
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -412,7 +418,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             'avg_drawdown_length': float(blended_metrics.get('avg_drawdown_length', 0)),
                             'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0)),
                             'days_loss_over_half_pct': int(blended_metrics.get('days_loss_over_half_pct', 0)),
-                            'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0))
+                            'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0)),
+                            'days_gain_over_half_pct': int(blended_metrics.get('days_gain_over_half_pct', 0)),
+                            'days_gain_over_one_pct': int(blended_metrics.get('days_gain_over_one_pct', 0)),
+                            'largest_profit_day': float(blended_metrics.get('largest_profit_day', 0)),
+                            'largest_profit_date': blended_metrics.get('largest_profit_date', '')
                         }
                     }
                     logger.info("[Weighted Analysis] Weighted blended portfolio created successfully")
@@ -899,7 +909,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
-                    result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
+                    result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
                     logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
                     PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
@@ -915,7 +925,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 })
             else:
                 # Run process_individual_portfolios for this portfolio only
-                result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital)[0]
+                result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
                 logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
                 PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                 individual_results.append(result)
@@ -976,7 +986,11 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                         'avg_drawdown_length': float(result['metrics'].get('avg_drawdown_length', 0)),
                         'num_drawdown_periods': int(result['metrics'].get('num_drawdown_periods', 0)),
                         'days_loss_over_half_pct': int(result['metrics'].get('days_loss_over_half_pct', 0)),
-                        'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0))
+                        'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0)),
+                        'days_gain_over_half_pct': int(result['metrics'].get('days_gain_over_half_pct', 0)),
+                        'days_gain_over_one_pct': int(result['metrics'].get('days_gain_over_one_pct', 0)),
+                        'largest_profit_day': float(result['metrics'].get('largest_profit_day', 0)),
+                        'largest_profit_date': result['metrics'].get('largest_profit_date', '')
                     }
                 }
                 simplified_individual_results.append(simplified_result)
@@ -1122,7 +1136,11 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                             'avg_drawdown_length': float(blended_metrics.get('avg_drawdown_length', 0)),
                             'num_drawdown_periods': int(blended_metrics.get('num_drawdown_periods', 0)),
                             'days_loss_over_half_pct': int(blended_metrics.get('days_loss_over_half_pct', 0)),
-                            'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0))
+                            'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0)),
+                            'days_gain_over_half_pct': int(blended_metrics.get('days_gain_over_half_pct', 0)),
+                            'days_gain_over_one_pct': int(blended_metrics.get('days_gain_over_one_pct', 0)),
+                            'largest_profit_day': float(blended_metrics.get('largest_profit_day', 0)),
+                            'largest_profit_date': blended_metrics.get('largest_profit_date', '')
                         }
                     }
                     logger.info("[Analyze Portfolios] Blended portfolio created successfully")
@@ -1416,4 +1434,74 @@ async def delete_optimization_result(
     except Exception as e:
         logger.error(f"[Delete Optimization] Error deleting optimization result {optimization_id}: {str(e)}")
         db.rollback()
-        return {"success": False, "error": f"Failed to delete optimization result: {str(e)}"} 
+        return {"success": False, "error": f"Failed to delete optimization result: {str(e)}"}
+
+
+@router.post("/export-blended-csv")
+async def export_blended_portfolio_csv(request: Request, db: Session = Depends(get_db)):
+    """
+    Export blended portfolio data as CSV with columns:
+    date, net liquidity, daily P/L $, daily P/L %, current drawdown %
+    """
+    try:
+        data = await request.json()
+        portfolio_ids = data.get('portfolio_ids', [])
+        portfolio_weights = data.get('portfolio_weights', [])
+        starting_capital = data.get('starting_capital', 1000000.0)
+        rf_rate = data.get('rf_rate', 0.043)
+        sma_window = data.get('sma_window', 20)
+        use_trading_filter = data.get('use_trading_filter', True)
+        date_range_start = data.get('date_range_start')
+        date_range_end = data.get('date_range_end')
+
+        logger.info(f"[Export CSV] Generating blended portfolio CSV for {len(portfolio_ids)} portfolios")
+
+        # Create blended portfolio
+        blended_df, blended_metrics, _ = create_blended_portfolio(
+            db=db,
+            portfolio_ids=portfolio_ids,
+            weights=portfolio_weights,
+            name="Blended Portfolio Export",
+            starting_capital=starting_capital,
+            rf_rate=rf_rate,
+            sma_window=sma_window,
+            use_trading_filter=use_trading_filter,
+            date_range_start=date_range_start,
+            date_range_end=date_range_end
+        )
+
+        if blended_df is None or blended_df.empty:
+            logger.error("[Export CSV] Failed to generate blended portfolio data")
+            return {"success": False, "error": "Failed to generate blended portfolio data"}
+
+        # Select and rename columns for export
+        export_df = pd.DataFrame({
+            'Date': blended_df['Date'].dt.strftime('%Y-%m-%d'),
+            'Net Liquidity': blended_df['Account Value'].round(2),
+            'Daily P/L $': blended_df['P/L'].round(2),
+            'Daily P/L %': (blended_df['Daily Return'] * 100).round(4),
+            'Current Drawdown %': (blended_df['Drawdown Pct'] * 100).round(4)
+        })
+
+        # Convert to CSV
+        csv_buffer = io.StringIO()
+        export_df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+
+        # Generate filename
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"blended_portfolio_{timestamp}.csv"
+
+        logger.info(f"[Export CSV] Successfully generated CSV with {len(export_df)} rows")
+
+        # Return as streaming response
+        return StreamingResponse(
+            iter([csv_buffer.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+
+    except Exception as e:
+        logger.error(f"[Export CSV] Error generating CSV: {str(e)}", exc_info=True)
+        return {"success": False, "error": f"Failed to generate CSV: {str(e)}"} 

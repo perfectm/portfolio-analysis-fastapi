@@ -191,10 +191,15 @@ export default function Portfolios() {
   
   // Date range state with proper defaults and constraints
   const getConstrainedDate = (dateString: string | undefined, isEndDate: boolean): string => {
-    if (!dateString) {
-      return isEndDate ? maxDate.toISOString().split('T')[0] : "2022-05-01";
+    // Always use today's date for end date, regardless of saved value
+    if (isEndDate) {
+      return maxDate.toISOString().split('T')[0];
     }
-    
+
+    if (!dateString) {
+      return "2022-05-01";
+    }
+
     const date = new Date(dateString);
     if (date < minDate) return minDate.toISOString().split('T')[0];
     if (date > maxDate) return maxDate.toISOString().split('T')[0];
@@ -666,6 +671,62 @@ export default function Portfolios() {
       (sum, multiplier) => sum + multiplier,
       0
     );
+  };
+
+  // Date range preset handlers
+  const setDatePresetYTD = () => {
+    const now = new Date();
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+
+    // Constrain to minDate if year start is before it
+    const startDate = yearStart < minDate ? minDate : yearStart;
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = maxDate.toISOString().split('T')[0];
+
+    setDateRangeStart(startStr);
+    setDateRangeEnd(endStr);
+    setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
+  };
+
+  const setDatePresetLastMonth = () => {
+    const now = new Date();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    // Constrain to valid date range
+    const startDate = lastMonthStart < minDate ? minDate : lastMonthStart;
+    const endDate = lastMonthEnd > maxDate ? maxDate : lastMonthEnd;
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+
+    setDateRangeStart(startStr);
+    setDateRangeEnd(endStr);
+    setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
+  };
+
+  const setDatePresetLastYear = () => {
+    const now = new Date();
+    const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
+    const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31);
+
+    // Constrain to valid date range
+    const startDate = lastYearStart < minDate ? minDate : lastYearStart;
+    const endDate = lastYearEnd > maxDate ? maxDate : lastYearEnd;
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+
+    setDateRangeStart(startStr);
+    setDateRangeEnd(endStr);
+    setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
+  };
+
+  const setDatePresetAllData = () => {
+    const startStr = minDate.toISOString().split('T')[0];
+    const endStr = maxDate.toISOString().split('T')[0];
+
+    setDateRangeStart(startStr);
+    setDateRangeEnd(endStr);
+    setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
   };
 
   // Progressive optimization function that handles partial results and continuation
@@ -1339,6 +1400,88 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
     }
   };
 
+  // Download blended portfolio CSV
+  const [downloadingCSV, setDownloadingCSV] = useState<boolean>(false);
+
+  const downloadBlendedCSV = async () => {
+    if (!analysisResults?.blended_result) {
+      alert("Please run an analysis first before downloading CSV");
+      return;
+    }
+
+    if (selectedPortfolios.length < 2) {
+      alert("CSV export is only available for blended portfolios (2+ strategies)");
+      return;
+    }
+
+    setDownloadingCSV(true);
+
+    try {
+      const requestBody = {
+        portfolio_ids: selectedPortfolios,
+        portfolio_weights: selectedPortfolios.map(
+          (id) => portfolioWeights[id] || 1.0
+        ),
+        starting_capital: startingCapital,
+        rf_rate: riskFreeRate / 100, // Convert percentage to decimal
+        sma_window: loadedOptimization?.parameters?.sma_window || 20,
+        use_trading_filter: loadedOptimization?.parameters?.use_trading_filter !== undefined
+          ? loadedOptimization.parameters.use_trading_filter : true,
+        date_range_start: dateRangeStart,
+        date_range_end: dateRangeEnd,
+      };
+
+      console.log("Downloading CSV with request:", requestBody);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/export-blended-csv`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate CSV: ${response.status} ${response.statusText}`);
+      }
+
+      // Get the filename from Content-Disposition header
+      const contentDisposition = response.headers.get("Content-Disposition");
+      let filename = "blended_portfolio.csv";
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log("CSV downloaded successfully:", filename);
+    } catch (error) {
+      console.error("Failed to download CSV:", error);
+      alert(
+        `Failed to download CSV: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setDownloadingCSV(false);
+    }
+  };
+
   // Generate daily net liquidity chart data
   const generateDailyLiquidityData = () => {
     try {
@@ -1981,9 +2124,79 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                 >
                   📅 Date Range Filter
                 </label>
-                <div style={{ 
-                  display: "flex", 
-                  flexDirection: "column", 
+
+                {/* Preset Buttons */}
+                <div style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  marginBottom: "0.75rem",
+                  flexWrap: "wrap"
+                }}>
+                  <button
+                    onClick={setDatePresetYTD}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.85rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#4a5568" : "#e2e8f0",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#cbd5e0"}`,
+                      color: theme.palette.text.primary,
+                      cursor: "pointer",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    YTD
+                  </button>
+                  <button
+                    onClick={setDatePresetLastMonth}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.85rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#4a5568" : "#e2e8f0",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#cbd5e0"}`,
+                      color: theme.palette.text.primary,
+                      cursor: "pointer",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    Last Month
+                  </button>
+                  <button
+                    onClick={setDatePresetLastYear}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.85rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#4a5568" : "#e2e8f0",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#cbd5e0"}`,
+                      color: theme.palette.text.primary,
+                      cursor: "pointer",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    Last Year
+                  </button>
+                  <button
+                    onClick={setDatePresetAllData}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.85rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#4a5568" : "#e2e8f0",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#cbd5e0"}`,
+                      color: theme.palette.text.primary,
+                      cursor: "pointer",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    All Data
+                  </button>
+                </div>
+
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
                   gap: "1rem",
                   backgroundColor: theme.palette.mode === 'dark' ? "#2d3436" : "#f8f9fa",
                   padding: "1rem",
@@ -2413,7 +2626,26 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
               {/* Blended Portfolio Results */}
               {analysisResults.blended_result && (
                 <div className="blended-results">
-                  <h3>🔗 Blended Portfolio Analysis</h3>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                    <h3>🔗 Blended Portfolio Analysis</h3>
+                    <button
+                      onClick={downloadBlendedCSV}
+                      disabled={downloadingCSV}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: theme.palette.success.main,
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: downloadingCSV ? "wait" : "pointer",
+                        fontSize: "0.9rem",
+                        fontWeight: "500",
+                        opacity: downloadingCSV ? 0.7 : 1,
+                      }}
+                    >
+                      {downloadingCSV ? "⏳ Generating..." : "📥 Download CSV"}
+                    </button>
+                  </div>
                   <div
                     className="blended-card"
                     style={{
@@ -3311,6 +3543,145 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           {analysisResults.blended_result.metrics.days_loss_over_one_pct?.toLocaleString() || 0}
                         </div>
                       </div>
+
+                      {/* Days Gain > 0.5% */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Gain &gt; 0.5%
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_gain_over_half_pct?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      {/* Days Gain > 1% */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Gain &gt; 1%
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_gain_over_one_pct?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      {/* Largest Profit Day */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Largest Profit Day
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          ${analysisResults.blended_result.metrics.largest_profit_day?.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          }) || "0.00"}
+                        </div>
+                      </div>
+
+                      {/* Largest Profit Date */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Largest Profit Date
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.text.secondary,
+                          }}
+                        >
+                          {formatDateString(analysisResults.blended_result.metrics.largest_profit_date)}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Blended Portfolio Plots */}
@@ -4121,6 +4492,149 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {result.metrics.days_loss_over_one_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              {/* Days Gain > 0.5% */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Days Gain &gt; 0.5%
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  {result.metrics.days_gain_over_half_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              {/* Days Gain > 1% */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Days Gain &gt; 1%
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  {result.metrics.days_gain_over_one_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              {/* Largest Profit Day */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Largest Profit Day
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  ${result.metrics.largest_profit_day?.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  }) || "0.00"}
+                                </div>
+                              </div>
+
+                              {/* Largest Profit Date */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Largest Profit Date
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.text.secondary,
+                                  }}
+                                >
+                                  {formatDateString(result.metrics.largest_profit_date)}
                                 </div>
                               </div>
                             </div>

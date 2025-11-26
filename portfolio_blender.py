@@ -295,27 +295,57 @@ def process_individual_portfolios(
     rf_rate: float = 0.043,
     sma_window: int = 20,
     use_trading_filter: bool = True,
-    starting_capital: float = 1000000.0
+    starting_capital: float = 1000000.0,
+    date_range_start: str = None,
+    date_range_end: str = None
 ) -> List[Dict[str, Any]]:
     """
     Process individual portfolio files
-    
+
     Args:
         files_data: List of (filename, dataframe) tuples
         rf_rate: Annual risk-free rate
         sma_window: SMA window
         use_trading_filter: Whether to use trading filter
         starting_capital: Starting capital
-        
+        date_range_start: Optional start date for filtering (YYYY-MM-DD)
+        date_range_end: Optional end date for filtering (YYYY-MM-DD)
+
     Returns:
         List of individual portfolio results
     """
     results = []
-    
+
     for i, (filename, df) in enumerate(files_data):
         try:
             logger.info(f"Processing individual portfolio: {filename}")
-            
+
+            # Apply date filtering if specified
+            if date_range_start or date_range_end:
+                # Ensure Date column is datetime
+                if 'Date' in df.columns:
+                    df['Date'] = pd.to_datetime(df['Date']).dt.normalize()
+
+                    if date_range_start:
+                        start_date = pd.to_datetime(date_range_start).normalize()
+                        df = df[df['Date'] >= start_date]
+                        logger.info(f"Portfolio {filename}: Filtered to dates >= {start_date.date()}")
+
+                    if date_range_end:
+                        end_date = pd.to_datetime(date_range_end).normalize()
+                        df = df[df['Date'] <= end_date]
+                        logger.info(f"Portfolio {filename}: Filtered to dates <= {end_date.date()}")
+
+                    if df.empty:
+                        logger.warning(f"Portfolio {filename}: No data remaining after date filtering")
+                        continue
+
+                    # Drop pre-calculated columns that are invalid after date filtering
+                    columns_to_drop = ['Cumulative P/L', 'Account Value', 'Account_Value', 'Drawdown Pct',
+                                      'Drawdown Amount', 'Rolling Peak', 'Daily Return']
+                    df = df.drop(columns=[col for col in columns_to_drop if col in df.columns], errors='ignore')
+                    logger.info(f"Portfolio {filename}: Dropped pre-calculated columns for recalculation after filtering")
+
             # Process individual file
             clean_df, individual_metrics = process_portfolio_data(
                 df,
