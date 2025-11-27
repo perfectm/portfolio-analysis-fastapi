@@ -3473,71 +3473,6 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             marginBottom: "0.5rem",
                           }}
                         >
-                          Best P/L Day
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "1.4rem",
-                            fontWeight: "bold",
-                            color: theme.palette.success.main,
-                          }}
-                        >
-                          {analysisResults.blended_result.metrics.best_pl_day !== undefined && analysisResults.blended_result.metrics.best_pl_day !== null
-                            ? new Intl.NumberFormat("en-US", {
-                                style: "currency",
-                                currency: "USD",
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0,
-                              }).format(analysisResults.blended_result.metrics.best_pl_day)
-                            : 'N/A'}
-                        </div>
-                      </div>
-
-                      <div
-                        className="metric-card"
-                        style={{
-                          padding: "1rem",
-                          background: theme.palette.background.paper,
-                          borderRadius: "6px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
-                            marginBottom: "0.5rem",
-                          }}
-                        >
-                          Best P/L Date
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "1.4rem",
-                            fontWeight: "bold",
-                            color: theme.palette.text.secondary,
-                          }}
-                        >
-                          {formatDateString(analysisResults.blended_result.metrics.best_pl_date)}
-                        </div>
-                      </div>
-
-                      <div
-                        className="metric-card"
-                        style={{
-                          padding: "1rem",
-                          background: theme.palette.background.paper,
-                          borderRadius: "6px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "0.9rem",
-                            color: theme.palette.text.secondary,
-                            marginBottom: "0.5rem",
-                          }}
-                        >
                           Days Loss &gt; 0.5%
                         </div>
                         <div
@@ -3548,6 +3483,35 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           }}
                         >
                           {analysisResults.blended_result.metrics.days_loss_over_half_pct?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Loss &gt; 0.75%
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.warning.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_loss_over_three_quarters_pct?.toLocaleString() || 0}
                         </div>
                       </div>
 
@@ -3607,6 +3571,36 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           }}
                         >
                           {analysisResults.blended_result.metrics.days_loss_over_half_pct_starting_cap?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      {/* Days Loss > 0.75% of Starting Capital */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Loss &gt; 0.75% of Starting Cap
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.warning.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_loss_over_three_quarters_pct_starting_cap?.toLocaleString() || 0}
                         </div>
                       </div>
 
@@ -3674,6 +3668,40 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         </div>
                       </div>
 
+                      {/* Days Gain > 0.75% */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Gain &gt; 0.75%
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_gain_over_three_quarters_pct?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
                       {/* Days Gain > 1% */}
                       <div
                         className="metric-card"
@@ -3705,6 +3733,108 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           }}
                         >
                           {analysisResults.blended_result.metrics.days_gain_over_one_pct?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      {/* Days Gain > 0.5% of Starting Capital */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Gain &gt; 0.5% of Starting Cap
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_gain_over_half_pct_starting_cap?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      {/* Days Gain > 0.75% of Starting Capital */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Gain &gt; 0.75% of Starting Cap
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_gain_over_three_quarters_pct_starting_cap?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      {/* Days Gain > 1% of Starting Capital */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          background:
+                            theme.palette.mode === "dark"
+                              ? theme.palette.action.selected
+                              : theme.palette.action.hover,
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: `1px solid ${theme.palette.divider}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Gain &gt; 1% of Starting Cap
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.success.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_gain_over_one_pct_starting_cap?.toLocaleString() || 0}
                         </div>
                       </div>
 
@@ -4535,55 +4665,6 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                     marginBottom: "0.25rem",
                                   }}
                                 >
-                                  Best P/L Day
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color: theme.palette.success.main,
-                                  }}
-                                >
-                                  {result.metrics.best_pl_day !== undefined && result.metrics.best_pl_day !== null
-                                    ? new Intl.NumberFormat("en-US", {
-                                        style: "currency",
-                                        currency: "USD",
-                                        minimumFractionDigits: 0,
-                                        maximumFractionDigits: 0,
-                                      }).format(result.metrics.best_pl_day)
-                                    : 'N/A'}
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
-                                  Best P/L Date
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "1.1rem",
-                                    fontWeight: "bold",
-                                    color: theme.palette.text.secondary,
-                                  }}
-                                >
-                                  {formatDateString(result.metrics.best_pl_date)}
-                                </div>
-                              </div>
-
-                              <div className="metric">
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: theme.palette.text.secondary,
-                                    marginBottom: "0.25rem",
-                                  }}
-                                >
                                   Days Loss &gt; 0.5%
                                 </div>
                                 <div
@@ -4594,6 +4675,27 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {result.metrics.days_loss_over_half_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Days Loss &gt; 0.75%
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.warning.main,
+                                  }}
+                                >
+                                  {result.metrics.days_loss_over_three_quarters_pct?.toLocaleString() || 0}
                                 </div>
                               </div>
 
@@ -4636,6 +4738,27 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {result.metrics.days_loss_over_half_pct_starting_cap?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Days Loss &gt; 0.75% of Starting Cap
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.warning.main,
+                                  }}
+                                >
+                                  {result.metrics.days_loss_over_three_quarters_pct_starting_cap?.toLocaleString() || 0}
                                 </div>
                               </div>
 
@@ -4695,6 +4818,41 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 </div>
                               </div>
 
+                              {/* Days Gain > 0.75% */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Days Gain &gt; 0.75%
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  {result.metrics.days_gain_over_three_quarters_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
                               {/* Days Gain > 1% */}
                               <div
                                 className="metric-card"
@@ -4727,6 +4885,111 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {result.metrics.days_gain_over_one_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              {/* Days Gain > 0.5% of Starting Capital */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Days Gain &gt; 0.5% of Starting Cap
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  {result.metrics.days_gain_over_half_pct_starting_cap?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              {/* Days Gain > 0.75% of Starting Capital */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Days Gain &gt; 0.75% of Starting Cap
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  {result.metrics.days_gain_over_three_quarters_pct_starting_cap?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              {/* Days Gain > 1% of Starting Capital */}
+                              <div
+                                className="metric-card"
+                                style={{
+                                  background:
+                                    theme.palette.mode === "dark"
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                  padding: "0.75rem",
+                                  borderRadius: "6px",
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  textAlign: "center",
+                                  minWidth: "140px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.5rem",
+                                  }}
+                                >
+                                  Days Gain &gt; 1% of Starting Cap
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.success.main,
+                                  }}
+                                >
+                                  {result.metrics.days_gain_over_one_pct_starting_cap?.toLocaleString() || 0}
                                 </div>
                               </div>
 

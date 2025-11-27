@@ -125,6 +125,7 @@ The backend uses FastAPI with a modular router architecture for better code orga
 - **margin.py**: Margin management functionality
 - **robustness.py**: Portfolio robustness testing with random period analysis
 - **profit_optimization.py**: Profit optimization and contract sizing endpoints
+- **favorites.py**: User favorite portfolio settings persistence
 
 ### Frontend Structure (React + TypeScript + Vite + Material-UI)
 Modern React application with Material-UI components and Recharts for data visualization:
@@ -149,6 +150,11 @@ Modern React application with Material-UI components and Recharts for data visua
 - **analysis_results**: Computed risk metrics and parameters
 - **analysis_plots**: Generated chart file references
 - **blended_portfolios**: Multi-portfolio configurations
+- **favorite_settings**: User-specific saved portfolio analysis configurations
+- **users**: User authentication and profile data
+- **regime_data**: Market regime analysis results (via yfinance S&P 500 data)
+- **margin_requirements**: Portfolio margin requirement configurations
+- **optimization_cache**: Cached optimization results for performance
 
 ## Key Features & Endpoints
 
@@ -189,6 +195,10 @@ Modern React application with Material-UI components and Recharts for data visua
 - `GET /api/profit-optimization/history`: Get historical optimization results
 - `GET /api/profit-optimization/{optimization_id}`: Get specific optimization result
 
+### Favorites & User Preferences
+- `POST /api/favorites/save`: Save current portfolio analysis settings as user favorites
+- `GET /api/favorites/load`: Load user's saved favorite settings
+
 ### File Processing
 - **Supported formats**: CSV files with date and P/L columns
 - **Date columns**: 'Date Opened', 'Date', 'Trade Date', 'Entry Date', 'Open Date'
@@ -220,6 +230,8 @@ Modern React application with Material-UI components and Recharts for data visua
 - **Cross-device Network Access**: Configured for 0.0.0.0 binding with CORS support
 - **Responsive Design**: Mobile-friendly interface with Material-UI breakpoints
 - **Error Handling**: Comprehensive error messaging and validation feedback
+- **Favorite Settings Persistence**: Save and restore portfolio analysis configurations per user
+- **Date Preset Buttons**: Quick date range selection (1Y, 2Y, 3Y, 5Y, All, YTD) in Portfolios.tsx
 
 ## Configuration & Environment
 
@@ -343,17 +355,48 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **API Inclusion**: All three metrics included in every analysis response (individual and blended)
 
 ### Metrics Display Organization
-- **Bottom Row Convention**: Portfolios.tsx displays 8 metrics in final row separated by horizontal divider:
+- **Bottom Row Convention**: Portfolios.tsx displays metrics in final rows separated by horizontal divider:
   1. Max Drawdown % (red)
   2. Max Drawdown $ (red)
   3. Days in Drawdown (orange)
   4. Avg Drawdown Length (orange)
   5. Worst P/L Day (red)
   6. Worst P/L Date (gray)
-  7. Best P/L Day (green)
-  8. Best P/L Date (gray)
+  7. Days Loss > 0.5% of Current Net Liq (orange)
+  8. Days Loss > 0.75% of Current Net Liq (orange)
+  9. Days Loss > 1% of Current Net Liq (red)
+  10. Days Loss > 0.5% of Starting Capital (orange)
+  11. Days Loss > 0.75% of Starting Capital (orange)
+  12. Days Loss > 1% of Starting Capital (red)
+  13. Days Gain > 0.5% of Current Net Liq (green, highlighted)
+  14. Days Gain > 0.75% of Current Net Liq (green, highlighted)
+  15. Days Gain > 1% of Current Net Liq (green, highlighted)
+  16. Days Gain > 0.5% of Starting Capital (green, highlighted)
+  17. Days Gain > 0.75% of Starting Capital (green, highlighted)
+  18. Days Gain > 1% of Starting Capital (green, highlighted)
+  19. Largest Profit Day (green, highlighted)
+  20. Largest Profit Date (gray, highlighted)
 - **Visual Separator**: 2px horizontal divider (`theme.palette.divider`) before bottom row metrics
 - **Consistent Layout**: Same organization for both blended and individual portfolio results
+- **Removed Duplicates**: "Best P/L Day" and "Best P/L Date" duplicates removed from middle section, only "Largest Profit Day/Date" kept in bottom row
+
+### Tail Risk Metrics
+- **Current Net Liq Based**: Metrics calculated as percentage of account value on each day
+  - Days Loss > 0.5%: Daily Return < -0.005
+  - Days Loss > 0.75%: Daily Return < -0.0075
+  - Days Loss > 1%: Daily Return < -0.01
+  - Days Gain > 0.5%: Daily Return > 0.005
+  - Days Gain > 0.75%: Daily Return > 0.0075
+  - Days Gain > 1%: Daily Return > 0.01
+- **Starting Capital Based**: Metrics calculated as fixed dollar thresholds based on initial capital
+  - Days Loss > 0.5% of Starting Cap: P/L < -(starting_capital × 0.005)
+  - Days Loss > 0.75% of Starting Cap: P/L < -(starting_capital × 0.0075)
+  - Days Loss > 1% of Starting Cap: P/L < -(starting_capital × 0.01)
+  - Days Gain > 0.5% of Starting Cap: P/L > (starting_capital × 0.005)
+  - Days Gain > 0.75% of Starting Cap: P/L > (starting_capital × 0.0075)
+  - Days Gain > 1% of Starting Cap: P/L > (starting_capital × 0.01)
+- **Backend Location**: Calculated inline within `_calculate_drawdown_metrics()` in `portfolio_processor.py`
+- **Purpose**: Provides tail risk assessment for extreme loss/gain scenarios with dual perspectives (dynamic vs fixed thresholds)
 
 ### Visualization Best Practices
 - **Correlation Heatmaps**: Dynamic sizing based on portfolio count (0.5 × n portfolios, max 30 inches)
@@ -367,6 +410,22 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **TypeScript**: Strict type checking enabled for frontend components
 - **Error Handling**: Comprehensive error boundaries and validation
 - **Testing**: Pytest framework with modular test files for different components
+
+## Database Migrations
+
+The project uses manual SQLAlchemy migrations in the `/migrations/` directory:
+- **add_users_table.py**: User authentication tables
+- **add_regime_tables.py**: Market regime analysis tables
+- **add_margin_tables.py**: Margin requirement tables
+- **add_optimization_cache.py**: Optimization result caching
+- **add_beta_columns.py**: Beta, alpha, and R-squared metrics
+- **add_cvar_column.py**: Conditional Value at Risk (CVaR) metric
+- **add_premium_column.py**: Premium data for options strategies
+- **add_contracts_column.py**: Contract count tracking
+- **add_upi_column.py**: Unique Portfolio Identifier
+- **backfill_cvar_values.py**: Historical CVaR data population
+
+**Running Migrations**: Execute migration files directly with `python migrations/filename.py`
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.

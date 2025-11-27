@@ -777,23 +777,33 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame, starting_capital: float)
         # Count days where loss > 0.5% of net liq (Daily Return < -0.005)
         days_loss_over_half_pct = int((clean_df['Daily Return'] < -0.005).sum())
 
+        # Count days where loss > 0.75% of net liq (Daily Return < -0.0075)
+        days_loss_over_three_quarters_pct = int((clean_df['Daily Return'] < -0.0075).sum())
+
         # Count days where loss > 1% of net liq (Daily Return < -0.01)
         days_loss_over_one_pct = int((clean_df['Daily Return'] < -0.01).sum())
 
         # Count days where gain > 0.5% of net liq (Daily Return > 0.005)
         days_gain_over_half_pct = int((clean_df['Daily Return'] > 0.005).sum())
 
+        # Count days where gain > 0.75% of net liq (Daily Return > 0.0075)
+        days_gain_over_three_quarters_pct = int((clean_df['Daily Return'] > 0.0075).sum())
+
         # Count days where gain > 1% of net liq (Daily Return > 0.01)
         days_gain_over_one_pct = int((clean_df['Daily Return'] > 0.01).sum())
 
         logger.info(f"[Drawdown Metrics] Days with loss > 0.5%: {days_loss_over_half_pct}")
+        logger.info(f"[Drawdown Metrics] Days with loss > 0.75%: {days_loss_over_three_quarters_pct}")
         logger.info(f"[Drawdown Metrics] Days with loss > 1.0%: {days_loss_over_one_pct}")
         logger.info(f"[Drawdown Metrics] Days with gain > 0.5%: {days_gain_over_half_pct}")
+        logger.info(f"[Drawdown Metrics] Days with gain > 0.75%: {days_gain_over_three_quarters_pct}")
         logger.info(f"[Drawdown Metrics] Days with gain > 1.0%: {days_gain_over_one_pct}")
     else:
         days_loss_over_half_pct = 0
+        days_loss_over_three_quarters_pct = 0
         days_loss_over_one_pct = 0
         days_gain_over_half_pct = 0
+        days_gain_over_three_quarters_pct = 0
         days_gain_over_one_pct = 0
         logger.warning(f"[Drawdown Metrics] 'Daily Return' column not found, tail risk metrics set to 0")
 
@@ -801,20 +811,41 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame, starting_capital: float)
     # These measure days where dollar P/L exceeds fixed percentages of starting capital
     if 'P/L' in clean_df.columns:
         # Calculate thresholds based on starting capital
-        half_pct_starting_cap_threshold = starting_capital * 0.005  # 0.5% of starting capital
-        one_pct_starting_cap_threshold = starting_capital * 0.01    # 1% of starting capital
+        half_pct_starting_cap_threshold = starting_capital * 0.005          # 0.5% of starting capital
+        three_quarters_pct_starting_cap_threshold = starting_capital * 0.0075  # 0.75% of starting capital
+        one_pct_starting_cap_threshold = starting_capital * 0.01            # 1% of starting capital
 
         # Count days where loss > 0.5% of starting capital
         days_loss_over_half_pct_starting_cap = int((clean_df['P/L'] < -half_pct_starting_cap_threshold).sum())
 
+        # Count days where loss > 0.75% of starting capital
+        days_loss_over_three_quarters_pct_starting_cap = int((clean_df['P/L'] < -three_quarters_pct_starting_cap_threshold).sum())
+
         # Count days where loss > 1% of starting capital
         days_loss_over_one_pct_starting_cap = int((clean_df['P/L'] < -one_pct_starting_cap_threshold).sum())
 
+        # Count days where gain > 0.5% of starting capital
+        days_gain_over_half_pct_starting_cap = int((clean_df['P/L'] > half_pct_starting_cap_threshold).sum())
+
+        # Count days where gain > 0.75% of starting capital
+        days_gain_over_three_quarters_pct_starting_cap = int((clean_df['P/L'] > three_quarters_pct_starting_cap_threshold).sum())
+
+        # Count days where gain > 1% of starting capital
+        days_gain_over_one_pct_starting_cap = int((clean_df['P/L'] > one_pct_starting_cap_threshold).sum())
+
         logger.info(f"[Drawdown Metrics] Days with loss > 0.5% of starting capital (${half_pct_starting_cap_threshold:,.2f}): {days_loss_over_half_pct_starting_cap}")
+        logger.info(f"[Drawdown Metrics] Days with loss > 0.75% of starting capital (${three_quarters_pct_starting_cap_threshold:,.2f}): {days_loss_over_three_quarters_pct_starting_cap}")
         logger.info(f"[Drawdown Metrics] Days with loss > 1.0% of starting capital (${one_pct_starting_cap_threshold:,.2f}): {days_loss_over_one_pct_starting_cap}")
+        logger.info(f"[Drawdown Metrics] Days with gain > 0.5% of starting capital (${half_pct_starting_cap_threshold:,.2f}): {days_gain_over_half_pct_starting_cap}")
+        logger.info(f"[Drawdown Metrics] Days with gain > 0.75% of starting capital (${three_quarters_pct_starting_cap_threshold:,.2f}): {days_gain_over_three_quarters_pct_starting_cap}")
+        logger.info(f"[Drawdown Metrics] Days with gain > 1.0% of starting capital (${one_pct_starting_cap_threshold:,.2f}): {days_gain_over_one_pct_starting_cap}")
     else:
         days_loss_over_half_pct_starting_cap = 0
+        days_loss_over_three_quarters_pct_starting_cap = 0
         days_loss_over_one_pct_starting_cap = 0
+        days_gain_over_half_pct_starting_cap = 0
+        days_gain_over_three_quarters_pct_starting_cap = 0
+        days_gain_over_one_pct_starting_cap = 0
         logger.warning(f"[Drawdown Metrics] 'P/L' column not found, starting capital-based tail risk metrics set to 0")
 
     # Calculate largest single-day profit and its date
@@ -843,11 +874,17 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame, starting_capital: float)
         'avg_drawdown_length': float(avg_drawdown_length),
         'num_drawdown_periods': int(num_drawdown_periods),
         'days_loss_over_half_pct': int(days_loss_over_half_pct),
+        'days_loss_over_three_quarters_pct': int(days_loss_over_three_quarters_pct),
         'days_loss_over_one_pct': int(days_loss_over_one_pct),
         'days_gain_over_half_pct': int(days_gain_over_half_pct),
+        'days_gain_over_three_quarters_pct': int(days_gain_over_three_quarters_pct),
         'days_gain_over_one_pct': int(days_gain_over_one_pct),
         'days_loss_over_half_pct_starting_cap': int(days_loss_over_half_pct_starting_cap),
+        'days_loss_over_three_quarters_pct_starting_cap': int(days_loss_over_three_quarters_pct_starting_cap),
         'days_loss_over_one_pct_starting_cap': int(days_loss_over_one_pct_starting_cap),
+        'days_gain_over_half_pct_starting_cap': int(days_gain_over_half_pct_starting_cap),
+        'days_gain_over_three_quarters_pct_starting_cap': int(days_gain_over_three_quarters_pct_starting_cap),
+        'days_gain_over_one_pct_starting_cap': int(days_gain_over_one_pct_starting_cap),
         'largest_profit_day': float(largest_profit_day),
         'largest_profit_date': largest_profit_date.strftime('%Y-%m-%d')
     }
@@ -895,11 +932,17 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
         'avg_drawdown_length': 0,
         'num_drawdown_periods': 0,
         'days_loss_over_half_pct': 0,
+        'days_loss_over_three_quarters_pct': 0,
         'days_loss_over_one_pct': 0,
         'days_gain_over_half_pct': 0,
+        'days_gain_over_three_quarters_pct': 0,
         'days_gain_over_one_pct': 0,
         'days_loss_over_half_pct_starting_cap': 0,
+        'days_loss_over_three_quarters_pct_starting_cap': 0,
         'days_loss_over_one_pct_starting_cap': 0,
+        'days_gain_over_half_pct_starting_cap': 0,
+        'days_gain_over_three_quarters_pct_starting_cap': 0,
+        'days_gain_over_one_pct_starting_cap': 0,
         'largest_profit_day': 0,
         'largest_profit_date': ''
     }
