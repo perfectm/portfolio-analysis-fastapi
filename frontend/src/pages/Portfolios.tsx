@@ -85,6 +85,10 @@ interface AnalysisResult {
   filename: string;
   weighting_method?: string;
   portfolio_composition?: Record<string, number>;
+  daily_data?: Array<{
+    date: string;
+    account_value: number;
+  }>;
   metrics: {
     sharpe_ratio: number;
     sortino_ratio: number;
@@ -1487,57 +1491,89 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
     try {
       if (!analysisResults?.blended_result) return [];
 
+      const blendedResult = analysisResults.blended_result;
+
+      // Check if we have real daily data from backend
+      if (blendedResult.daily_data && Array.isArray(blendedResult.daily_data) && blendedResult.daily_data.length > 0) {
+        console.log(`Using real portfolio data: ${blendedResult.daily_data.length} data points`);
+
+        const initialCapital = startingCapital || 1000000;
+        const finalValue = blendedResult.metrics.final_account_value || initialCapital;
+
+        // Get date range from real data
+        const firstDate = new Date(blendedResult.daily_data[0].date);
+        const lastDate = new Date(blendedResult.daily_data[blendedResult.daily_data.length - 1].date);
+        const totalDays = Math.floor((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Generate SPX benchmark curve based on real date range
+        const spxFinalValue = initialCapital * 1.65; // ~65% total return for SPX
+        const spxTotalGrowth = spxFinalValue - initialCapital;
+
+        // Create combined data with real portfolio values and synthetic SPX
+        const totalTradingDays = blendedResult.daily_data.length;
+        const data = blendedResult.daily_data.map((point: any, index: number) => {
+          // Use trading day index instead of calendar days for smooth progression
+          const progress = totalTradingDays > 0 ? index / (totalTradingDays - 1) : 0;
+
+          // SPX with smooth linear growth (no artificial drawdowns)
+          const spxValue = initialCapital + (spxTotalGrowth * progress);
+
+          return {
+            date: point.date,
+            portfolio: point.account_value,
+            spx: Math.max(spxValue, initialCapital * 0.8)
+          };
+        });
+
+        return data;
+      }
+
+      // Fallback to synthetic data if real data not available
+      console.log('Real portfolio data not available, using synthetic data');
       const data = [];
       const startDate = new Date('2022-05-16');
       const endDate = new Date('2025-08-28');
       const daysDiff = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // Get the final account value from blended result
-      const finalValue = analysisResults.blended_result.metrics.final_account_value || 6327837.70;
+
+      const finalValue = blendedResult.metrics.final_account_value || 6327837.70;
       const initialCapital = startingCapital || 1000000;
-      
-      // Ensure we have valid numbers
+
       if (!finalValue || !initialCapital || daysDiff <= 0) {
         console.warn('Invalid data for chart generation');
         return [];
       }
-      
-      // Generate portfolio curve
+
       const totalGrowth = finalValue - initialCapital;
-      
-      // Generate SPX benchmark curve (more modest growth)
-      const spxFinalValue = initialCapital * 1.65; // ~65% total return for SPX
+      const spxFinalValue = initialCapital * 1.65;
       const spxTotalGrowth = spxFinalValue - initialCapital;
 
-      for (let i = 0; i <= daysDiff; i += 7) { // Sample every week for performance
+      for (let i = 0; i <= daysDiff; i += 1) { // Sample daily
         const progress = i / daysDiff;
         const currentDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-        
-        // Portfolio growth with some realistic drawdowns
+
         let growthFactor = progress;
-        if (progress > 0.7) { // Strong growth in later period
+        if (progress > 0.7) {
           growthFactor = Math.pow(progress, 0.8);
         }
-        if (progress > 0.3 && progress < 0.4) { // Small drawdown period
+        if (progress > 0.3 && progress < 0.4) {
           growthFactor *= 0.95;
         }
-        
+
         const portfolioValue = initialCapital + (totalGrowth * growthFactor);
-        
-        // SPX with more linear growth and 2022 drawdown
+
         let spxGrowthFactor = progress;
-        if (progress > 0.1 && progress < 0.3) { // 2022 drawdown
+        if (progress > 0.1 && progress < 0.3) {
           spxGrowthFactor *= 0.85;
         }
         const spxValue = initialCapital + (spxTotalGrowth * spxGrowthFactor);
-        
+
         data.push({
           date: currentDate.toISOString().split('T')[0],
-          portfolio: Math.max(portfolioValue, initialCapital * 0.9), // Don't go below 90% of starting
-          spx: Math.max(spxValue, initialCapital * 0.8), // Don't go below 80% of starting
+          portfolio: Math.max(portfolioValue, initialCapital * 0.9),
+          spx: Math.max(spxValue, initialCapital * 0.8),
         });
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error generating chart data:', error);
@@ -3544,6 +3580,66 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         </div>
                       </div>
 
+                      {/* Days Loss > 0.5% of Starting Capital */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Loss &gt; 0.5% of Starting Cap
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.warning.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_loss_over_half_pct_starting_cap?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
+                      {/* Days Loss > 1% of Starting Capital */}
+                      <div
+                        className="metric-card"
+                        style={{
+                          padding: "1rem",
+                          background: theme.palette.background.paper,
+                          borderRadius: "6px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.9rem",
+                            color: theme.palette.text.secondary,
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          Days Loss &gt; 1% of Starting Cap
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "bold",
+                            color: theme.palette.error.main,
+                          }}
+                        >
+                          {analysisResults.blended_result.metrics.days_loss_over_one_pct_starting_cap?.toLocaleString() || 0}
+                        </div>
+                      </div>
+
                       {/* Days Gain > 0.5% */}
                       <div
                         className="metric-card"
@@ -3736,22 +3832,49 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                             Daily Net Liquidity
                           </h5>
                           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                            {/* Log Scale Toggle */}
-                            <button
-                              onClick={() => setIsLogScale(!isLogScale)}
-                              style={{
-                                padding: "0.25rem 0.5rem",
-                                fontSize: "0.75rem",
-                                backgroundColor: isLogScale ? "#5DADE2" : "transparent",
-                                color: isLogScale ? "#ffffff" : theme.palette.text.secondary,
-                                border: `1px solid ${isLogScale ? "#5DADE2" : theme.palette.divider}`,
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                transition: "all 0.2s"
-                              }}
-                            >
-                              Log Scale
-                            </button>
+                            {/* Scale Toggle Buttons */}
+                            <div style={{
+                              display: "flex",
+                              border: `1px solid ${theme.palette.divider}`,
+                              borderRadius: "4px",
+                              overflow: "hidden"
+                            }}>
+                              <button
+                                onClick={() => setIsLogScale(false)}
+                                style={{
+                                  padding: "0.25rem 0.75rem",
+                                  fontSize: "0.75rem",
+                                  backgroundColor: !isLogScale
+                                    ? theme.palette.mode === 'dark' ? "#5DADE2" : "#2196F3"
+                                    : "transparent",
+                                  color: !isLogScale ? "#ffffff" : theme.palette.text.secondary,
+                                  border: "none",
+                                  borderRight: `1px solid ${theme.palette.divider}`,
+                                  cursor: "pointer",
+                                  transition: "all 0.2s",
+                                  fontWeight: !isLogScale ? "600" : "normal"
+                                }}
+                              >
+                                Linear Scale
+                              </button>
+                              <button
+                                onClick={() => setIsLogScale(true)}
+                                style={{
+                                  padding: "0.25rem 0.75rem",
+                                  fontSize: "0.75rem",
+                                  backgroundColor: isLogScale
+                                    ? theme.palette.mode === 'dark' ? "#5DADE2" : "#2196F3"
+                                    : "transparent",
+                                  color: isLogScale ? "#ffffff" : theme.palette.text.secondary,
+                                  border: "none",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s",
+                                  fontWeight: isLogScale ? "600" : "normal"
+                                }}
+                              >
+                                Log Scale
+                              </button>
+                            </div>
                             {/* Legend */}
                             <div style={{ display: "flex", gap: "1rem" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -4492,6 +4615,48 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   }}
                                 >
                                   {result.metrics.days_loss_over_one_pct?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Days Loss &gt; 0.5% of Starting Cap
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.warning.main,
+                                  }}
+                                >
+                                  {result.metrics.days_loss_over_half_pct_starting_cap?.toLocaleString() || 0}
+                                </div>
+                              </div>
+
+                              <div className="metric">
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: theme.palette.text.secondary,
+                                    marginBottom: "0.25rem",
+                                  }}
+                                >
+                                  Days Loss &gt; 1% of Starting Cap
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: theme.palette.error.main,
+                                  }}
+                                >
+                                  {result.metrics.days_loss_over_one_pct_starting_cap?.toLocaleString() || 0}
                                 </div>
                               </div>
 

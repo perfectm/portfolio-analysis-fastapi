@@ -255,6 +255,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0)),
                         'days_gain_over_half_pct': int(result['metrics'].get('days_gain_over_half_pct', 0)),
                         'days_gain_over_one_pct': int(result['metrics'].get('days_gain_over_one_pct', 0)),
+                        'days_loss_over_half_pct_starting_cap': int(result['metrics'].get('days_loss_over_half_pct_starting_cap', 0)),
+                        'days_loss_over_one_pct_starting_cap': int(result['metrics'].get('days_loss_over_one_pct_starting_cap', 0)),
                         'largest_profit_day': float(result['metrics'].get('largest_profit_day', 0)),
                         'largest_profit_date': result['metrics'].get('largest_profit_date', '')
                     }
@@ -375,6 +377,31 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             logger.error(f"[Weighted Analysis] Error creating Monte Carlo simulation: {str(mc_error)}")
                     else:
                         logger.info(f"[Weighted Analysis] Skipping Monte Carlo simulation for {len(portfolios_data)} portfolios to save memory")
+
+                    # Extract daily time series data (Date and Account Value) BEFORE deleting blended_df
+                    daily_data = []
+                    if blended_df is not None and 'Date' in blended_df.columns and 'Account Value' in blended_df.columns:
+                        # Calculate daily P/L changes for validation
+                        blended_df['Daily_PL_Change'] = blended_df['Account Value'].diff()
+
+                        for _, row in blended_df[['Date', 'Account Value', 'P/L']].iterrows():
+                            daily_data.append({
+                                'date': row['Date'].strftime('%Y-%m-%d') if hasattr(row['Date'], 'strftime') else str(row['Date']),
+                                'account_value': float(row['Account Value']),
+                                'daily_pl': float(row['P/L']) if 'P/L' in row else 0
+                            })
+
+                        # Log validation data
+                        worst_drop = blended_df['Daily_PL_Change'].min()
+                        worst_drop_date = blended_df.loc[blended_df['Daily_PL_Change'].idxmin(), 'Date']
+                        worst_pl_single_day = blended_df['P/L'].min()
+                        worst_pl_date = blended_df.loc[blended_df['P/L'].idxmin(), 'Date']
+
+                        logger.info(f"[Weighted Analysis] Extracted {len(daily_data)} daily data points for chart")
+                        logger.info(f"[Weighted Analysis] Worst Account Value drop (day-to-day): ${worst_drop:.2f} on {worst_drop_date}")
+                        logger.info(f"[Weighted Analysis] Worst P/L single day: ${worst_pl_single_day:.2f} on {worst_pl_date}")
+                        logger.info(f"[Weighted Analysis] Account Value range: ${blended_df['Account Value'].min():.2f} to ${blended_df['Account Value'].max():.2f}")
+
                     del blended_df
                     gc.collect()
                     portfolio_composition = {}
@@ -382,12 +409,14 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         for i, (name, _) in enumerate(portfolios_data):
                             if i < len(portfolio_weights):
                                 portfolio_composition[name] = portfolio_weights[i]
+
                     simplified_blended_result = {
                         'filename': f'Weighted Blended Portfolio ({len(portfolios_data)} strategies)',
                         'type': 'blended',
                         'plots': blended_plots_list,
                         'weighting_method': weighting_method,
                         'portfolio_composition': portfolio_composition,
+                        'daily_data': daily_data,
                         'metrics': {
                             'sharpe_ratio': float(blended_metrics.get('sharpe_ratio', 0)),
                             'sortino_ratio': float(blended_metrics.get('sortino_ratio', 0)),
@@ -421,6 +450,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0)),
                             'days_gain_over_half_pct': int(blended_metrics.get('days_gain_over_half_pct', 0)),
                             'days_gain_over_one_pct': int(blended_metrics.get('days_gain_over_one_pct', 0)),
+                            'days_loss_over_half_pct_starting_cap': int(blended_metrics.get('days_loss_over_half_pct_starting_cap', 0)),
+                            'days_loss_over_one_pct_starting_cap': int(blended_metrics.get('days_loss_over_one_pct_starting_cap', 0)),
                             'largest_profit_day': float(blended_metrics.get('largest_profit_day', 0)),
                             'largest_profit_date': blended_metrics.get('largest_profit_date', '')
                         }
@@ -989,6 +1020,8 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                         'days_loss_over_one_pct': int(result['metrics'].get('days_loss_over_one_pct', 0)),
                         'days_gain_over_half_pct': int(result['metrics'].get('days_gain_over_half_pct', 0)),
                         'days_gain_over_one_pct': int(result['metrics'].get('days_gain_over_one_pct', 0)),
+                        'days_loss_over_half_pct_starting_cap': int(result['metrics'].get('days_loss_over_half_pct_starting_cap', 0)),
+                        'days_loss_over_one_pct_starting_cap': int(result['metrics'].get('days_loss_over_one_pct_starting_cap', 0)),
                         'largest_profit_day': float(result['metrics'].get('largest_profit_day', 0)),
                         'largest_profit_date': result['metrics'].get('largest_profit_date', '')
                     }
@@ -1102,10 +1135,36 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                             logger.info(f"[Analyze Portfolios] Monte Carlo simulation created: {monte_carlo_url}")
                     except Exception as mc_error:
                         logger.error(f"[Analyze Portfolios] Error creating Monte Carlo simulation: {str(mc_error)}")
+
+                    # Extract daily time series data (Date and Account Value) for chart
+                    daily_data = []
+                    if blended_df is not None and 'Date' in blended_df.columns and 'Account Value' in blended_df.columns:
+                        # Calculate daily P/L changes for validation
+                        blended_df['Daily_PL_Change'] = blended_df['Account Value'].diff()
+
+                        for _, row in blended_df[['Date', 'Account Value', 'P/L']].iterrows():
+                            daily_data.append({
+                                'date': row['Date'].strftime('%Y-%m-%d') if hasattr(row['Date'], 'strftime') else str(row['Date']),
+                                'account_value': float(row['Account Value']),
+                                'daily_pl': float(row['P/L']) if 'P/L' in row else 0
+                            })
+
+                        # Log validation data
+                        worst_drop = blended_df['Daily_PL_Change'].min()
+                        worst_drop_date = blended_df.loc[blended_df['Daily_PL_Change'].idxmin(), 'Date']
+                        worst_pl_single_day = blended_df['P/L'].min()
+                        worst_pl_date = blended_df.loc[blended_df['P/L'].idxmin(), 'Date']
+
+                        logger.info(f"[Analyze Portfolios] Extracted {len(daily_data)} daily data points for chart")
+                        logger.info(f"[Analyze Portfolios] Worst Account Value drop (day-to-day): ${worst_drop:.2f} on {worst_drop_date}")
+                        logger.info(f"[Analyze Portfolios] Worst P/L single day: ${worst_pl_single_day:.2f} on {worst_pl_date}")
+                        logger.info(f"[Analyze Portfolios] Account Value range: ${blended_df['Account Value'].min():.2f} to ${blended_df['Account Value'].max():.2f}")
+
                     simplified_blended_result = {
                         'filename': f'Blended Portfolio ({len(portfolios_data)} strategies)',
                         'type': 'blended',
                         'plots': blended_plots_list,
+                        'daily_data': daily_data,
                         'metrics': {
                             'sharpe_ratio': float(blended_metrics.get('sharpe_ratio', 0)),
                             'sortino_ratio': float(blended_metrics.get('sortino_ratio', 0)),
@@ -1139,6 +1198,8 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                             'days_loss_over_one_pct': int(blended_metrics.get('days_loss_over_one_pct', 0)),
                             'days_gain_over_half_pct': int(blended_metrics.get('days_gain_over_half_pct', 0)),
                             'days_gain_over_one_pct': int(blended_metrics.get('days_gain_over_one_pct', 0)),
+                            'days_loss_over_half_pct_starting_cap': int(blended_metrics.get('days_loss_over_half_pct_starting_cap', 0)),
+                            'days_loss_over_one_pct_starting_cap': int(blended_metrics.get('days_loss_over_one_pct_starting_cap', 0)),
                             'largest_profit_day': float(blended_metrics.get('largest_profit_day', 0)),
                             'largest_profit_date': blended_metrics.get('largest_profit_date', '')
                         }

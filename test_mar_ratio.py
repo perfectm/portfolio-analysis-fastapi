@@ -55,7 +55,7 @@ def test_mar_ratio_calculation():
     print(f"CAGR: {cagr * 100:.2f}%")
     
     # Calculate drawdown metrics including MAR ratio
-    drawdown_metrics = _calculate_drawdown_metrics(df)
+    drawdown_metrics = _calculate_drawdown_metrics(df, starting_capital=100000)
     
     print("\n=== Drawdown Metrics ===")
     for key, value in drawdown_metrics.items():

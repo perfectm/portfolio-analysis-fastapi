@@ -114,7 +114,7 @@ def process_portfolio_data(
     clean_df = _calculate_drawdown(clean_df, starting_capital)
 
     # Update metrics with drawdown information
-    drawdown_metrics = _calculate_drawdown_metrics(clean_df)
+    drawdown_metrics = _calculate_drawdown_metrics(clean_df, starting_capital)
     metrics.update(drawdown_metrics)
     
     _log_portfolio_summary(clean_df, metrics, actual_starting_capital)
@@ -696,8 +696,13 @@ def _calculate_drawdown(clean_df: pd.DataFrame, starting_capital: float) -> pd.D
     return clean_df
 
 
-def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
-    """Calculate detailed drawdown metrics"""
+def _calculate_drawdown_metrics(clean_df: pd.DataFrame, starting_capital: float) -> Dict[str, Any]:
+    """Calculate detailed drawdown metrics
+
+    Args:
+        clean_df: DataFrame with Account Value, Drawdown Amount, P/L columns
+        starting_capital: Initial capital to use for starting capital-based thresholds
+    """
     # Log data shape and date range for debugging
     logger.info(f"[Drawdown Metrics] DataFrame shape: {clean_df.shape}")
     logger.info(f"[Drawdown Metrics] Date range: {clean_df['Date'].min()} to {clean_df['Date'].max()}")
@@ -792,6 +797,26 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
         days_gain_over_one_pct = 0
         logger.warning(f"[Drawdown Metrics] 'Daily Return' column not found, tail risk metrics set to 0")
 
+    # Calculate tail risk metrics based on starting capital (fixed dollar thresholds)
+    # These measure days where dollar P/L exceeds fixed percentages of starting capital
+    if 'P/L' in clean_df.columns:
+        # Calculate thresholds based on starting capital
+        half_pct_starting_cap_threshold = starting_capital * 0.005  # 0.5% of starting capital
+        one_pct_starting_cap_threshold = starting_capital * 0.01    # 1% of starting capital
+
+        # Count days where loss > 0.5% of starting capital
+        days_loss_over_half_pct_starting_cap = int((clean_df['P/L'] < -half_pct_starting_cap_threshold).sum())
+
+        # Count days where loss > 1% of starting capital
+        days_loss_over_one_pct_starting_cap = int((clean_df['P/L'] < -one_pct_starting_cap_threshold).sum())
+
+        logger.info(f"[Drawdown Metrics] Days with loss > 0.5% of starting capital (${half_pct_starting_cap_threshold:,.2f}): {days_loss_over_half_pct_starting_cap}")
+        logger.info(f"[Drawdown Metrics] Days with loss > 1.0% of starting capital (${one_pct_starting_cap_threshold:,.2f}): {days_loss_over_one_pct_starting_cap}")
+    else:
+        days_loss_over_half_pct_starting_cap = 0
+        days_loss_over_one_pct_starting_cap = 0
+        logger.warning(f"[Drawdown Metrics] 'P/L' column not found, starting capital-based tail risk metrics set to 0")
+
     # Calculate largest single-day profit and its date
     if 'P/L' in clean_df.columns and not clean_df['P/L'].empty:
         max_profit_idx = clean_df['P/L'].idxmax()
@@ -821,6 +846,8 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame) -> Dict[str, Any]:
         'days_loss_over_one_pct': int(days_loss_over_one_pct),
         'days_gain_over_half_pct': int(days_gain_over_half_pct),
         'days_gain_over_one_pct': int(days_gain_over_one_pct),
+        'days_loss_over_half_pct_starting_cap': int(days_loss_over_half_pct_starting_cap),
+        'days_loss_over_one_pct_starting_cap': int(days_loss_over_one_pct_starting_cap),
         'largest_profit_day': float(largest_profit_day),
         'largest_profit_date': largest_profit_date.strftime('%Y-%m-%d')
     }
@@ -871,6 +898,8 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
         'days_loss_over_one_pct': 0,
         'days_gain_over_half_pct': 0,
         'days_gain_over_one_pct': 0,
+        'days_loss_over_half_pct_starting_cap': 0,
+        'days_loss_over_one_pct_starting_cap': 0,
         'largest_profit_day': 0,
         'largest_profit_date': ''
     }
