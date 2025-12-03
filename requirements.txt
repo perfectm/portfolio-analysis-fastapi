@@ -35,3 +35,7 @@ psutil
 
 # Market data for regime analysis
 yfinance>=0.2.18
+
+# Tear sheet generation
+quantstats>=0.0.62
+ipython>=8.0.0

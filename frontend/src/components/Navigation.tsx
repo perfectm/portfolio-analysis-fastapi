@@ -13,41 +13,80 @@ import {
   Avatar,
   IconButton,
 } from "@mui/material";
-import { Assessment, AccountCircle, ExitToApp } from "@mui/icons-material";
+import { Assessment, ExitToApp, ArrowDropDown } from "@mui/icons-material";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "../contexts/AuthContext";
+
+interface NavItem {
+  path: string;
+  label: string;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
 
 const Navigation: React.FC = () => {
   const location = useLocation();
   const theme = useTheme();
   const { user, isAuthenticated, logout } = useAuth();
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [userMenuAnchor, setUserMenuAnchor] = React.useState<null | HTMLElement>(null);
+  const [navMenuAnchors, setNavMenuAnchors] = React.useState<{ [key: string]: HTMLElement | null }>({});
 
   const isActive = (path: string) => {
     return location.pathname === path;
   };
 
-  const navItems = [
+  const isGroupActive = (items: NavItem[]) => {
+    return items.some(item => location.pathname === item.path);
+  };
+
+  // Standalone nav items (not in dropdowns)
+  const standaloneItems: NavItem[] = [
     { path: "/", label: "Home" },
     { path: "/upload", label: "Upload" },
     { path: "/portfolios", label: "Portfolios" },
-    { path: "/margin", label: "Margin Management" },
-    { path: "/robustness", label: "Robustness" },
-    { path: "/profit-optimization", label: "Profit Optimization" },
-    { path: "/optimization-history", label: "Optimization History" },
   ];
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
+  // Grouped nav items (in dropdowns)
+  const navGroups: NavGroup[] = [
+    {
+      label: "Analysis",
+      items: [
+        { path: "/robustness", label: "Robustness Testing" },
+        { path: "/profit-optimization", label: "Profit Optimization" },
+        { path: "/optimization-history", label: "Optimization History" },
+        { path: "/tear-sheet", label: "Tear Sheet" },
+      ],
+    },
+    {
+      label: "Management",
+      items: [
+        { path: "/margin", label: "Margin Management" },
+      ],
+    },
+  ];
+
+  const handleNavMenuOpen = (groupLabel: string) => (event: React.MouseEvent<HTMLElement>) => {
+    setNavMenuAnchors(prev => ({ ...prev, [groupLabel]: event.currentTarget }));
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
+  const handleNavMenuClose = (groupLabel: string) => () => {
+    setNavMenuAnchors(prev => ({ ...prev, [groupLabel]: null }));
+  };
+
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setUserMenuAnchor(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setUserMenuAnchor(null);
   };
 
   const handleLogout = () => {
     logout();
-    handleMenuClose();
+    handleUserMenuClose();
   };
 
   return (
@@ -99,39 +138,135 @@ const Navigation: React.FC = () => {
           {/* Navigation Items */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             {/* Main Navigation - only show if authenticated */}
-            {isAuthenticated && navItems.map((item) => (
-              <Link key={item.path} to={item.path} style={{ textDecoration: "none" }}>
-                <Button
-                  variant={isActive(item.path) ? "contained" : "text"}
-                  sx={{
-                    minWidth: "auto",
-                    px: 2,
-                    py: 1,
-                    borderRadius: 2,
-                    fontWeight: 600,
-                    textTransform: "none",
-                    ...(isActive(item.path)
-                      ? {
-                          background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                          boxShadow: theme.shadows[3],
-                          "&:hover": {
-                            background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                            boxShadow: theme.shadows[6],
-                          },
-                        }
-                      : {
-                          color: theme.palette.text.primary,
-                          "&:hover": {
-                            backgroundColor: theme.palette.action.hover,
-                            borderRadius: 2,
-                          },
-                        }),
-                  }}
-                >
-                  {item.label}
-                </Button>
-              </Link>
-            ))}
+            {isAuthenticated && (
+              <>
+                {/* Standalone nav items */}
+                {standaloneItems.map((item) => (
+                  <Link key={item.path} to={item.path} style={{ textDecoration: "none" }}>
+                    <Button
+                      variant={isActive(item.path) ? "contained" : "text"}
+                      sx={{
+                        minWidth: "auto",
+                        px: 2,
+                        py: 1,
+                        borderRadius: 2,
+                        fontWeight: 600,
+                        textTransform: "none",
+                        ...(isActive(item.path)
+                          ? {
+                              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                              boxShadow: theme.shadows[3],
+                              "&:hover": {
+                                background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                                boxShadow: theme.shadows[6],
+                              },
+                            }
+                          : {
+                              color: theme.palette.text.primary,
+                              "&:hover": {
+                                backgroundColor: theme.palette.action.hover,
+                                borderRadius: 2,
+                              },
+                            }),
+                      }}
+                    >
+                      {item.label}
+                    </Button>
+                  </Link>
+                ))}
+
+                {/* Grouped nav items with dropdown menus */}
+                {navGroups.map((group) => (
+                  <Box
+                    key={group.label}
+                    onMouseEnter={handleNavMenuOpen(group.label)}
+                    onMouseLeave={handleNavMenuClose(group.label)}
+                  >
+                    <Button
+                      variant={isGroupActive(group.items) ? "contained" : "text"}
+                      endIcon={<ArrowDropDown />}
+                      sx={{
+                        minWidth: "auto",
+                        px: 2,
+                        py: 1,
+                        borderRadius: 2,
+                        fontWeight: 600,
+                        textTransform: "none",
+                        ...(isGroupActive(group.items)
+                          ? {
+                              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                              boxShadow: theme.shadows[3],
+                              "&:hover": {
+                                background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                                boxShadow: theme.shadows[6],
+                              },
+                            }
+                          : {
+                              color: theme.palette.text.primary,
+                              "&:hover": {
+                                backgroundColor: theme.palette.action.hover,
+                                borderRadius: 2,
+                              },
+                            }),
+                      }}
+                    >
+                      {group.label}
+                    </Button>
+                    <Menu
+                      anchorEl={navMenuAnchors[group.label]}
+                      open={Boolean(navMenuAnchors[group.label])}
+                      onClose={handleNavMenuClose(group.label)}
+                      MenuListProps={{
+                        onMouseLeave: handleNavMenuClose(group.label),
+                      }}
+                      anchorOrigin={{
+                        vertical: 'bottom',
+                        horizontal: 'left',
+                      }}
+                      transformOrigin={{
+                        vertical: 'top',
+                        horizontal: 'left',
+                      }}
+                      sx={{
+                        mt: 1,
+                        '& .MuiPaper-root': {
+                          borderRadius: 2,
+                          minWidth: 200,
+                          boxShadow: theme.shadows[8],
+                        },
+                      }}
+                    >
+                      {group.items.map((item) => (
+                        <MenuItem
+                          key={item.path}
+                          component={Link}
+                          to={item.path}
+                          onClick={handleNavMenuClose(group.label)}
+                          selected={isActive(item.path)}
+                          sx={{
+                            fontWeight: isActive(item.path) ? 600 : 400,
+                            color: isActive(item.path)
+                              ? theme.palette.primary.main
+                              : theme.palette.text.primary,
+                            '&:hover': {
+                              backgroundColor: theme.palette.action.hover,
+                            },
+                            '&.Mui-selected': {
+                              backgroundColor: theme.palette.action.selected,
+                              '&:hover': {
+                                backgroundColor: theme.palette.action.hover,
+                              },
+                            },
+                          }}
+                        >
+                          {item.label}
+                        </MenuItem>
+                      ))}
+                    </Menu>
+                  </Box>
+                ))}
+              </>
+            )}
 
             {/* Theme Toggle */}
             <ThemeToggle size="medium" />
@@ -140,7 +275,7 @@ const Navigation: React.FC = () => {
             {isAuthenticated && user && (
               <>
                 <IconButton
-                  onClick={handleMenuOpen}
+                  onClick={handleUserMenuOpen}
                   sx={{
                     ml: 1,
                     color: theme.palette.text.primary,
@@ -158,9 +293,9 @@ const Navigation: React.FC = () => {
                   </Avatar>
                 </IconButton>
                 <Menu
-                  anchorEl={anchorEl}
-                  open={Boolean(anchorEl)}
-                  onClose={handleMenuClose}
+                  anchorEl={userMenuAnchor}
+                  open={Boolean(userMenuAnchor)}
+                  onClose={handleUserMenuClose}
                   anchorOrigin={{
                     vertical: 'bottom',
                     horizontal: 'right',

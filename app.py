@@ -37,6 +37,7 @@ from routers.margin import router as margin_router
 from routers.robustness import router as robustness_router
 from routers.profit_optimization import router as profit_optimization_router
 from routers.favorites import router as favorites_router
+from routers.tear_sheet import router as tear_sheet_router
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -141,6 +142,7 @@ app.include_router(margin_router, prefix="/api/margin")
 app.include_router(robustness_router, prefix="/api/robustness")
 app.include_router(profit_optimization_router, prefix="/api/profit-optimization")
 app.include_router(favorites_router)
+app.include_router(tear_sheet_router, prefix="/api")
 
 # Legacy upload endpoint for backward compatibility
 @app.post("/upload")

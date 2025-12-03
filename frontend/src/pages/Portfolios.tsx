@@ -1406,6 +1406,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
 
   // Download blended portfolio CSV
   const [downloadingCSV, setDownloadingCSV] = useState<boolean>(false);
+  const [generatingTearSheet, setGeneratingTearSheet] = useState<boolean>(false);
 
   const downloadBlendedCSV = async () => {
     if (!analysisResults?.blended_result) {
@@ -1483,6 +1484,78 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
       );
     } finally {
       setDownloadingCSV(false);
+    }
+  };
+
+  const generateTearSheet = async () => {
+    if (!analysisResults?.blended_result) {
+      alert("Please run an analysis first before generating tear sheet");
+      return;
+    }
+
+    if (selectedPortfolios.length < 2) {
+      alert("Tear sheet generation is only available for blended portfolios (2+ strategies)");
+      return;
+    }
+
+    setGeneratingTearSheet(true);
+
+    try {
+      const requestBody = {
+        portfolio_ids: selectedPortfolios,
+        portfolio_weights: selectedPortfolios.map(
+          (id) => portfolioWeights[id] || 1.0
+        ),
+        starting_capital: startingCapital,
+        rf_rate: riskFreeRate / 100, // Convert percentage to decimal
+        sma_window: loadedOptimization?.parameters?.sma_window || 20,
+        use_trading_filter: loadedOptimization?.parameters?.use_trading_filter !== undefined
+          ? loadedOptimization.parameters.use_trading_filter : true,
+        date_range_start: dateRangeStart,
+        date_range_end: dateRangeEnd,
+      };
+
+      console.log("Generating tear sheet with request:", requestBody);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/tear-sheet/generate-from-portfolios`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate tear sheet: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.html) {
+        // Open tear sheet in a new window
+        const newWindow = window.open("", "_blank");
+        if (newWindow) {
+          newWindow.document.write(data.html);
+          newWindow.document.close();
+        } else {
+          alert("Please allow pop-ups to view the tear sheet");
+        }
+        console.log("Tear sheet generated successfully");
+      } else {
+        throw new Error(data.error || "Failed to generate tear sheet");
+      }
+    } catch (error) {
+      console.error("Failed to generate tear sheet:", error);
+      alert(
+        `Failed to generate tear sheet: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setGeneratingTearSheet(false);
     }
   };
 
@@ -2664,23 +2737,42 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                 <div className="blended-results">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                     <h3>🔗 Blended Portfolio Analysis</h3>
-                    <button
-                      onClick={downloadBlendedCSV}
-                      disabled={downloadingCSV}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        background: theme.palette.success.main,
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: downloadingCSV ? "wait" : "pointer",
-                        fontSize: "0.9rem",
-                        fontWeight: "500",
-                        opacity: downloadingCSV ? 0.7 : 1,
-                      }}
-                    >
-                      {downloadingCSV ? "⏳ Generating..." : "📥 Download CSV"}
-                    </button>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        onClick={downloadBlendedCSV}
+                        disabled={downloadingCSV}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          background: theme.palette.success.main,
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: downloadingCSV ? "wait" : "pointer",
+                          fontSize: "0.9rem",
+                          fontWeight: "500",
+                          opacity: downloadingCSV ? 0.7 : 1,
+                        }}
+                      >
+                        {downloadingCSV ? "⏳ Generating..." : "📥 Download CSV"}
+                      </button>
+                      <button
+                        onClick={generateTearSheet}
+                        disabled={generatingTearSheet}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          background: theme.palette.primary.main,
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: generatingTearSheet ? "wait" : "pointer",
+                          fontSize: "0.9rem",
+                          fontWeight: "500",
+                          opacity: generatingTearSheet ? 0.7 : 1,
+                        }}
+                      >
+                        {generatingTearSheet ? "⏳ Generating..." : "📊 Generate Tear Sheet"}
+                      </button>
+                    </div>
                   </div>
                   <div
                     className="blended-card"

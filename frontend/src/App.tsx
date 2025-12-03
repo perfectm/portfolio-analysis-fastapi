@@ -17,6 +17,7 @@ const RegimeAnalysisFixed = React.lazy(() => import("./pages/RegimeAnalysisFixed
 const RobustnessTest = React.lazy(() => import("./pages/RobustnessTest"));
 const ProfitOptimization = React.lazy(() => import("./pages/ProfitOptimization"));
 const OptimizationHistory = React.lazy(() => import("./pages/OptimizationHistory"));
+const TearSheet = React.lazy(() => import("./pages/TearSheet"));
 
 // Loading component for lazy-loaded pages
 const PageLoader: React.FC = () => (
@@ -90,6 +91,7 @@ const AppContent: React.FC = () => {
             <Route path="/robustness" element={<RobustnessTest />} />
             <Route path="/profit-optimization" element={<ProfitOptimization />} />
             <Route path="/optimization-history" element={<OptimizationHistory />} />
+            <Route path="/tear-sheet" element={<TearSheet />} />
             <Route path="*" element={<Home />} />
           </Routes>
         </Suspense>
