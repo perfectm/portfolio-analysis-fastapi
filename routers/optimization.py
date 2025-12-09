@@ -148,12 +148,28 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             # Log total portfolio scale
             total_scale = sum(portfolio_weights)
             logger.info(f"[Weighted Analysis] Using portfolio multipliers: {[f'{w:.2f}x' for w in portfolio_weights]} (total scale: {total_scale:.2f}x)")
-        portfolios_data = []
+
+        # Validate portfolios first and filter out non-existent ones
+        valid_portfolio_ids = []
+        invalid_ids = []
         for portfolio_id in portfolio_ids:
             portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
-            if not portfolio:
-                logger.warning(f"Portfolio {portfolio_id} not found")
-                continue
+            if portfolio:
+                valid_portfolio_ids.append(portfolio_id)
+            else:
+                invalid_ids.append(portfolio_id)
+
+        # Log once if there were invalid IDs
+        if invalid_ids:
+            logger.info(f"[Weighted Analysis] Filtered out {len(invalid_ids)} non-existent portfolio(s): {invalid_ids}")
+
+        if not valid_portfolio_ids:
+            return {"success": False, "error": "None of the selected portfolios exist in the database"}
+
+        # Now fetch data only for valid portfolios
+        portfolios_data = []
+        for portfolio_id in valid_portfolio_ids:
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
             df = PortfolioService.get_portfolio_dataframe(db, portfolio_id, columns=["Date", "P/L", "Daily_Return"])
             if df.empty:
                 logger.warning(f"No data found for portfolio {portfolio_id}")
@@ -165,16 +181,16 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         logger.info(f"[Weighted Analysis] Processing {len(portfolios_data)} portfolios")
         individual_results = []
         for i, (name, df) in enumerate(portfolios_data):
-            cached = get_cached_analysis_result(db, portfolio_ids[i], 0.05, 20, True, starting_capital)
+            cached = get_cached_analysis_result(db, valid_portfolio_ids[i], 0.05, 20, True, starting_capital)
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
-                df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
+                df = PortfolioService.get_portfolio_dataframe(db, valid_portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
                     result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
+                    PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
                 else:
@@ -189,8 +205,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             else:
                 # Run process_individual_portfolios for this portfolio only
                 result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
+                PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                 individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
@@ -203,7 +219,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         plot_paths = create_plots(
                             result['clean_df'], 
                             result['metrics'], 
-                            filename_prefix=f"weighted_analysis_portfolio_{i}_{portfolio_ids[i] if i < len(portfolio_ids) else 'unknown'}", 
+                            filename_prefix=f"weighted_analysis_portfolio_{i}_{valid_portfolio_ids[i] if i < len(portfolio_ids) else 'unknown'}", 
                             sma_window=20
                         )
                         if 'clean_df' in result:
@@ -277,7 +293,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 logger.info("[Weighted Analysis] Creating weighted blended portfolio analysis")
                 blended_df, blended_metrics, _ = create_blended_portfolio(
                     db=db,
-                    portfolio_ids=portfolio_ids,
+                    portfolio_ids=valid_portfolio_ids,
                     weights=portfolio_weights,
                     name=f"Weighted Blended Portfolio ({len(portfolios_data)} strategies)",
                     description=f"Weighted blend of {len(portfolios_data)} portfolios",
@@ -292,8 +308,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     blended_plots_list = []
                     try:
                         logger.info("[Weighted Analysis] Creating plots for weighted blended portfolio")
-                        portfolio_ids_str = "_".join(str(pid) for pid in portfolio_ids)
-                        unique_prefix = f"weighted_blended_{len(portfolio_ids)}portfolios_{portfolio_ids_str}"
+                        portfolio_ids_str = "_".join(str(pid) for pid in valid_portfolio_ids)
+                        unique_prefix = f"weighted_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}"
                         blended_plot_paths = create_plots(
                             blended_df, 
                             blended_metrics, 
@@ -928,12 +944,28 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         logger.info(f"[Analyze Portfolios] User provided starting capital: ${user_starting_capital:,.2f}")
         logger.info(f"[Analyze Portfolios] Margin-based starting capital: ${margin_based_capital:,.2f}")
         logger.info(f"[Analyze Portfolios] Using starting capital: ${starting_capital:,.2f}")
-        portfolios_data = []
+
+        # Validate portfolios first and filter out non-existent ones
+        valid_portfolio_ids = []
+        invalid_ids = []
         for portfolio_id in portfolio_ids:
             portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
-            if not portfolio:
-                logger.warning(f"Portfolio {portfolio_id} not found")
-                continue
+            if portfolio:
+                valid_portfolio_ids.append(portfolio_id)
+            else:
+                invalid_ids.append(portfolio_id)
+
+        # Log once if there were invalid IDs
+        if invalid_ids:
+            logger.info(f"[Analyze Portfolios] Filtered out {len(invalid_ids)} non-existent portfolio(s): {invalid_ids}")
+
+        if not valid_portfolio_ids:
+            return {"success": False, "error": "None of the selected portfolios exist in the database"}
+
+        # Now fetch data only for valid portfolios
+        portfolios_data = []
+        for portfolio_id in valid_portfolio_ids:
+            portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
             df = PortfolioService.get_portfolio_dataframe(db, portfolio_id, columns=["Date", "P/L", "Daily_Return"])
             if df.empty:
                 logger.warning(f"No data found for portfolio {portfolio_id}")
@@ -945,16 +977,16 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         logger.info(f"[Analyze Portfolios] Processing {len(portfolios_data)} portfolios")
         individual_results = []
         for i, (name, df) in enumerate(portfolios_data):
-            cached = get_cached_analysis_result(db, portfolio_ids[i], 0.05, 20, True, starting_capital)
+            cached = get_cached_analysis_result(db, valid_portfolio_ids[i], 0.05, 20, True, starting_capital)
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
-                df = PortfolioService.get_portfolio_dataframe(db, portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
+                df = PortfolioService.get_portfolio_dataframe(db, valid_portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
                     result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                    PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
+                    PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
                 else:
@@ -969,8 +1001,8 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             else:
                 # Run process_individual_portfolios for this portfolio only
                 result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
-                PortfolioService.store_analysis_result(db, portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
+                PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                 individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
@@ -983,7 +1015,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                         plot_paths = create_plots(
                             result['clean_df'], 
                             result['metrics'], 
-                            filename_prefix=f"analysis_portfolio_{i}_{portfolio_ids[i] if i < len(portfolio_ids) else 'unknown'}", 
+                            filename_prefix=f"analysis_portfolio_{i}_{valid_portfolio_ids[i] if i < len(valid_portfolio_ids) else 'unknown'}", 
                             sma_window=20
                         )
                         logger.info(f"[Analyze Portfolios] create_plots returned: {plot_paths}")
@@ -1052,12 +1084,12 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             try:
                 logger.info("[Analyze Portfolios] Creating blended portfolio analysis")
                 # Use 1x multiplier for each portfolio
-                equal_weights = [1.0] * len(portfolio_ids)
+                equal_weights = [1.0] * len(valid_portfolio_ids)
                 logger.info(f"[Analyze Portfolios] Using equal weights (1x each): {equal_weights}")
 
                 blended_df, blended_metrics, _ = create_blended_portfolio(
                     db=db,
-                    portfolio_ids=portfolio_ids,
+                    portfolio_ids=valid_portfolio_ids,
                     weights=equal_weights,
                     name=f"Equal-Weight Blended Portfolio ({len(portfolios_data)} strategies)",
                     description=f"Equal-weight blend of {len(portfolios_data)} portfolios",
@@ -1072,8 +1104,8 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     blended_plots_list = []
                     try:
                         logger.info("[Analyze Portfolios] Creating plots for blended portfolio")
-                        portfolio_ids_str = "_".join(str(pid) for pid in portfolio_ids)
-                        unique_prefix = f"analysis_blended_{len(portfolio_ids)}portfolios_{portfolio_ids_str}"
+                        portfolio_ids_str = "_".join(str(pid) for pid in valid_portfolio_ids)
+                        unique_prefix = f"analysis_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}"
                         blended_plot_paths = create_plots(
                             blended_df, 
                             blended_metrics, 
