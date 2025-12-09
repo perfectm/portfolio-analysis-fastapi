@@ -5257,7 +5257,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 border: `1px solid ${theme.palette.divider}`,
                               }}
                               onError={(e) => {
-                                e.currentTarget.style.display = "none";
+                                console.error("Failed to load correlation heatmap:", e.currentTarget.src);
                               }}
                             />
                           </div>
@@ -5295,7 +5295,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 border: `1px solid ${theme.palette.divider}`,
                               }}
                               onError={(e) => {
-                                e.currentTarget.style.display = "none";
+                                console.error("Failed to load Monte Carlo simulation:", e.currentTarget.src);
                               }}
                             />
                           </div>
