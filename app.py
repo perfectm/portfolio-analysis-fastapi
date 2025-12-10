@@ -108,12 +108,19 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 # Add CORS middleware to allow React frontend to communicate with API
 # Configure CORS based on environment
 allowed_origins = [
-    "http://localhost:3000", 
-    "http://localhost:5173", 
-    "http://127.0.0.1:3000", 
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
     "http://closet.local:5173",
-    "http://closet.local:8000"
+    "http://closet.local:8000",
+    # VPS domains
+    "https://hornillo.cloud",
+    "http://hornillo.cloud",
+    "https://cottonmike.com",
+    "http://cottonmike.com",
+    "https://portfolio.cottonmike.com",
+    "http://portfolio.cottonmike.com"
 ]
 
 # In production (Render), allow the deployed domain
