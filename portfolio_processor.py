@@ -6,7 +6,11 @@ import numpy as np
 import logging
 from typing import Tuple, Dict, Any
 
-from config import DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS
+from config import (
+    DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS,
+    TRADE_STEWARD_IDENTIFIER_COLUMNS, TRADE_STEWARD_DATE_COLUMN,
+    TRADE_STEWARD_PL_COLUMN, TRADE_STEWARD_ENTRY_DATE_COLUMN
+)
 from beta_calculator import calculate_portfolio_beta
 
 logger = logging.getLogger(__name__)
@@ -39,13 +43,71 @@ def _convert_numpy_types(metrics: Dict[str, Any]) -> Dict[str, Any]:
     return converted
 
 
+def _create_continuous_time_series(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create a continuous daily time series by filling in non-trading days.
+    This ensures accurate daily return calculations for Sharpe/Sortino ratios.
+
+    Args:
+        df: DataFrame with Date, P/L, Cumulative P/L, Account Value, Has_Trade columns
+
+    Returns:
+        DataFrame with continuous daily dates, forward-filled values
+    """
+    # First, aggregate multiple trades on the same day
+    # Group by date and take the last values (end-of-day values)
+    df_daily = df.groupby('Date').agg({
+        'P/L': 'sum',  # Sum P/L for all trades on the same day
+        'Cumulative P/L': 'last',  # Take end-of-day cumulative P/L
+        'Account Value': 'last',  # Take end-of-day account value
+        'Has_Trade': 'any'  # True if any trades on this day
+    }).reset_index()
+
+    # Handle optional columns if they exist
+    if 'Premium' in df.columns:
+        df_daily['Premium'] = df.groupby('Date')['Premium'].sum().values
+    if 'Contracts' in df.columns:
+        df_daily['Contracts'] = df.groupby('Date')['Contracts'].sum().values
+
+    logger.info(f"Aggregated to daily: {len(df)} rows → {len(df_daily)} unique days")
+
+    # Create a complete date range from first to last date
+    date_range = pd.date_range(start=df_daily['Date'].min(), end=df_daily['Date'].max(), freq='D')
+
+    # Reindex to include all calendar days
+    df_daily = df_daily.set_index('Date').reindex(date_range)
+
+    # Forward fill Account Value and Cumulative P/L (account value stays constant on non-trading days)
+    df_daily['Account Value'] = df_daily['Account Value'].ffill()
+    df_daily['Cumulative P/L'] = df_daily['Cumulative P/L'].ffill()
+
+    # Fill P/L with 0 for non-trading days
+    df_daily['P/L'] = df_daily['P/L'].fillna(0)
+
+    # Fill Has_Trade with False for non-trading days
+    df_daily['Has_Trade'] = df_daily['Has_Trade'].fillna(False)
+
+    # Handle optional columns (Premium, Contracts) if they exist
+    if 'Premium' in df_daily.columns:
+        df_daily['Premium'] = df_daily['Premium'].fillna(0)
+    if 'Contracts' in df_daily.columns:
+        df_daily['Contracts'] = df_daily['Contracts'].fillna(0)
+
+    # Reset index to make Date a column again
+    df_daily = df_daily.reset_index().rename(columns={'index': 'Date'})
+
+    logger.info(f"Created continuous time series: {len(df_daily)} total days ({df_daily['Has_Trade'].sum()} trading days)")
+
+    return df_daily
+
+
 def process_portfolio_data(
-    df: pd.DataFrame, 
-    rf_rate: float = 0.043, 
-    daily_rf_rate: float = 0.000171, 
-    sma_window: int = 20, 
-    use_trading_filter: bool = True, 
-    starting_capital: float = 1000000, 
+    df: pd.DataFrame,
+    rf_rate: float = 0.043,
+    daily_rf_rate: float = 0.000171,
+    sma_window: int = 20,
+    use_trading_filter: bool = True,
+    starting_capital: float = 1000000,
     is_blended: bool = False
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
@@ -77,11 +139,18 @@ def process_portfolio_data(
     # Calculate cumulative P/L and account value
     clean_df['Cumulative P/L'] = clean_df['P/L'].cumsum()
     clean_df['Account Value'] = starting_capital + clean_df['Cumulative P/L']
-    
-    # Calculate returns based on account value
+
+    # Mark days with actual trades BEFORE creating continuous series
+    clean_df['Has_Trade'] = clean_df['P/L'] != 0
+
+    # Create continuous daily time series for accurate return calculations
+    # This fills in non-trading days so we can calculate proper daily returns
+    clean_df = _create_continuous_time_series(clean_df)
+
+    # Now calculate daily returns on the continuous series (includes all calendar days)
     clean_df['Daily Return'] = clean_df['Account Value'].pct_change()
     clean_df['Daily Return'] = clean_df['Daily Return'].replace([np.inf, -np.inf], np.nan)
-    
+
     # Calculate SMA if using trading filter
     if use_trading_filter:
         clean_df['SMA'] = clean_df['Account Value'].rolling(window=int(sma_window), min_periods=1).mean()
@@ -91,9 +160,8 @@ def process_portfolio_data(
         clean_df = clean_df.drop(['SMA', 'Position'], axis=1)
     else:
         clean_df['Strategy Return'] = clean_df['Daily Return']
-    
-    # Keep track of only days with actual trades
-    clean_df['Has_Trade'] = clean_df['P/L'] != 0
+
+    # Set Strategy Return to NaN for non-trading days
     clean_df.loc[~clean_df['Has_Trade'], 'Strategy Return'] = np.nan
     
     logger.info(f"[MEMORY] After calculations - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
@@ -127,8 +195,76 @@ def process_portfolio_data(
     return clean_df, metrics
 
 
+def _detect_vendor(df: pd.DataFrame) -> str:
+    """
+    Detect the vendor/format of the uploaded CSV file.
+    Returns: 'trade_steward', 'option_omega', or 'unknown'
+    """
+    columns = set(df.columns)
+
+    # Check for Trade Steward format (all identifier columns must be present)
+    if all(col in columns for col in TRADE_STEWARD_IDENTIFIER_COLUMNS):
+        logger.info("Detected Trade Steward format")
+        return 'trade_steward'
+
+    # Default to Option Omega format if we can find standard date and P/L columns
+    has_date = any(col in columns for col in DATE_COLUMNS)
+    has_pl = any(col in columns for col in PL_COLUMNS)
+
+    if has_date and has_pl:
+        logger.info("Detected Option Omega (standard) format")
+        return 'option_omega'
+
+    logger.warning("Unable to detect vendor format - columns available: %s", list(columns))
+    return 'unknown'
+
+
+def _clean_trade_steward_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean and aggregate Trade Steward format data.
+    Trade Steward files contain both:
+    - Daily status rows (no Exit Date, Trade P/L = 0)
+    - Closed trades (Exit Date present, Trade P/L non-zero)
+
+    We only use closed trades and aggregate by Exit Date.
+    """
+    logger.info(f"Processing Trade Steward format - total rows: {len(df)}")
+
+    # Filter to only rows with an Exit Date (closed trades)
+    df_closed = df[df[TRADE_STEWARD_DATE_COLUMN].notna() & (df[TRADE_STEWARD_DATE_COLUMN] != '')]
+    logger.info(f"Found {len(df_closed)} closed trades (rows with Exit Date)")
+
+    if len(df_closed) == 0:
+        raise ValueError("No closed trades found in Trade Steward file. Cannot analyze portfolio without completed trades.")
+
+    # Convert Exit Date to datetime
+    df_closed = df_closed.copy()
+    df_closed['Date'] = pd.to_datetime(df_closed[TRADE_STEWARD_DATE_COLUMN])
+
+    # Clean P/L data - remove currency symbols and convert to float
+    df_closed['P/L'] = df_closed[TRADE_STEWARD_PL_COLUMN].astype(str).str.replace('$', '').str.replace(',', '').str.replace('(', '-').str.replace(')', '').astype(float)
+
+    # Group by date and sum P/L for trades that closed on the same day
+    clean_df = df_closed.groupby('Date', as_index=False).agg({
+        'P/L': 'sum'
+    })
+
+    logger.info(f"Aggregated to {len(clean_df)} unique trading dates")
+    logger.info(f"Date range: {clean_df['Date'].min()} to {clean_df['Date'].max()}")
+    logger.info(f"Total P/L: ${clean_df['P/L'].sum():.2f}")
+
+    return clean_df
+
+
 def _clean_portfolio_data(df: pd.DataFrame) -> pd.DataFrame:
     """Clean and standardize portfolio data columns"""
+    # Detect vendor format
+    vendor = _detect_vendor(df)
+
+    if vendor == 'trade_steward':
+        return _clean_trade_steward_data(df)
+    elif vendor == 'unknown':
+        raise ValueError("Unable to detect CSV format. Please ensure the file is from a supported vendor (Option Omega or Trade Steward).")
     # Find the date column
     date_column = None
     for col in DATE_COLUMNS:
@@ -395,70 +531,93 @@ def _calculate_years_fraction(start_date: pd.Timestamp, end_date: pd.Timestamp) 
 
 
 def _calculate_sharpe_ratio(
-    clean_df: pd.DataFrame, 
-    rf_rate: float, 
+    clean_df: pd.DataFrame,
+    rf_rate: float,
     starting_capital: float
 ) -> Tuple[float, float]:
-    """Calculate Sharpe ratio and annual volatility"""
-    # Standard Sharpe Ratio Calculation (Best Practice)
-    # Use portfolio returns (not just trading days) and calculate properly
-    
-    # Method 1: Using account value returns (most common for portfolio analysis)
-    portfolio_returns = clean_df['Account Value'].pct_change().dropna()
-    
+    """Calculate Sharpe ratio and annual volatility using only trading days"""
+    # For trading strategies, we should only evaluate performance on actual trading days
+    # Filter to only days with actual trades
+    trading_days = clean_df[clean_df['Has_Trade']].copy()
+
+    if len(trading_days) == 0:
+        logger.warning("No trading days found for Sharpe ratio calculation")
+        return 0.0, 0.0
+
+    # Calculate returns on trading days only
+    portfolio_returns = trading_days['Daily Return'].dropna()
+
+    if len(portfolio_returns) == 0:
+        logger.warning("No valid returns found for Sharpe ratio calculation")
+        return 0.0, 0.0
+
     # Convert annual risk-free rate to daily
     daily_rf_for_sharpe = (1 + rf_rate) ** (1/252) - 1
-    
+
     # Calculate excess returns
     excess_returns = portfolio_returns - daily_rf_for_sharpe
-    
+
     # Calculate Sharpe ratio components
     mean_excess_return = excess_returns.mean()
     volatility = excess_returns.std()
-    
-    # Annualized Sharpe ratio
+
+    # Annualized Sharpe ratio (using 252 trading days per year)
     sharpe_ratio = (mean_excess_return / volatility) * np.sqrt(252) if volatility != 0 else 0
-    
-    logger.info(f"\nStandard Sharpe Ratio Calculation:")
+
+    logger.info(f"\nSharpe Ratio Calculation (Trading Days Only):")
+    logger.info(f"Number of trading days: {len(trading_days)}")
     logger.info(f"Annual risk-free rate: {rf_rate:.4f}")
     logger.info(f"Daily risk-free rate: {daily_rf_for_sharpe:.6f}")
     logger.info(f"Mean daily excess return: {mean_excess_return:.6f}")
     logger.info(f"Daily volatility: {volatility:.6f}")
     logger.info(f"Annualized Sharpe Ratio: {sharpe_ratio:.4f}")
-    
-    # Use the portfolio-based volatility
+
+    # Use the trading-day-based volatility, annualized
     strategy_std = volatility * np.sqrt(252)
-    
+
     return sharpe_ratio, strategy_std
 
 
 def _calculate_sortino_ratio(
-    clean_df: pd.DataFrame, 
+    clean_df: pd.DataFrame,
     rf_rate: float
 ) -> float:
-    """Calculate Sortino ratio (risk-adjusted return using downside deviation)"""
-    # Calculate portfolio returns
-    portfolio_returns = clean_df['Account Value'].pct_change().dropna()
-    
+    """Calculate Sortino ratio (risk-adjusted return using downside deviation) using only trading days"""
+    # For trading strategies, we should only evaluate performance on actual trading days
+    # Filter to only days with actual trades
+    trading_days = clean_df[clean_df['Has_Trade']].copy()
+
+    if len(trading_days) == 0:
+        logger.warning("No trading days found for Sortino ratio calculation")
+        return 0.0
+
+    # Calculate returns on trading days only
+    portfolio_returns = trading_days['Daily Return'].dropna()
+
+    if len(portfolio_returns) == 0:
+        logger.warning("No valid returns found for Sortino ratio calculation")
+        return 0.0
+
     # Convert annual risk-free rate to daily
     daily_rf = (1 + rf_rate) ** (1/252) - 1
-    
+
     # Calculate excess returns
     excess_returns = portfolio_returns - daily_rf
-    
+
     # Calculate downside deviation (only negative excess returns)
     downside_returns = excess_returns[excess_returns < 0]
     downside_deviation = downside_returns.std() if len(downside_returns) > 0 else 0
-    
-    # Annualized Sortino ratio
+
+    # Annualized Sortino ratio (using 252 trading days per year)
     mean_excess_return = excess_returns.mean()
     sortino_ratio = (mean_excess_return / downside_deviation) * np.sqrt(252) if downside_deviation != 0 else 0
-    
-    logger.info(f"Sortino Ratio Calculation:")
+
+    logger.info(f"Sortino Ratio Calculation (Trading Days Only):")
+    logger.info(f"Number of trading days: {len(trading_days)}")
     logger.info(f"Mean daily excess return: {mean_excess_return:.6f}")
     logger.info(f"Downside deviation: {downside_deviation:.6f}")
     logger.info(f"Annualized Sortino Ratio: {sortino_ratio:.4f}")
-    
+
     return sortino_ratio
 
 
