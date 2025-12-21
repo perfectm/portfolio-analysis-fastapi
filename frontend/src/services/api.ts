@@ -8,15 +8,17 @@ const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  
-  // 2. Development mode
+
+  // 2. Development mode - use current hostname with API port
   if (import.meta.env.DEV) {
-    return 'http://localhost:8000';
+    const { protocol, hostname } = window.location;
+    // Use the current hostname (works for both localhost and LAN access like closet.local)
+    return `${protocol}//${hostname}:8000`;
   }
-  
+
   // 3. Production mode - check common deployment patterns
   const { protocol, hostname, port } = window.location;
-  
+
   // If running on a specific port, try common API ports
   if (port && port !== '80' && port !== '443') {
     // Try the same host with common API ports
@@ -24,7 +26,7 @@ const getApiBaseUrl = () => {
     // For now, return the same origin - this can be customized per deployment
     return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
   }
-  
+
   // Default: same origin (works for most production deployments)
   return window.location.origin;
 };
