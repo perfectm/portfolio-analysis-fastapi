@@ -27,6 +27,13 @@ PL_COLUMNS = ['P/L', 'PnL', 'Profit/Loss', 'Net P/L', 'Realized P/L', 'Total P/L
 PREMIUM_COLUMNS = ['Premium', 'Premium Collected', 'Premium Received', 'Initial Premium', 'Option Premium']
 CONTRACTS_COLUMNS = ['No. of Contracts', 'Contracts', 'Contract Count', 'Number of Contracts', 'Qty', 'Quantity']
 
+# Vendor-specific column mappings
+# Trade Steward format columns
+TRADE_STEWARD_IDENTIFIER_COLUMNS = ['Backtick UID', 'Trade Number', 'Exit Date', 'Trade P/L']
+TRADE_STEWARD_DATE_COLUMN = 'Exit Date'
+TRADE_STEWARD_PL_COLUMN = 'Trade P/L'
+TRADE_STEWARD_ENTRY_DATE_COLUMN = 'Entry Date'
+
 # Monte Carlo simulation settings
 DEFAULT_SIMULATIONS = 1000
 DEFAULT_FORECAST_DAYS = 252

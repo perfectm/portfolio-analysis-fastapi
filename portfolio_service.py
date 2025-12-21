@@ -13,9 +13,13 @@ import os
 import psutil
 
 from models import Portfolio, PortfolioData, AnalysisResult, AnalysisPlot, BlendedPortfolio, BlendedPortfolioMapping, PortfolioMarginData
-from config import DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS
+from config import (
+    DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS,
+    TRADE_STEWARD_IDENTIFIER_COLUMNS, TRADE_STEWARD_DATE_COLUMN,
+    TRADE_STEWARD_PL_COLUMN, TRADE_STEWARD_ENTRY_DATE_COLUMN
+)
 from margin_service import MarginService, MARGIN_COLUMNS
-from portfolio_processor import process_portfolio_data
+from portfolio_processor import process_portfolio_data, _detect_vendor
 
 logger = logging.getLogger(__name__)
 
@@ -172,29 +176,48 @@ class PortfolioService:
                     PortfolioData.portfolio_id == portfolio_id
                 ).order_by(PortfolioData.date).all()
             
-            # Find the date column using the same logic as portfolio_processor
-            date_column = None
-            for col in DATE_COLUMNS:
-                if col in df.columns:
-                    date_column = col
-                    break
-            
-            if date_column is None:
-                logger.error(f"No date column found. Looking for any of: {DATE_COLUMNS}")
-                logger.error(f"Available columns are: {df.columns.tolist()}")
-                raise ValueError(f"No date column found. Expected one of: {DATE_COLUMNS}")
-            
-            # Find the P/L column
-            pl_column = None
-            for col in PL_COLUMNS:
-                if col in df.columns:
-                    pl_column = col
-                    break
-                    
-            if pl_column is None:
-                logger.error(f"No P/L column found. Looking for any of: {PL_COLUMNS}")
-                logger.error(f"Available columns are: {df.columns.tolist()}")
-                raise ValueError(f"No P/L column found. Expected one of: {PL_COLUMNS}")
+            # Detect vendor format
+            vendor = _detect_vendor(df)
+            logger.info(f"Detected vendor format: {vendor}")
+
+            # Set column names based on vendor
+            if vendor == 'trade_steward':
+                # For Trade Steward, we'll store aggregated data by Exit Date
+                # Filter to only closed trades (rows with Exit Date)
+                df_closed = df[df[TRADE_STEWARD_DATE_COLUMN].notna() & (df[TRADE_STEWARD_DATE_COLUMN] != '')]
+                logger.info(f"Trade Steward format: filtered to {len(df_closed)} closed trades from {len(df)} total rows")
+
+                if len(df_closed) == 0:
+                    raise ValueError("No closed trades found in Trade Steward file")
+
+                # Use Trade Steward columns
+                date_column = TRADE_STEWARD_DATE_COLUMN
+                pl_column = TRADE_STEWARD_PL_COLUMN
+                df = df_closed  # Use only closed trades
+            else:
+                # Standard Option Omega format
+                date_column = None
+                for col in DATE_COLUMNS:
+                    if col in df.columns:
+                        date_column = col
+                        break
+
+                if date_column is None:
+                    logger.error(f"No date column found. Looking for any of: {DATE_COLUMNS}")
+                    logger.error(f"Available columns are: {df.columns.tolist()}")
+                    raise ValueError(f"No date column found. Expected one of: {DATE_COLUMNS}")
+
+                # Find the P/L column
+                pl_column = None
+                for col in PL_COLUMNS:
+                    if col in df.columns:
+                        pl_column = col
+                        break
+
+                if pl_column is None:
+                    logger.error(f"No P/L column found. Looking for any of: {PL_COLUMNS}")
+                    logger.error(f"Available columns are: {df.columns.tolist()}")
+                    raise ValueError(f"No P/L column found. Expected one of: {PL_COLUMNS}")
             
             # Find the Premium column (optional)
             premium_column = None
