@@ -54,6 +54,31 @@ const formatDateString = (dateStr: string | null | undefined): string => {
   return new Date(year, month - 1, day).toLocaleDateString();
 };
 
+// Helper function to truncate long filenames with ellipsis
+const truncateFilename = (filename: string, maxLength: number = 20): string => {
+  if (filename.length <= maxLength) return filename;
+
+  // Find the last dot to separate extension
+  const lastDotIndex = filename.lastIndexOf('.');
+
+  // If no extension or extension is at the start, just truncate
+  if (lastDotIndex <= 0) {
+    return filename.substring(0, maxLength - 3) + '...';
+  }
+
+  const extension = filename.substring(lastDotIndex);
+  const baseName = filename.substring(0, lastDotIndex);
+
+  // If base name is short enough, return as is
+  if (baseName.length <= maxLength - extension.length) {
+    return filename;
+  }
+
+  // Truncate base name and add ellipsis before extension
+  const truncatedBase = baseName.substring(0, maxLength - extension.length - 3);
+  return truncatedBase + '...' + extension;
+};
+
 interface Portfolio {
   id: number;
   name: string;
@@ -5667,8 +5692,9 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           borderRight: "1px solid rgba(255, 255, 255, 0.1)",
                           color: theme.palette.mode === "dark" ? "#ffffff" : "#2d3748",
                         }}
+                        title={portfolio.filename}
                       >
-                        {portfolio.filename}
+                        {truncateFilename(portfolio.filename)}
                       </td>
                       <td
                         style={{
