@@ -512,9 +512,9 @@ class PortfolioService:
         Store analysis results in database
         """
         try:
-            logger.error(f"[store_analysis_result] DEBUG: Attempting to store analysis result for portfolio_id={portfolio_id}, analysis_type={analysis_type}")
-            logger.error(f"[store_analysis_result] DEBUG: Metrics to save: {metrics}")
-            logger.error(f"[store_analysis_result] DEBUG: Analysis params: {analysis_params}")
+            logger.debug(f"[store_analysis_result] Attempting to store analysis result for portfolio_id={portfolio_id}, analysis_type={analysis_type}")
+            logger.debug(f"[store_analysis_result] Metrics to save: {metrics}")
+            logger.debug(f"[store_analysis_result] Analysis params: {analysis_params}")
             analysis_result = AnalysisResult(
                 portfolio_id=portfolio_id,
                 analysis_type=analysis_type,

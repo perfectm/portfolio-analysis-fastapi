@@ -193,7 +193,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     # Check for missing/zero metrics
                     if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
                         result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                        logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                        logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={portfolio_id}")
                         PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                         metrics = result['metrics']
                         clean_df = result['clean_df']
@@ -210,7 +210,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 else:
                     # Run process_individual_portfolios for this portfolio only
                     result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                    logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={portfolio_id}")
                     PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     result['portfolio_id'] = portfolio_id  # Add portfolio_id to result
                     individual_results.append(result)
@@ -1003,7 +1003,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
                     result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                    logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={portfolio_id}")
                     PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
@@ -1020,7 +1020,7 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             else:
                 # Run process_individual_portfolios for this portfolio only
                 result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={portfolio_id}")
                 PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                 result['portfolio_id'] = portfolio_id  # Add portfolio_id to result
                 individual_results.append(result)

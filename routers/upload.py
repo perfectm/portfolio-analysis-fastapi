@@ -113,7 +113,7 @@ async def upload_files_api(
                 logger.info(f"[API Upload] Created {len(plot_paths)} plots for portfolio {i+1}")
                 if i < len(portfolio_ids) and portfolio_ids[i] is not None:
                     try:
-                        logger.error(f"[ROUTER:upload] About to call store_analysis_result for portfolio_id={portfolio_ids[i]}, metrics={result['metrics']}")
+                        logger.debug(f"[ROUTER:upload] Storing analysis result for portfolio_id={portfolio_ids[i]}")
                         analysis_result = PortfolioService.store_analysis_result(
                             db, portfolio_ids[i], "individual", result['metrics'], analysis_params
                         )
