@@ -182,7 +182,10 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         individual_results = []
         for i, (portfolio_id, name, df) in enumerate(portfolios_data):
             try:
-                cached = get_cached_analysis_result(db, portfolio_id, 0.05, 20, True, starting_capital)
+                # Skip cache if date range filtering is applied (cache doesn't include date range in key)
+                cached = None
+                if not date_range_start and not date_range_end:
+                    cached = get_cached_analysis_result(db, portfolio_id, 0.05, 20, True, starting_capital)
                 if cached:
                     import json
                     metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
@@ -989,7 +992,10 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         logger.info(f"[Analyze Portfolios] Processing {len(portfolios_data)} portfolios")
         individual_results = []
         for i, (name, df) in enumerate(portfolios_data):
-            cached = get_cached_analysis_result(db, valid_portfolio_ids[i], 0.05, 20, True, starting_capital)
+            # Skip cache if date range filtering is applied (cache doesn't include date range in key)
+            cached = None
+            if not date_range_start and not date_range_end:
+                cached = get_cached_analysis_result(db, valid_portfolio_ids[i], 0.05, 20, True, starting_capital)
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
