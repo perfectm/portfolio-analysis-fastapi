@@ -26,9 +26,10 @@ POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://cmtool:password@localhost
 def verify_postgres_connection():
     """Verify PostgreSQL connection before migration"""
     try:
+        from sqlalchemy import text
         engine = create_engine(POSTGRES_URL)
         with engine.connect() as conn:
-            result = conn.execute("SELECT version();")
+            result = conn.execute(text("SELECT version();"))
             version = result.fetchone()[0]
             logger.info(f"✅ PostgreSQL connection successful: {version.split(',')[0]}")
         engine.dispose()
@@ -71,8 +72,9 @@ def get_table_order():
 def count_rows(engine, table_name):
     """Count rows in a table"""
     try:
+        from sqlalchemy import text
         with engine.connect() as conn:
-            result = conn.execute(f"SELECT COUNT(*) FROM {table_name}")
+            result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
             return result.fetchone()[0]
     except:
         return 0
@@ -191,6 +193,7 @@ def migrate_table(sqlite_engine, postgres_engine, table_name, batch_size=1000):
 
 def reset_sequences(postgres_engine):
     """Reset PostgreSQL sequences after migration"""
+    from sqlalchemy import text
     logger.info("\n🔄 Resetting PostgreSQL sequences...")
 
     with postgres_engine.connect() as conn:
@@ -200,12 +203,12 @@ def reset_sequences(postgres_engine):
         for table_name in tables:
             try:
                 # Try to reset the sequence
-                result = conn.execute(f"""
+                result = conn.execute(text(f"""
                     SELECT setval(
                         pg_get_serial_sequence('{table_name}', 'id'),
                         COALESCE((SELECT MAX(id) FROM {table_name}), 1)
                     );
-                """)
+                """))
                 logger.info(f"  ✓ Reset sequence for {table_name}")
             except Exception as e:
                 # Skip if table doesn't have an id column or sequence
