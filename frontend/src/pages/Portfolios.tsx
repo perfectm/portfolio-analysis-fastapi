@@ -1300,6 +1300,14 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
 
       const results = await response.json();
       console.log("Analysis results:", results);
+
+      // Check if the backend returned an error
+      if (!results.success && results.error) {
+        alert(results.error);
+        setAnalysisResults(null);
+        return;
+      }
+
       setAnalysisResults(results);
     } catch (error) {
       console.error("Analysis failed:", error);
