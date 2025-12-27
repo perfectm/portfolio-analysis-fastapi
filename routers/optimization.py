@@ -339,11 +339,17 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     try:
                         logger.info("[Weighted Analysis] Creating plots for weighted blended portfolio")
                         portfolio_ids_str = "_".join(str(pid) for pid in valid_portfolio_ids)
-                        unique_prefix = f"weighted_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}"
+                        # Include date range in filename to ensure plots update when filters change
+                        date_suffix = ""
+                        if date_range_start or date_range_end:
+                            start_str = date_range_start.replace("-", "") if date_range_start else "beginning"
+                            end_str = date_range_end.replace("-", "") if date_range_end else "end"
+                            date_suffix = f"_{start_str}_to_{end_str}"
+                        unique_prefix = f"weighted_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}{date_suffix}"
                         blended_plot_paths = create_plots(
-                            blended_df, 
-                            blended_metrics, 
-                            filename_prefix=unique_prefix, 
+                            blended_df,
+                            blended_metrics,
+                            filename_prefix=unique_prefix,
                             sma_window=20
                         )
                         for plot_path in blended_plot_paths:
@@ -1140,11 +1146,17 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     try:
                         logger.info("[Analyze Portfolios] Creating plots for blended portfolio")
                         portfolio_ids_str = "_".join(str(pid) for pid in valid_portfolio_ids)
-                        unique_prefix = f"analysis_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}"
+                        # Include date range in filename to ensure plots update when filters change
+                        date_suffix = ""
+                        if date_range_start or date_range_end:
+                            start_str = date_range_start.replace("-", "") if date_range_start else "beginning"
+                            end_str = date_range_end.replace("-", "") if date_range_end else "end"
+                            date_suffix = f"_{start_str}_to_{end_str}"
+                        unique_prefix = f"analysis_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}{date_suffix}"
                         blended_plot_paths = create_plots(
-                            blended_df, 
-                            blended_metrics, 
-                            filename_prefix=unique_prefix, 
+                            blended_df,
+                            blended_metrics,
+                            filename_prefix=unique_prefix,
                             sma_window=20
                         )
                         for plot_path in blended_plot_paths:
