@@ -35,6 +35,10 @@ Save this password - you'll need it in Step 3.
 # On Hostinger, navigate to your app directory
 cd /opt/cmtool
 
+# Activate the Python virtual environment
+source venv/bin/activate
+# (You should see (venv) in your prompt)
+
 # Set the DATABASE_URL with your password
 export DATABASE_URL='postgresql://cmtool:YOUR_PASSWORD_HERE@localhost:5432/portfolio_analysis'
 
@@ -57,7 +61,9 @@ If the test fails, check the troubleshooting steps in the output.
 
 ```bash
 # Still on Hostinger in /opt/cmtool
-# Make sure DATABASE_URL is still set
+# Make sure venv is activated and DATABASE_URL is still set
+# (If you closed the terminal, run these again:)
+source venv/bin/activate
 export DATABASE_URL='postgresql://cmtool:YOUR_PASSWORD_HERE@localhost:5432/portfolio_analysis'
 
 # Run the migration
