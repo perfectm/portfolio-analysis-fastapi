@@ -117,53 +117,63 @@ def migrate_table(sqlite_engine, postgres_engine, table_name, batch_size=1000):
         try:
             # Read all data from SQLite
             select_stmt = table.select()
-            result = sqlite_engine.execute(select_stmt)
 
-            migrated = 0
-            failed = 0
-            batch = []
+            with sqlite_engine.connect() as sqlite_conn:
+                result = sqlite_conn.execute(select_stmt)
 
-            for row in result:
-                batch.append(dict(row._mapping))
+                migrated = 0
+                failed = 0
+                batch = []
 
-                if len(batch) >= batch_size:
-                    # Insert batch
+                for row in result:
+                    batch.append(dict(row._mapping))
+
+                    if len(batch) >= batch_size:
+                        # Insert batch
+                        try:
+                            with postgres_engine.connect() as postgres_conn:
+                                postgres_conn.execute(table.insert(), batch)
+                                postgres_conn.commit()
+                            migrated += len(batch)
+                            logger.info(f"  ✓ Migrated {migrated:,} / {source_count:,} rows ({migrated*100//source_count}%)")
+                            batch = []
+                        except IntegrityError as e:
+                            logger.warning(f"  ⚠️  Integrity error in batch, trying row-by-row...")
+                            # Try inserting rows individually
+                            for row_data in batch:
+                                try:
+                                    with postgres_engine.connect() as postgres_conn:
+                                        postgres_conn.execute(table.insert(), [row_data])
+                                        postgres_conn.commit()
+                                    migrated += 1
+                                except IntegrityError:
+                                    failed += 1
+                            batch = []
+                        except Exception as e:
+                            logger.error(f"  ❌ Batch insert failed: {e}")
+                            failed += len(batch)
+                            batch = []
+
+                # Insert remaining batch
+                if batch:
                     try:
-                        postgres_engine.execute(table.insert(), batch)
+                        with postgres_engine.connect() as postgres_conn:
+                            postgres_conn.execute(table.insert(), batch)
+                            postgres_conn.commit()
                         migrated += len(batch)
-                        logger.info(f"  ✓ Migrated {migrated:,} / {source_count:,} rows ({migrated*100//source_count}%)")
-                        batch = []
-                    except IntegrityError as e:
-                        logger.warning(f"  ⚠️  Integrity error in batch, trying row-by-row...")
-                        # Try inserting rows individually
+                    except IntegrityError:
+                        logger.warning(f"  ⚠️  Integrity error in final batch, trying row-by-row...")
                         for row_data in batch:
                             try:
-                                postgres_engine.execute(table.insert(), [row_data])
+                                with postgres_engine.connect() as postgres_conn:
+                                    postgres_conn.execute(table.insert(), [row_data])
+                                    postgres_conn.commit()
                                 migrated += 1
                             except IntegrityError:
                                 failed += 1
-                        batch = []
                     except Exception as e:
-                        logger.error(f"  ❌ Batch insert failed: {e}")
+                        logger.error(f"  ❌ Final batch insert failed: {e}")
                         failed += len(batch)
-                        batch = []
-
-            # Insert remaining batch
-            if batch:
-                try:
-                    postgres_engine.execute(table.insert(), batch)
-                    migrated += len(batch)
-                except IntegrityError:
-                    logger.warning(f"  ⚠️  Integrity error in final batch, trying row-by-row...")
-                    for row_data in batch:
-                        try:
-                            postgres_engine.execute(table.insert(), [row_data])
-                            migrated += 1
-                        except IntegrityError:
-                            failed += 1
-                except Exception as e:
-                    logger.error(f"  ❌ Final batch insert failed: {e}")
-                    failed += len(batch)
 
             # Verify migration
             dest_count = count_rows(postgres_engine, table_name)
