@@ -749,6 +749,57 @@ export default function Portfolios() {
     setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
   };
 
+  const setDatePresetMTD = () => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Constrain to valid date range
+    const startDate = monthStart < minDate ? minDate : monthStart;
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = maxDate.toISOString().split('T')[0];
+
+    setDateRangeStart(startStr);
+    setDateRangeEnd(endStr);
+    setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
+  };
+
+  const setDatePresetQTD = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const quarterStartMonth = Math.floor(currentMonth / 3) * 3;
+    const quarterStart = new Date(now.getFullYear(), quarterStartMonth, 1);
+
+    // Constrain to valid date range
+    const startDate = quarterStart < minDate ? minDate : quarterStart;
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = maxDate.toISOString().split('T')[0];
+
+    setDateRangeStart(startStr);
+    setDateRangeEnd(endStr);
+    setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
+  };
+
+  const setDatePresetLastQuarter = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentQuarterStartMonth = Math.floor(currentMonth / 3) * 3;
+    const lastQuarterStartMonth = currentQuarterStartMonth === 0 ? 9 : currentQuarterStartMonth - 3;
+    const lastQuarterYear = currentQuarterStartMonth === 0 ? now.getFullYear() - 1 : now.getFullYear();
+
+    const lastQuarterStart = new Date(lastQuarterYear, lastQuarterStartMonth, 1);
+    const lastQuarterEnd = new Date(lastQuarterYear, lastQuarterStartMonth + 3, 0);
+
+    // Constrain to valid date range
+    const startDate = lastQuarterStart < minDate ? minDate : lastQuarterStart;
+    const endDate = lastQuarterEnd > maxDate ? maxDate : lastQuarterEnd;
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+
+    setDateRangeStart(startStr);
+    setDateRangeEnd(endStr);
+    setSliderValues([dateToSliderValue(startStr), dateToSliderValue(endStr)]);
+  };
+
   const setDatePresetAllData = () => {
     const startStr = minDate.toISOString().split('T')[0];
     const endStr = maxDate.toISOString().split('T')[0];
@@ -2288,6 +2339,51 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                     }}
                   >
                     YTD
+                  </button>
+                  <button
+                    onClick={setDatePresetMTD}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.85rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#4a5568" : "#e2e8f0",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#cbd5e0"}`,
+                      color: theme.palette.text.primary,
+                      cursor: "pointer",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    MTD
+                  </button>
+                  <button
+                    onClick={setDatePresetQTD}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.85rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#4a5568" : "#e2e8f0",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#cbd5e0"}`,
+                      color: theme.palette.text.primary,
+                      cursor: "pointer",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    QTD
+                  </button>
+                  <button
+                    onClick={setDatePresetLastQuarter}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.85rem",
+                      backgroundColor: theme.palette.mode === 'dark' ? "#4a5568" : "#e2e8f0",
+                      border: `1px solid ${theme.palette.mode === 'dark' ? "#636e72" : "#cbd5e0"}`,
+                      color: theme.palette.text.primary,
+                      cursor: "pointer",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    Last Quarter
                   </button>
                   <button
                     onClick={setDatePresetLastMonth}
