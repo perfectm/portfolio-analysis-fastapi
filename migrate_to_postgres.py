@@ -138,7 +138,9 @@ def migrate_table(sqlite_engine, postgres_engine, table_name, batch_size=1000):
                             logger.info(f"  ✓ Migrated {migrated:,} / {source_count:,} rows ({migrated*100//source_count}%)")
                             batch = []
                         except IntegrityError as e:
-                            logger.warning(f"  ⚠️  Integrity error in batch, trying row-by-row...")
+                            logger.warning(f"  ⚠️  Integrity error in batch: {str(e)}")
+                            logger.warning(f"  First row in failed batch: {batch[0] if batch else 'empty'}")
+                            logger.warning(f"  Trying row-by-row...")
                             # Try inserting rows individually
                             for row_data in batch:
                                 try:
