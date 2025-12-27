@@ -8,12 +8,34 @@ This is a full-stack portfolio analysis application that provides Monte Carlo si
 
 ### Deployment Architecture
 
-**IMPORTANT**: Both development and production environments are hosted on the same local machine.
+The application is deployed in two environments:
 
+#### Production Server (Hostinger)
 - **Production URL**: `https://portfolio.cottonmike.com`
-- **Development**: Same codebase, same database (`portfolio_analysis.db`)
-- **Server**: Single uvicorn instance serves both environments
-- **No separate deployment needed**: Changes made locally are immediately available in production after:
+- **Server**: Hostinger VPS (Linux)
+- **Installation Path**: `/opt/cmtool`
+- **Service Name**: `cmtool` (systemd service)
+- **User**: `deployuser`
+
+**Deployment Process:**
+1. SSH to server: `ssh cotton@srv1173534`
+2. Navigate to app: `cd /opt/cmtool`
+3. Pull latest code: `sudo -u deployuser git pull`
+4. Restart service: `sudo systemctl restart cmtool`
+5. Check status: `sudo systemctl status cmtool`
+6. View logs: `tail -f logs/portfolio_analysis.log`
+
+**Important Hostinger Notes:**
+- Service managed by systemd (not shell scripts)
+- Logs written to `logs/portfolio_analysis.log` (automatic rotation at 10MB)
+- Use `sudo -u deployuser` for git operations to maintain correct permissions
+- After git pull conflicts, may need: `sudo -u deployuser git fetch origin && git reset --hard origin/main`
+
+#### Local Development
+- **Development**: Local machine, same codebase
+- **Database**: SQLite (`portfolio_analysis.db`)
+- **Server**: uvicorn instance via shell scripts
+- **Changes immediately available after**:
   1. Rebuilding frontend: `cd frontend && npm run build`
   2. Restarting servers using scripts: `./stop.sh && ./start.sh`
   3. Hard refresh browser to clear cached assets (Cmd+Shift+R on Mac, Ctrl+F5 on Windows)
