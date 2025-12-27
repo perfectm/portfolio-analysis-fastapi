@@ -12,24 +12,41 @@ The application is deployed in two environments:
 
 #### Production Server (Hostinger)
 - **Production URL**: `https://portfolio.cottonmike.com`
-- **Server**: Hostinger VPS (Linux)
+- **Server**: Hostinger VPS (Linux, Ubuntu)
 - **Installation Path**: `/opt/cmtool`
 - **Service Name**: `cmtool` (systemd service)
-- **User**: `deployuser`
+- **Deployment User**: `deployuser` (owns git repo, runs git operations)
+- **Runtime User**: `deployuser` (runs the application service)
+- **Database**: PostgreSQL (`portfolio_analysis` database, user: `cmtool`)
+
+**User/Permission Architecture:**
+- `deployuser`: Owns `/opt/cmtool` directory and files, manages git operations
+- `cmtool` (database user): PostgreSQL database access only
+- Environment variables stored in `/opt/cmtool/.env` (600 permissions, owned by deployuser)
+- Python virtual environment: `/opt/cmtool/venv` (owned by deployuser)
 
 **Deployment Process:**
 1. SSH to server: `ssh cotton@srv1173534`
 2. Navigate to app: `cd /opt/cmtool`
 3. Pull latest code: `sudo -u deployuser git pull`
-4. Restart service: `sudo systemctl restart cmtool`
-5. Check status: `sudo systemctl status cmtool`
-6. View logs: `tail -f logs/portfolio_analysis.log`
+4. Rebuild frontend (if needed): `cd frontend && npm run build && cd ..`
+5. Restart service: `sudo systemctl restart cmtool`
+6. Check status: `sudo systemctl status cmtool`
+7. View logs: `tail -f logs/portfolio_analysis.log`
+
+**PostgreSQL Migration (Completed):**
+- Migrated from SQLite to PostgreSQL for improved performance
+- 30-50% faster queries on large datasets (800K+ records)
+- Database connection configured via `DATABASE_URL` in `/opt/cmtool/.env`
+- Backup SQLite file kept at `/opt/cmtool/portfolio_analysis.db` (legacy)
 
 **Important Hostinger Notes:**
 - Service managed by systemd (not shell scripts)
 - Logs written to `logs/portfolio_analysis.log` (automatic rotation at 10MB)
-- Use `sudo -u deployuser` for git operations to maintain correct permissions
-- After git pull conflicts, may need: `sudo -u deployuser git fetch origin && git reset --hard origin/main`
+- **CRITICAL**: Always use `sudo -u deployuser` for git operations to maintain correct permissions
+- After git pull conflicts: `sudo -u deployuser git fetch origin && sudo -u deployuser git reset --hard origin/main`
+- yfinance cache stored in `/opt/cmtool/.cache/yfinance` (auto-created at runtime)
+- Session data and uploads owned by `deployuser`
 
 #### Local Development
 - **Development**: Local machine, same codebase
