@@ -122,12 +122,18 @@ def create_blended_portfolio(
     
     # Sort by date
     blended_trades = blended_trades.sort_values('Date')
-    
+
+    # Check for minimum data points after blending (30 trading days minimum)
+    unique_trading_days = blended_trades['Date'].nunique()
+    if unique_trading_days < 30:
+        logger.warning(f"Blended portfolio: Only {unique_trading_days} trading days after filtering (minimum 30 required)")
+        raise ValueError(f"The selected date range contains only {unique_trading_days} trading days. Please select a period with at least 30 trading days for meaningful analysis.")
+
     # Free memory from individual portfolio DataFrames
     del individual_portfolios_pl
-    
+
     logger.info(f"[MEMORY] After combining - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
-    
+
     # Process the blended portfolio
     processed_df, metrics = process_portfolio_data(
         blended_trades,
@@ -256,7 +262,13 @@ def create_blended_portfolio_from_files(
     
     if blended_df.empty:
         logger.warning("Blended portfolio: No data remaining after date filtering")
-        return None, None, None
+        raise ValueError("The selected date range has no data. Please select a longer time period.")
+
+    # Check for minimum data points (30 trading days minimum for meaningful analysis)
+    unique_trading_days = blended_df['Date'].nunique()
+    if unique_trading_days < 30:
+        logger.warning(f"Blended portfolio: Only {unique_trading_days} trading days after filtering (minimum 30 required)")
+        raise ValueError(f"The selected date range contains only {unique_trading_days} trading days. Please select a period with at least 30 trading days for meaningful analysis.")
 
     blended_df = blended_df.reset_index(drop=True)
 
@@ -338,7 +350,13 @@ def process_individual_portfolios(
 
                     if df.empty:
                         logger.warning(f"Portfolio {filename}: No data remaining after date filtering")
-                        continue
+                        raise ValueError(f"Portfolio '{filename}' has no data in the selected date range. Please select a longer time period.")
+
+                    # Check for minimum data points (30 trading days minimum for meaningful analysis)
+                    unique_trading_days = df['Date'].nunique()
+                    if unique_trading_days < 30:
+                        logger.warning(f"Portfolio {filename}: Only {unique_trading_days} trading days after filtering (minimum 30 required)")
+                        raise ValueError(f"Portfolio '{filename}' has only {unique_trading_days} trading days in the selected date range. Please select a period with at least 30 trading days for meaningful analysis.")
 
                     # Drop pre-calculated columns that are invalid after date filtering
                     columns_to_drop = ['Cumulative P/L', 'Account Value', 'Account_Value', 'Drawdown Pct',
