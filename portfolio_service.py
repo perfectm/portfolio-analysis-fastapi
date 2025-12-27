@@ -75,19 +75,37 @@ class PortfolioService:
             try:
                 # Try to load as parquet first
                 if portfolio.parquet_path.endswith('.parquet'):
-                    df = pd.read_parquet(portfolio.parquet_path, columns=columns)
+                    # Read parquet - if columns specified, try to read them, but handle missing columns gracefully
+                    if columns:
+                        # First, read without column filter to see what's available
+                        try:
+                            df = pd.read_parquet(portfolio.parquet_path, columns=columns)
+                        except (KeyError, ValueError):
+                            # If some columns don't exist, load all and filter
+                            df = pd.read_parquet(portfolio.parquet_path)
+                            df = df[[col for col in columns if col in df.columns]]
+                    else:
+                        df = pd.read_parquet(portfolio.parquet_path)
                 elif portfolio.parquet_path.endswith('.pkl'):
                     df = pd.read_pickle(portfolio.parquet_path)
                     if columns:
-                        df = df[columns]
+                        # Only select columns that exist
+                        df = df[[col for col in columns if col in df.columns]]
                 else:
                     # Fallback: try both formats
                     try:
-                        df = pd.read_parquet(portfolio.parquet_path, columns=columns)
+                        if columns:
+                            try:
+                                df = pd.read_parquet(portfolio.parquet_path, columns=columns)
+                            except (KeyError, ValueError):
+                                df = pd.read_parquet(portfolio.parquet_path)
+                                df = df[[col for col in columns if col in df.columns]]
+                        else:
+                            df = pd.read_parquet(portfolio.parquet_path)
                     except:
                         df = pd.read_pickle(portfolio.parquet_path)
                         if columns:
-                            df = df[columns]
+                            df = df[[col for col in columns if col in df.columns]]
                 return df
             except Exception as e:
                 logger.error(f"Failed to load portfolio data for {portfolio_id}: {e}")
