@@ -123,7 +123,8 @@ def calculate_beta(portfolio_returns: pd.Series, spx_returns: pd.Series) -> Tupl
             raise ValueError("Portfolio and SPX returns must have same length")
 
         if len(portfolio_returns) < 5:
-            raise ValueError("Need at least 5 observations for beta calculation")
+            logger.warning(f"Only {len(portfolio_returns)} observations - insufficient for reliable beta calculation, returning defaults")
+            return 0.0, 0.0, 0.0, len(portfolio_returns)
 
         # Remove any remaining NaN values
         valid_mask = ~(np.isnan(portfolio_returns) | np.isnan(spx_returns))
@@ -131,7 +132,8 @@ def calculate_beta(portfolio_returns: pd.Series, spx_returns: pd.Series) -> Tupl
         spx_clean = spx_returns[valid_mask]
 
         if len(port_clean) < 5:
-            raise ValueError("Insufficient valid data points for beta calculation")
+            logger.warning(f"Only {len(port_clean)} valid observations - insufficient for reliable beta calculation, returning defaults")
+            return 0.0, 0.0, 0.0, len(port_clean)
 
         # Calculate covariance and variance
         covariance = np.cov(port_clean, spx_clean)[0, 1]

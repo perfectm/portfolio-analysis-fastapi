@@ -133,9 +133,15 @@ def process_portfolio_data(
     
     # Sort by date without inplace
     clean_df = clean_df.sort_values('Date')
-    
+
+    # Validate we have data after cleaning and sorting
+    if clean_df.empty:
+        logger.error("Portfolio has no data after cleaning/filtering")
+        raise ValueError("Portfolio has no data in the selected date range. Please select a longer time period or check your data.")
+
     logger.info(f"[MEMORY] After cleaning - RSS: {process.memory_info().rss / 1024 / 1024:.2f} MB")
-    
+    logger.info(f"Portfolio has {len(clean_df)} rows after cleaning")
+
     # Calculate cumulative P/L and account value
     clean_df['Cumulative P/L'] = clean_df['P/L'].cumsum()
     clean_df['Account Value'] = starting_capital + clean_df['Cumulative P/L']
@@ -370,7 +376,10 @@ def _calculate_portfolio_metrics(
         logger.info(f"  - Has trades count: {clean_df['Has_Trade'].sum()}")
         logger.info(f"  - Valid returns count: {len(valid_returns)}")
         logger.info(f"  - Account value range: {clean_df['Account Value'].min():.2f} to {clean_df['Account Value'].max():.2f}")
-        logger.info(f"  - Cumulative P/L final: {clean_df['Cumulative P/L'].iloc[-1]:.2f}")
+        if len(clean_df) > 0:
+            logger.info(f"  - Cumulative P/L final: {clean_df['Cumulative P/L'].iloc[-1]:.2f}")
+        else:
+            logger.warning("  - No data available for final P/L logging")
 
         # Calculate worst and best P/L days (always, regardless of valid returns)
         worst_pl_idx = clean_df['P/L'].idxmin()
@@ -493,9 +502,9 @@ def _calculate_portfolio_metrics(
         'cagr': float(strategy_mean_return),  # Already as decimal
         'annual_volatility': float(strategy_std),  # Already as decimal
         'total_return': float(total_return),  # Already as decimal
-        'total_pl': float(clean_df['Cumulative P/L'].iloc[-1]),
-        'final_account_value': float(clean_df['Account Value'].iloc[-1]),
-        'peak_value': float(clean_df['Account Value'].max()),
+        'total_pl': float(clean_df['Cumulative P/L'].iloc[-1]) if len(clean_df) > 0 else 0.0,
+        'final_account_value': float(clean_df['Account Value'].iloc[-1]) if len(clean_df) > 0 else starting_capital,
+        'peak_value': float(clean_df['Account Value'].max()) if len(clean_df) > 0 else starting_capital,
         'number_of_trading_days': len(clean_df[clean_df['Has_Trade']]),
         'time_period_years': float(num_years),
         'worst_pl_day': float(worst_pl),
@@ -749,7 +758,12 @@ def _calculate_upi(clean_df: pd.DataFrame, rf_rate: float) -> float:
     """Calculate UPI (Ulcer Performance Index) - risk-adjusted returns using Ulcer Index"""
     # UPI = (Annualized Return - Risk Free Rate) / Ulcer Index
     # This measures excess return per unit of downside risk
-    
+
+    # Guard against empty DataFrame
+    if len(clean_df) == 0:
+        logger.warning("Cannot calculate UPI - DataFrame is empty")
+        return 0.0
+
     # Calculate annualized return (CAGR)
     total_return = (clean_df['Account Value'].iloc[-1] / clean_df['Account Value'].iloc[0]) - 1
     num_years = _calculate_years_fraction(clean_df['Date'].min(), clean_df['Date'].max())
@@ -1051,6 +1065,9 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame, starting_capital: float)
 
 def _calculate_cagr_from_df(clean_df: pd.DataFrame) -> float:
     """Calculate CAGR from DataFrame"""
+    if len(clean_df) == 0:
+        logger.warning("Cannot calculate CAGR - DataFrame is empty")
+        return 0.0
     total_return = (clean_df['Account Value'].iloc[-1] / clean_df['Account Value'].iloc[0]) - 1
     num_years = _calculate_years_fraction(clean_df['Date'].min(), clean_df['Date'].max())
     if num_years > 0:
@@ -1106,7 +1123,7 @@ def _get_default_metrics(starting_capital: float, clean_df: pd.DataFrame = None)
         'largest_profit_date': ''
     }
     
-    if clean_df is not None:
+    if clean_df is not None and len(clean_df) > 0:
         base_metrics.update({
             'total_pl': float(clean_df['Cumulative P/L'].iloc[-1]) if 'Cumulative P/L' in clean_df.columns else 0,
             'final_account_value': float(clean_df['Account Value'].iloc[-1]) if 'Account Value' in clean_df.columns else starting_capital,
