@@ -329,18 +329,33 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 logger.info("[Weighted Analysis] Creating weighted blended portfolio analysis")
                 # Use only successfully processed portfolio IDs (excludes skipped ones)
                 successful_weights = [portfolio_weights[i] for i, pid in enumerate(valid_portfolio_ids) if pid in successfully_processed_ids]
-                blended_df, blended_metrics, _ = create_blended_portfolio(
-                    db=db,
-                    portfolio_ids=successfully_processed_ids,
-                    weights=successful_weights,
-                    name=f"Weighted Blended Portfolio ({len(portfolios_data)} strategies)",
-                    description=f"Weighted blend of {len(portfolios_data)} portfolios",
-                    date_range_start=date_range_start,
-                    date_range_end=date_range_end,
-                    starting_capital=starting_capital,
-                    rf_rate=rf_rate,
-                    sma_window=sma_window,
-                    use_trading_filter=use_trading_filter
+
+                # Renormalize weights to sum to 1.0 after filtering out failed portfolios
+                if successful_weights and len(successfully_processed_ids) > 1:
+                    weight_sum = sum(successful_weights)
+                    if weight_sum > 0:
+                        successful_weights = [w / weight_sum for w in successful_weights]
+                        logger.info(f"[Weighted Analysis] Renormalized {len(successful_weights)} weights (sum: {sum(successful_weights):.4f})")
+                    else:
+                        logger.warning("[Weighted Analysis] All weights are zero - skipping blended portfolio creation")
+                        successful_weights = []
+
+                if not successfully_processed_ids or not successful_weights or len(successfully_processed_ids) < 2:
+                    logger.warning(f"[Weighted Analysis] Insufficient portfolios for blending ({len(successfully_processed_ids)} successful) - skipping")
+                    simplified_blended_result = None
+                else:
+                    blended_df, blended_metrics, _ = create_blended_portfolio(
+                        db=db,
+                        portfolio_ids=successfully_processed_ids,
+                        weights=successful_weights,
+                        name=f"Weighted Blended Portfolio ({len(portfolios_data)} strategies)",
+                        description=f"Weighted blend of {len(portfolios_data)} portfolios",
+                        date_range_start=date_range_start,
+                        date_range_end=date_range_end,
+                        starting_capital=starting_capital,
+                        rf_rate=rf_rate,
+                        sma_window=sma_window,
+                        use_trading_filter=use_trading_filter
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []
