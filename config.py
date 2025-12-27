@@ -3,9 +3,57 @@ Configuration settings and constants for the Portfolio Analysis API
 """
 import os
 import logging
+from logging.handlers import RotatingFileHandler
+import sys
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# Set up logging with both file and console handlers
+def setup_logging():
+    """Configure logging to write to both file and console"""
+    # Create logs directory if it doesn't exist
+    log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Create log file path
+    log_file = os.path.join(log_dir, 'portfolio_analysis.log')
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # Clear any existing handlers
+    root_logger.handlers.clear()
+
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # File handler with rotation (10MB max, keep 5 backups)
+    try:
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5,
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+    except (PermissionError, OSError) as e:
+        # If we can't write to file, just log to console
+        print(f"Warning: Could not create log file: {e}", file=sys.stderr)
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    return root_logger
+
+# Initialize logging
+setup_logging()
 
 # Directory settings - use environment variable for production
 UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
