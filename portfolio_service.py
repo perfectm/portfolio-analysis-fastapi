@@ -393,10 +393,10 @@ class PortfolioService:
         
         # Try to load from Parquet first with specific columns
         if columns:
-            required_cols = {'Date'} | set(columns)  # Ensure we have Date column
+            required_cols = list({'Date'} | set(columns))  # Ensure we have Date column, convert to list
         else:
             required_cols = None
-        
+
         df = PortfolioService.load_portfolio_parquet(db, portfolio_id, columns=required_cols)
         
         if df is not None:
