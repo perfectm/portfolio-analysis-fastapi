@@ -128,13 +128,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         # Use user-provided starting capital if available, otherwise calculate from margins
         margin_based_capital = calculate_starting_capital_from_margins(db, portfolio_ids, portfolio_weights)
         starting_capital = user_starting_capital if user_starting_capital and user_starting_capital > 0 else margin_based_capital
-
-        # Detect single-day analysis to skip visualizations
-        is_single_day = date_range_start and date_range_end and date_range_start == date_range_end
-
+        
         logger.info(f"[Weighted Analysis] Analyzing portfolios: {portfolio_ids}")
-        if is_single_day:
-            logger.info(f"[Weighted Analysis] Single-day analysis detected ({date_range_start}) - visualizations will be skipped")
         logger.info(f"[Weighted Analysis] Weighting method: {weighting_method}")
         logger.info(f"[Weighted Analysis] Weights: {weights}")
         logger.info(f"[Weighted Analysis] User provided starting capital: ${user_starting_capital:,.2f}")
@@ -254,8 +249,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             if 'metrics' in result:
                 plots_list = []
                 logger.info(f"[Weighted Analysis] Processing result {i+1}, keys: {list(result.keys())}")
-                # Skip plot creation for single-day analysis
-                if 'clean_df' in result and not is_single_day:
+                if 'clean_df' in result:
                     try:
                         logger.info(f"[Weighted Analysis] Creating plots for portfolio {i+1}")
                         plot_paths = create_plots(
@@ -278,11 +272,6 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         logger.info(f"[Weighted Analysis] Created {len(plot_paths)} plots for portfolio {i+1}")
                     except Exception as plot_error:
                         logger.error(f"[Weighted Analysis] Error creating plots for portfolio {i+1}: {str(plot_error)}")
-                elif 'clean_df' in result and is_single_day:
-                    # Clean up DataFrame for single-day analysis without creating plots
-                    logger.info(f"[Weighted Analysis] Skipping plots for portfolio {i+1} (single-day analysis)")
-                    del result['clean_df']
-                    gc.collect()
                 else:
                     logger.warning(f"[Weighted Analysis] No 'clean_df' key found in result {i+1}")
                 simplified_result = {
@@ -370,109 +359,105 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 )
                 if blended_df is not None and blended_metrics is not None:
                     blended_plots_list = []
-                    # Skip all visualizations for single-day analysis
-                    if is_single_day:
-                        logger.info("[Weighted Analysis] Skipping all visualizations for single-day analysis")
-                    else:
-                        try:
-                            logger.info("[Weighted Analysis] Creating plots for weighted blended portfolio")
-                            portfolio_ids_str = "_".join(str(pid) for pid in valid_portfolio_ids)
-                            # Include date range in filename to ensure plots update when filters change
-                            date_suffix = ""
-                            if date_range_start or date_range_end:
-                                start_str = date_range_start.replace("-", "") if date_range_start else "beginning"
-                                end_str = date_range_end.replace("-", "") if date_range_end else "end"
-                                date_suffix = f"_{start_str}_to_{end_str}"
-                            unique_prefix = f"weighted_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}{date_suffix}"
-                            blended_plot_paths = create_plots(
-                                blended_df,
-                                blended_metrics,
-                                filename_prefix=unique_prefix,
-                                sma_window=20
-                            )
-                            for plot_path in blended_plot_paths:
-                                filename = os.path.basename(plot_path)
-                                plot_url = f"/uploads/plots/{filename}".replace("\\", "/")
-                                blended_plots_list.append({
-                                    'filename': filename,
-                                    'url': plot_url
-                                })
-                            logger.info(f"[Weighted Analysis] Created {len(blended_plot_paths)} plots for weighted blended portfolio")
-                        except Exception as plot_error:
-                            logger.error(f"[Weighted Analysis] Error creating plots for weighted blended portfolio: {str(plot_error)}")
-                        try:
-                            logger.info("[Weighted Analysis] Creating correlation heatmap")
-                            # Create correlation data from individual portfolios using proper correlation approach
-                            correlation_data = pd.DataFrame()
-                            portfolio_names = []
-
-                            # Prepare portfolio data for correlation calculation
-                            for i, (_, name, df) in enumerate(portfolios_data):
-                                # Sum P/L by date first (handle multiple trades per day)
-                                if 'Date' in df.columns:
-                                    df_copy = df.copy()
-                                    df_copy['Date'] = pd.to_datetime(df_copy['Date'])
-                                    # Group by date and sum P/L values
-                                    daily_pnl_sum = df_copy.groupby('Date')['P/L'].sum()
-                                    daily_pnl_sum.name = name
-
-                                    # Join with correlation_data using outer join to align dates
-                                    if correlation_data.empty:
-                                        correlation_data = daily_pnl_sum.to_frame()
-                                    else:
-                                        correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
-
-                                    portfolio_names.append(name)
+                    try:
+                        logger.info("[Weighted Analysis] Creating plots for weighted blended portfolio")
+                        portfolio_ids_str = "_".join(str(pid) for pid in valid_portfolio_ids)
+                        # Include date range in filename to ensure plots update when filters change
+                        date_suffix = ""
+                        if date_range_start or date_range_end:
+                            start_str = date_range_start.replace("-", "") if date_range_start else "beginning"
+                            end_str = date_range_end.replace("-", "") if date_range_end else "end"
+                            date_suffix = f"_{start_str}_to_{end_str}"
+                        unique_prefix = f"weighted_blended_{len(valid_portfolio_ids)}portfolios_{portfolio_ids_str}{date_suffix}"
+                        blended_plot_paths = create_plots(
+                            blended_df,
+                            blended_metrics,
+                            filename_prefix=unique_prefix,
+                            sma_window=20
+                        )
+                        for plot_path in blended_plot_paths:
+                            filename = os.path.basename(plot_path)
+                            plot_url = f"/uploads/plots/{filename}".replace("\\", "/")
+                            blended_plots_list.append({
+                                'filename': filename,
+                                'url': plot_url
+                            })
+                        logger.info(f"[Weighted Analysis] Created {len(blended_plot_paths)} plots for weighted blended portfolio")
+                    except Exception as plot_error:
+                        logger.error(f"[Weighted Analysis] Error creating plots for weighted blended portfolio: {str(plot_error)}")
+                    try:
+                        logger.info("[Weighted Analysis] Creating correlation heatmap")
+                        # Create correlation data from individual portfolios using proper correlation approach
+                        correlation_data = pd.DataFrame()
+                        portfolio_names = []
+                        
+                        # Prepare portfolio data for correlation calculation
+                        for i, (_, name, df) in enumerate(portfolios_data):
+                            # Sum P/L by date first (handle multiple trades per day)
+                            if 'Date' in df.columns:
+                                df_copy = df.copy()
+                                df_copy['Date'] = pd.to_datetime(df_copy['Date'])
+                                # Group by date and sum P/L values
+                                daily_pnl_sum = df_copy.groupby('Date')['P/L'].sum()
+                                daily_pnl_sum.name = name
+                                
+                                # Join with correlation_data using outer join to align dates
+                                if correlation_data.empty:
+                                    correlation_data = daily_pnl_sum.to_frame()
                                 else:
-                                    # Fallback if no Date column - assume data is already daily
-                                    daily_pnl_sum = df['P/L'].fillna(0)
-                                    daily_pnl_sum.name = name
-
-                                    if correlation_data.empty:
-                                        correlation_data = daily_pnl_sum.to_frame()
-                                    else:
-                                        correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
-
-                                    portfolio_names.append(name)
-
-                            # Fill NaN values with 0 for days where portfolios don't have trades
-                            correlation_data = correlation_data.fillna(0)
-
-                            if not correlation_data.empty and len(correlation_data.columns) >= 2:
-                                # Save correlation data to CSV for debugging
-                                debug_csv_path = os.path.join(UPLOAD_FOLDER, 'plots', 'correlation_debug_data.csv')
-                                correlation_data.to_csv(debug_csv_path, index=True)
-                                logger.info(f"[Weighted Analysis] Correlation debug data saved to: {debug_csv_path}")
-                                logger.info(f"[Weighted Analysis] Correlation data shape: {correlation_data.shape}")
-                                # Calculate preview using new correlation method
-                                value_columns = list(correlation_data.columns)
-                                correlation_matrix_preview = calculate_correlation_matrix_from_dataframe(correlation_data, value_columns)
-                                logger.info(f"[Weighted Analysis] Correlation matrix preview:\n{correlation_matrix_preview}")
-
-                                logger.info(f"[Weighted Analysis] Creating correlation heatmap with {len(portfolio_names)} portfolios")
-                                heatmap_path = create_correlation_heatmap(correlation_data, portfolio_names)
-                                if heatmap_path:
-                                    heatmap_filename = os.path.basename(heatmap_path)
-                                    heatmap_url = f"/uploads/plots/{heatmap_filename}".replace("\\", "/")
-                                    logger.info(f"[Weighted Analysis] Correlation heatmap created: {heatmap_url}")
+                                    correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
+                                
+                                portfolio_names.append(name)
                             else:
-                                logger.warning("[Weighted Analysis] No correlation data available for heatmap")
-                        except Exception as heatmap_error:
-                            logger.error(f"[Weighted Analysis] Error creating correlation heatmap: {str(heatmap_error)}")
-                        if len(portfolios_data) <= 20:
-                            try:
-                                logger.info(f"[Weighted Analysis] Creating Monte Carlo simulation for {len(portfolios_data)} portfolios")
-                                mc_path = create_monte_carlo_simulation(blended_df, blended_metrics)
-                                if mc_path:
-                                    mc_filename = os.path.basename(mc_path)
-                                    monte_carlo_url = f"/uploads/plots/{mc_filename}".replace("\\", "/")
-                                    logger.info(f"[Weighted Analysis] Monte Carlo simulation created: {monte_carlo_url}")
+                                # Fallback if no Date column - assume data is already daily
+                                daily_pnl_sum = df['P/L'].fillna(0)
+                                daily_pnl_sum.name = name
+                                
+                                if correlation_data.empty:
+                                    correlation_data = daily_pnl_sum.to_frame()
                                 else:
-                                    logger.warning("[Weighted Analysis] Monte Carlo simulation returned None")
-                            except Exception as mc_error:
-                                logger.error(f"[Weighted Analysis] Error creating Monte Carlo simulation: {str(mc_error)}")
+                                    correlation_data = correlation_data.join(daily_pnl_sum, how='outer')
+                                
+                                portfolio_names.append(name)
+                        
+                        # Fill NaN values with 0 for days where portfolios don't have trades
+                        correlation_data = correlation_data.fillna(0)
+                        
+                        if not correlation_data.empty and len(correlation_data.columns) >= 2:
+                            # Save correlation data to CSV for debugging
+                            debug_csv_path = os.path.join(UPLOAD_FOLDER, 'plots', 'correlation_debug_data.csv')
+                            correlation_data.to_csv(debug_csv_path, index=True)
+                            logger.info(f"[Weighted Analysis] Correlation debug data saved to: {debug_csv_path}")
+                            logger.info(f"[Weighted Analysis] Correlation data shape: {correlation_data.shape}")
+                            # Calculate preview using new correlation method
+                            value_columns = list(correlation_data.columns)
+                            correlation_matrix_preview = calculate_correlation_matrix_from_dataframe(correlation_data, value_columns)
+                            logger.info(f"[Weighted Analysis] Correlation matrix preview:\n{correlation_matrix_preview}")
+                            
+                            logger.info(f"[Weighted Analysis] Creating correlation heatmap with {len(portfolio_names)} portfolios")
+                            heatmap_path = create_correlation_heatmap(correlation_data, portfolio_names)
+                            if heatmap_path:
+                                heatmap_filename = os.path.basename(heatmap_path)
+                                heatmap_url = f"/uploads/plots/{heatmap_filename}".replace("\\", "/")
+                                logger.info(f"[Weighted Analysis] Correlation heatmap created: {heatmap_url}")
                         else:
-                            logger.info(f"[Weighted Analysis] Skipping Monte Carlo simulation for {len(portfolios_data)} portfolios to save memory")
+                            logger.warning("[Weighted Analysis] No correlation data available for heatmap")
+                    except Exception as heatmap_error:
+                        logger.error(f"[Weighted Analysis] Error creating correlation heatmap: {str(heatmap_error)}")
+                    if len(portfolios_data) <= 20:
+                        try:
+                            logger.info(f"[Weighted Analysis] Creating Monte Carlo simulation for {len(portfolios_data)} portfolios")
+                            mc_path = create_monte_carlo_simulation(blended_df, blended_metrics)
+                            if mc_path:
+                                mc_filename = os.path.basename(mc_path)
+                                monte_carlo_url = f"/uploads/plots/{mc_filename}".replace("\\", "/")
+                                logger.info(f"[Weighted Analysis] Monte Carlo simulation created: {monte_carlo_url}")
+                            else:
+                                logger.warning("[Weighted Analysis] Monte Carlo simulation returned None")
+                        except Exception as mc_error:
+                            logger.error(f"[Weighted Analysis] Error creating Monte Carlo simulation: {str(mc_error)}")
+                    else:
+                        logger.info(f"[Weighted Analysis] Skipping Monte Carlo simulation for {len(portfolios_data)} portfolios to save memory")
 
                     # Extract daily time series data (Date and Account Value) BEFORE deleting blended_df
                     daily_data = []
