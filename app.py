@@ -42,6 +42,16 @@ from routers.tear_sheet import router as tear_sheet_router
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# Configure yfinance cache location to avoid permission errors
+try:
+    import yfinance as yf
+    cache_dir = os.path.join(os.path.dirname(__file__), '.cache', 'yfinance')
+    os.makedirs(cache_dir, exist_ok=True)
+    yf.set_tz_cache_location(cache_dir)
+    logger.info(f"yfinance cache configured: {cache_dir}")
+except Exception as e:
+    logger.warning(f"Could not configure yfinance cache: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI startup and shutdown events"""

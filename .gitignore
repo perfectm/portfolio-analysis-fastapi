@@ -175,3 +175,4 @@ FINAL_ACTION_PLAN.md
 *.pid
 uploads/
 *.csv
+.cache/
