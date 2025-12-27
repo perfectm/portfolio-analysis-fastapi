@@ -175,27 +175,28 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                 logger.warning(f"No data found for portfolio {portfolio_id}")
                 continue
             logger.info(f"[Weighted Analysis] Retrieved {len(df)} rows for portfolio {portfolio_id} ({portfolio.name})")
-            portfolios_data.append((portfolio.name, df))
+            portfolios_data.append((portfolio_id, portfolio.name, df))  # Store portfolio_id with data
         if not portfolios_data:
             return {"success": False, "error": "No valid portfolio data found"}
         logger.info(f"[Weighted Analysis] Processing {len(portfolios_data)} portfolios")
         individual_results = []
-        for i, (name, df) in enumerate(portfolios_data):
-            cached = get_cached_analysis_result(db, valid_portfolio_ids[i], 0.05, 20, True, starting_capital)
+        for i, (portfolio_id, name, df) in enumerate(portfolios_data):
+            cached = get_cached_analysis_result(db, portfolio_id, 0.05, 20, True, starting_capital)
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
-                df = PortfolioService.get_portfolio_dataframe(db, valid_portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
+                df = PortfolioService.get_portfolio_dataframe(db, portfolio_id, columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
                     result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
-                    PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                    PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
                 else:
                     clean_df = df
                 individual_results.append({
+                    'portfolio_id': portfolio_id,
                     'filename': name,
                     'metrics': metrics,
                     'type': 'file',
@@ -205,8 +206,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
             else:
                 # Run process_individual_portfolios for this portfolio only
                 result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
-                PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                result['portfolio_id'] = portfolio_id  # Add portfolio_id to result
                 individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
@@ -217,9 +219,9 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     try:
                         logger.info(f"[Weighted Analysis] Creating plots for portfolio {i+1}")
                         plot_paths = create_plots(
-                            result['clean_df'], 
-                            result['metrics'], 
-                            filename_prefix=f"weighted_analysis_portfolio_{i}_{valid_portfolio_ids[i] if i < len(portfolio_ids) else 'unknown'}", 
+                            result['clean_df'],
+                            result['metrics'],
+                            filename_prefix=f"weighted_analysis_portfolio_{i}_{result.get('portfolio_id', 'unknown')}",
                             sma_window=20
                         )
                         if 'clean_df' in result:
@@ -333,7 +335,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         portfolio_names = []
                         
                         # Prepare portfolio data for correlation calculation
-                        for i, (name, df) in enumerate(portfolios_data):
+                        for i, (_, name, df) in enumerate(portfolios_data):
                             # Sum P/L by date first (handle multiple trades per day)
                             if 'Date' in df.columns:
                                 df_copy = df.copy()
@@ -428,7 +430,7 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     gc.collect()
                     portfolio_composition = {}
                     if portfolio_weights:
-                        for i, (name, _) in enumerate(portfolios_data):
+                        for i, (_, name, _df) in enumerate(portfolios_data):
                             if i < len(portfolio_weights):
                                 portfolio_composition[name] = portfolio_weights[i]
 
@@ -981,17 +983,18 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
-                df = PortfolioService.get_portfolio_dataframe(db, valid_portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
+                df = PortfolioService.get_portfolio_dataframe(db, portfolio_id, columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
                     result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
-                    PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                    logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                    PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
                 else:
                     clean_df = df
                 individual_results.append({
+                    'portfolio_id': portfolio_id,
                     'filename': name,
                     'metrics': metrics,
                     'type': 'file',
@@ -1001,8 +1004,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
             else:
                 # Run process_individual_portfolios for this portfolio only
                 result = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)[0]
-                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={valid_portfolio_ids[i]}, metrics={result['metrics']}")
-                PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                logger.error(f"[ROUTER:optimization] About to call store_analysis_result for portfolio_id={portfolio_id}, metrics={result['metrics']}")
+                PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                result['portfolio_id'] = portfolio_id  # Add portfolio_id to result
                 individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
