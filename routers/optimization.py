@@ -221,7 +221,11 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
 
         # Check if we have any valid results after filtering
         if not individual_results:
-            return {"success": False, "error": "All selected portfolios failed validation. Please check that your portfolios have sufficient data (at least 30 trading days) in the selected date range."}
+            return {"success": False, "error": "All selected portfolios failed validation. Please check that your portfolios have data in the selected date range."}
+
+        # Build list of successfully processed portfolio IDs (excludes skipped ones)
+        successfully_processed_ids = [result['portfolio_id'] for result in individual_results if 'portfolio_id' in result]
+        logger.info(f"[Weighted Analysis] Successfully processed {len(successfully_processed_ids)} out of {len(portfolios_data)} portfolios")
 
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
@@ -306,10 +310,12 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
         if len(portfolios_data) > 1:
             try:
                 logger.info("[Weighted Analysis] Creating weighted blended portfolio analysis")
+                # Use only successfully processed portfolio IDs (excludes skipped ones)
+                successful_weights = [portfolio_weights[i] for i, pid in enumerate(valid_portfolio_ids) if pid in successfully_processed_ids]
                 blended_df, blended_metrics, _ = create_blended_portfolio(
                     db=db,
-                    portfolio_ids=valid_portfolio_ids,
-                    weights=portfolio_weights,
+                    portfolio_ids=successfully_processed_ids,
+                    weights=successful_weights,
                     name=f"Weighted Blended Portfolio ({len(portfolios_data)} strategies)",
                     description=f"Weighted blend of {len(portfolios_data)} portfolios",
                     date_range_start=date_range_start,
