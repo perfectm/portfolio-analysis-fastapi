@@ -900,7 +900,15 @@ def _calculate_drawdown_metrics(clean_df: pd.DataFrame, starting_capital: float)
 
     # Find the date when the drawdown began (for dollar drawdown)
     pre_drawdown_data = clean_df.loc[:max_drawdown_dollar_idx]
-    drawdown_peak_idx = pre_drawdown_data[pre_drawdown_data['Account Value'] == peak_value].index[-1]
+    peak_matches = pre_drawdown_data[pre_drawdown_data['Account Value'] == peak_value]
+
+    # Handle case where no exact match is found (e.g., single-day data or floating point issues)
+    if peak_matches.empty:
+        # Use the first available date as drawdown start (or max drawdown date for single-day data)
+        drawdown_peak_idx = pre_drawdown_data.index[0] if len(pre_drawdown_data) > 0 else max_drawdown_dollar_idx
+    else:
+        drawdown_peak_idx = peak_matches.index[-1]
+
     drawdown_start_date = clean_df.loc[drawdown_peak_idx, 'Date']
 
     # Calculate recovery info (for dollar drawdown)
