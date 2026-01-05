@@ -66,11 +66,25 @@ async def upload_files_api(
                 df = pd.read_csv(pd.io.common.BytesIO(contents))
                 logger.info(f"[API Upload] Parsed CSV with shape {df.shape} for {file.filename}")
                 portfolio_name = file.filename.replace('.csv', '').replace('_', ' ').title()
-                logger.info(f"[API Upload] Creating portfolio record: {portfolio_name}")
-                portfolio = PortfolioService.create_portfolio(
-                    db, portfolio_name, file.filename, contents, df
-                )
-                logger.info(f"[API Upload] Created portfolio with ID {portfolio.id}")
+
+                # Check if portfolio with this name already exists
+                existing_portfolio = PortfolioService.get_portfolio_by_name(db, portfolio_name)
+
+                if existing_portfolio:
+                    # Update existing portfolio instead of creating a new one
+                    logger.info(f"[API Upload] Found existing portfolio '{portfolio_name}' (ID: {existing_portfolio.id}), updating with new data")
+                    portfolio = PortfolioService.update_portfolio_data(
+                        db, existing_portfolio.id, file.filename, contents, df
+                    )
+                    logger.info(f"[API Upload] Updated portfolio {portfolio.id} with new data")
+                else:
+                    # Create new portfolio
+                    logger.info(f"[API Upload] Creating new portfolio record: {portfolio_name}")
+                    portfolio = PortfolioService.create_portfolio(
+                        db, portfolio_name, file.filename, contents, df
+                    )
+                    logger.info(f"[API Upload] Created new portfolio with ID {portfolio.id}")
+
                 PortfolioService.store_portfolio_data(db, portfolio.id, df)
                 logger.info(f"[API Upload] Stored {len(df)} data rows for portfolio {portfolio.id}")
                 files_data.append((file.filename, df))

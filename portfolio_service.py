@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, asc
+from sqlalchemy import desc, asc, func
 import pandas as pd
 import logging
 import os
@@ -605,7 +605,58 @@ class PortfolioService:
         Get portfolio by ID
         """
         return db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
-    
+
+    @staticmethod
+    def get_portfolio_by_name(db: Session, portfolio_name: str) -> Optional[Portfolio]:
+        """
+        Get portfolio by name (for update on re-upload)
+        """
+        return db.query(Portfolio).filter(Portfolio.name == portfolio_name).first()
+
+    @staticmethod
+    def update_portfolio_data(db: Session, portfolio_id: int, filename: str, contents: bytes, df: pd.DataFrame) -> Portfolio:
+        """
+        Update an existing portfolio with new data (used when re-uploading)
+        Deletes old portfolio_data and analysis_results, updates metadata
+        """
+        try:
+            portfolio = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
+            if not portfolio:
+                raise ValueError(f"Portfolio with ID {portfolio_id} not found")
+
+            # Delete old portfolio data
+            db.query(PortfolioData).filter(PortfolioData.portfolio_id == portfolio_id).delete()
+
+            # Delete old analysis results (plots will be orphaned but that's okay)
+            db.query(AnalysisResult).filter(AnalysisResult.portfolio_id == portfolio_id).delete()
+
+            # Update portfolio metadata
+            portfolio.filename = filename
+            portfolio.upload_date = func.now()
+            portfolio.file_size = len(contents)
+            portfolio.row_count = len(df)
+
+            # Update date range if Date column exists
+            if 'Date' in df.columns:
+                df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+                portfolio.date_range_start = df['Date'].min()
+                portfolio.date_range_end = df['Date'].max()
+
+            # Update file hash
+            import hashlib
+            portfolio.file_hash = hashlib.sha256(contents).hexdigest()
+
+            db.commit()
+            db.refresh(portfolio)
+
+            logger.info(f"Updated portfolio {portfolio_id} with new data from {filename}")
+            return portfolio
+
+        except Exception as e:
+            logger.error(f"Error updating portfolio data: {e}")
+            db.rollback()
+            raise
+
     @staticmethod
     def delete_portfolio(db: Session, portfolio_id: int) -> bool:
         """
