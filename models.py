@@ -76,6 +76,9 @@ class Portfolio(Base):
     # Relationships
     raw_data = relationship("PortfolioData", back_populates="portfolio", cascade="all, delete-orphan")
     analysis_results = relationship("AnalysisResult", back_populates="portfolio", cascade="all, delete-orphan")
+    margin_data = relationship("PortfolioMarginData", back_populates="portfolio", cascade="all, delete-orphan")
+    regime_performance = relationship("RegimePerformance", back_populates="portfolio", cascade="all, delete-orphan")
+    blended_mappings = relationship("BlendedPortfolioMapping", back_populates="portfolio", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Portfolio(id={self.id}, name='{self.name}', filename='{self.filename}')>"
@@ -228,7 +231,7 @@ class BlendedPortfolioMapping(Base):
     
     # Relationships
     blended_portfolio = relationship("BlendedPortfolio", back_populates="portfolio_mappings")
-    portfolio = relationship("Portfolio")
+    portfolio = relationship("Portfolio", back_populates="blended_mappings")
     
     # Unique constraint
     __table_args__ = (
@@ -295,9 +298,9 @@ class RegimePerformance(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
-    portfolio = relationship("Portfolio")
+    portfolio = relationship("Portfolio", back_populates="regime_performance")
     
     # Unique constraint per portfolio/regime combination
     __table_args__ = (
@@ -414,9 +417,9 @@ class PortfolioMarginData(Base):
     margin_type = Column(String(50), nullable=True)  # Optional: type of margin (initial, maintenance, etc.)
     row_number = Column(Integer)  # Original row number from CSV
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationship
-    portfolio = relationship("Portfolio")
+    portfolio = relationship("Portfolio", back_populates="margin_data")
     
     # Create composite index for efficient querying
     __table_args__ = (
