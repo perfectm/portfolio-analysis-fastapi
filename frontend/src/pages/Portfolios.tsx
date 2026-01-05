@@ -537,6 +537,52 @@ export default function Portfolios() {
     }
   };
 
+  const deleteAllStrategyPortfolios = async (strategy: string, portfolioIds: number[]) => {
+    const count = portfolioIds.length;
+    const portfolioText = count === 1 ? 'portfolio' : 'portfolios';
+
+    if (!confirm(`Are you sure you want to delete all ${count} ${portfolioText} in the "${strategy}" strategy? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+
+      // Delete all portfolios in the strategy
+      for (const id of portfolioIds) {
+        try {
+          const response = await portfolioAPI.deletePortfolio(id);
+          if (response.success) {
+            successCount++;
+          } else {
+            failCount++;
+            console.error(`Failed to delete portfolio ${id}:`, response.error);
+          }
+        } catch (err) {
+          failCount++;
+          console.error(`Error deleting portfolio ${id}:`, err);
+        }
+      }
+
+      // Update state to remove deleted portfolios
+      if (successCount > 0) {
+        setPortfolios(portfolios.filter((p) => !portfolioIds.includes(p.id)));
+        setSelectedPortfolios(selectedPortfolios.filter((pid) => !portfolioIds.includes(pid)));
+      }
+
+      // Show result message
+      if (failCount === 0) {
+        alert(`Successfully deleted all ${successCount} ${portfolioText} from "${strategy}"`);
+      } else {
+        alert(`Deleted ${successCount} ${portfolioText}, but ${failCount} failed. Check console for details.`);
+      }
+    } catch (err) {
+      alert("Failed to delete strategy portfolios");
+      console.error("Error deleting strategy portfolios:", err);
+    }
+  };
+
   const startRenaming = (portfolio: Portfolio) => {
     setEditingPortfolioId(portfolio.id);
     setEditingName(portfolio.name);
@@ -5531,6 +5577,32 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         />
                         Select All {strategy}
                       </label>
+                      <button
+                        onClick={() => {
+                          const strategyPortfolioIds = groupedPortfolios[strategy].map(p => p.id);
+                          deleteAllStrategyPortfolios(strategy, strategyPortfolioIds);
+                        }}
+                        style={{
+                          padding: "0.4rem 0.8rem",
+                          fontSize: "0.875rem",
+                          backgroundColor: theme.palette.mode === 'dark' ? "#c53030" : "#e53e3e",
+                          border: "none",
+                          color: "white",
+                          cursor: "pointer",
+                          borderRadius: "4px",
+                          fontWeight: "500",
+                          transition: "background-color 0.2s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = theme.palette.mode === 'dark' ? "#9b2c2c" : "#c53030";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = theme.palette.mode === 'dark' ? "#c53030" : "#e53e3e";
+                        }}
+                        title={`Delete all ${groupedPortfolios[strategy].length} portfolio(s) in this strategy`}
+                      >
+                        🗑️ Delete All
+                      </button>
                     </div>
                   </div>
 
