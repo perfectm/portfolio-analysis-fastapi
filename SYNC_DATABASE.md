@@ -16,29 +16,73 @@ The `sync_prod_to_dev.py` script safely copies all data from production to your 
 2. **Production database password** for user `cmtool`
 3. **Python dependencies**: SQLAlchemy, psycopg2
 
+## Quick Start (Easiest Method)
+
+**Step 1: Start SSH Tunnel (runs in background)**
+```bash
+./start_tunnel.sh
+```
+
+**Step 2: Run Sync**
+```bash
+python sync_prod_to_dev.py "postgresql://cmtool:YOUR_PASSWORD@localhost:5433/portfolio_analysis"
+```
+
+**Step 3: Stop Tunnel (when done)**
+```bash
+./stop_tunnel.sh
+```
+
+That's it! Read below for detailed options and troubleshooting.
+
 ## Method 1: Using SSH Tunnel (Recommended)
 
 ### Step 1: Create SSH Tunnel
-Open a terminal and create an SSH tunnel to the production database:
 
+You have three options for creating the tunnel:
+
+#### Option A: Using Helper Script (Recommended - Runs in Background)
 ```bash
-# Option 1: Basic tunnel (recommended)
+./start_tunnel.sh
+```
+
+This starts the tunnel in the background and returns immediately. You can use your terminal normally.
+
+**To stop the tunnel later:**
+```bash
+./stop_tunnel.sh
+```
+
+**To check tunnel logs:**
+```bash
+tail -f tunnel.log
+```
+
+#### Option B: Manual Tunnel (Stays in Foreground)
+```bash
 ssh -N -L 5433:localhost:5432 cotton@srv1173534
+```
 
-# Option 2: With compression (if connection is slow)
-ssh -N -C -L 5433:localhost:5432 cotton@srv1173534
+**⚠️ Important:** This will appear to "hang" - **this is normal!** The `-N` flag means SSH is just forwarding ports and won't give you a prompt. Keep this terminal window open while syncing.
 
-# Option 3: With verbose logging (for troubleshooting)
-ssh -v -N -L 5433:localhost:5432 cotton@srv1173534
+**To stop:** Press `Ctrl+C` in the tunnel terminal
+
+#### Option C: Manual Background Tunnel
+```bash
+# Start in background
+ssh -f -N -L 5433:localhost:5432 cotton@srv1173534
+
+# To stop later
+pkill -f "ssh.*5433.*5432"
 ```
 
 **Flags explained:**
-- `-N`: Don't execute remote commands (just forward)
+- `-N`: Don't execute remote commands (just forward ports)
 - `-L`: Local port forwarding
-- `-C`: Enable compression
-- `-v`: Verbose output for debugging
+- `-f`: Run in background
+- `-v`: Verbose output (for debugging)
 
-**Note:** Keep this terminal open while syncing. The `-N` flag means it won't give you a shell prompt - this is normal.
+**Recommended:** Use **Option A** (./start_tunnel.sh) - it's easiest and runs in the background automatically.
 
 ### Step 2: Run Sync Script
 In another terminal:

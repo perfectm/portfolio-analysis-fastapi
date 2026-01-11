@@ -181,3 +181,5 @@ FINAL_ACTION_PLAN.md
 uploads/
 *.csv
 .cache/
+tunnel.log
+diagnostic_output.txt
