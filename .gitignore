@@ -64,7 +64,11 @@ db.sqlite3-journal
 
 # Local SQLite databases
 portfolio_analysis.db
+portfolio_analysis.db.backup
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
 
 # Flask stuff:
 instance/
@@ -154,6 +158,7 @@ Thumbs.db
 .env.local
 .env.production
 .env.render
+.env.sync
 
 # Security - files with sensitive data
 test_postgresql.py

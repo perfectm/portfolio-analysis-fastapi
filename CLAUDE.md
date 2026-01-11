@@ -85,6 +85,7 @@ The application is deployed in two environments:
 - **Start production**: `./start.sh prod` (Docker-based production mode)
 - **Stop all services**: `./stop.sh` (gracefully stops dev or prod services)
 - **Stop everything**: `./stop.sh all` (stops all services and cleans up logs)
+- **Sync production data**: `python sync_prod_to_dev.py` (import production data to local database for testing)
 
 ### Script Details
 
@@ -124,6 +125,7 @@ The application is deployed in two environments:
 - **Run regime tables migration**: `python migrations/add_regime_tables.py`
 - **Check database connection**: Use the `/api/debug/database` endpoint
 - **Database migrations**: Uses SQLAlchemy with automatic table creation
+- **Sync production to dev**: `python sync_prod_to_dev.py` (see SYNC_DATABASE.md for details)
 
 #### Docker & Deployment (Legacy - Not Currently Used)
 - **Local Docker**: `docker-compose up` (builds and runs the full stack)
@@ -293,6 +295,52 @@ The project includes comprehensive test files:
 - **test_weighting.py**: Portfolio weighting logic tests
 - **test_modules.py**: Module-level testing
 - **test_fix.py**: Bug fix validation
+
+## Database Synchronization (Production to Development)
+
+For testing with real production data, use the `sync_prod_to_dev.py` script to safely import data from the Hostinger production PostgreSQL database to your local SQLite development database.
+
+### Quick Start
+```bash
+# Step 1: Create SSH tunnel to production server
+ssh -L 5433:localhost:5432 cotton@srv1173534
+
+# Step 2: In another terminal, run sync
+python sync_prod_to_dev.py "postgresql://cmtool:PASSWORD@localhost:5433/portfolio_analysis"
+```
+
+### Features
+- ✅ **Read-only** connection to production (safe, no changes to prod)
+- ✅ **Complete data sync** of all tables with foreign key relationships
+- ✅ **Batch processing** for large datasets (100K+ rows)
+- ✅ **Progress feedback** during sync
+- ✅ **User confirmation** required before replacing local data
+- ✅ **Automatic backup** recommendation
+
+### What Gets Synced
+All tables are synced in the correct order to preserve relationships:
+- Users and authentication
+- Portfolios and raw data
+- Analysis results and plots
+- Blended portfolio configurations
+- Regime analysis data
+- Margin requirements
+- Optimization cache
+
+### Documentation
+See **SYNC_DATABASE.md** for:
+- Detailed usage instructions
+- SSH tunnel setup
+- Troubleshooting guide
+- Security best practices
+- Performance tips
+
+### Use Cases
+- Testing with real production data
+- Debugging issues reported by users
+- Performance testing with large datasets
+- Developing new features with actual data
+- Validating migrations before production deployment
 
 ## Deployment
 
