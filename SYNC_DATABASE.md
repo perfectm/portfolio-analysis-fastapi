@@ -18,17 +18,27 @@ The `sync_prod_to_dev.py` script safely copies all data from production to your 
 
 ## Quick Start (Easiest Method)
 
-**Step 1: Start SSH Tunnel (runs in background)**
+**Step 1: Configure .env file (one-time setup)**
+```bash
+# Add PROD_DATABASE_URL to your .env file
+echo 'PROD_DATABASE_URL=postgresql://cmtool:YOUR_PASSWORD@localhost:5433/portfolio_analysis' >> .env
+```
+
+**Step 2: Start SSH Tunnel (runs in background)**
 ```bash
 ./start_tunnel.sh
 ```
 
-**Step 2: Run Sync**
+**Step 3: Run Sync**
 ```bash
+# The script will automatically read from .env
+python sync_prod_to_dev.py
+
+# Or provide the URL directly (overrides .env)
 python sync_prod_to_dev.py "postgresql://cmtool:YOUR_PASSWORD@localhost:5433/portfolio_analysis"
 ```
 
-**Step 3: Stop Tunnel (when done)**
+**Step 4: Stop Tunnel (when done)**
 ```bash
 ./stop_tunnel.sh
 ```
@@ -99,14 +109,28 @@ Replace `YOUR_PASSWORD` with the actual `cmtool` database password.
 
 ## Method 2: Using Environment Variable
 
-### Option A: Set environment variable temporarily
+### Option A: Use existing .env file (Easiest)
+
+The script automatically reads `PROD_DATABASE_URL` from the `.env` file in the project root:
+
+```bash
+# Just run the script - it will read from .env automatically
+python sync_prod_to_dev.py
+```
+
+**Note**: Your `.env` file should contain:
+```
+PROD_DATABASE_URL=postgresql://cmtool:YOUR_PASSWORD@localhost:5433/portfolio_analysis
+```
+
+### Option B: Set environment variable temporarily
 
 ```bash
 export PROD_DATABASE_URL="postgresql://cmtool:YOUR_PASSWORD@localhost:5433/portfolio_analysis"
 python sync_prod_to_dev.py
 ```
 
-### Option B: Create a local .env file
+### Option C: Create a separate .env file
 
 ```bash
 # Create .env.sync (not tracked by git)

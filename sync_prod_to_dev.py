@@ -25,6 +25,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 import logging
 from datetime import datetime
+from pathlib import Path
+
+# Try to load .env file if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, skip
 
 # Configure logging
 logging.basicConfig(
