@@ -177,24 +177,32 @@ class OptimizationCache:
     """Helper class for optimization cache operations"""
     
     @staticmethod
-    def lookup_cache(db_session: Session, portfolio_ids: List[int], 
+    def lookup_cache(db_session: Session, portfolio_ids: List[int],
                     rf_rate: float, sma_window: int, use_trading_filter: bool,
-                    starting_capital: float, min_weight: float, max_weight: float) -> Optional[Dict]:
+                    starting_capital: float, min_weight: float, max_weight: float,
+                    optimization_method: str = None) -> Optional[Dict]:
         """Look up optimization results in cache"""
         from models import OptimizationCache as CacheModel
-        
+
         portfolio_hash = generate_portfolio_hash(portfolio_ids)
-        
+
+        # Build filter conditions
+        filter_conditions = [
+            CacheModel.portfolio_ids_hash == portfolio_hash,
+            CacheModel.rf_rate == rf_rate,
+            CacheModel.sma_window == sma_window,
+            CacheModel.use_trading_filter == use_trading_filter,
+            CacheModel.starting_capital == starting_capital,
+            CacheModel.min_weight == min_weight,
+            CacheModel.max_weight == max_weight
+        ]
+
+        # Add optimization method to cache key if specified
+        if optimization_method:
+            filter_conditions.append(CacheModel.optimization_method == optimization_method)
+
         cache_entry = db_session.query(CacheModel).filter(
-            and_(
-                CacheModel.portfolio_ids_hash == portfolio_hash,
-                CacheModel.rf_rate == rf_rate,
-                CacheModel.sma_window == sma_window,
-                CacheModel.use_trading_filter == use_trading_filter,
-                CacheModel.starting_capital == starting_capital,
-                CacheModel.min_weight == min_weight,
-                CacheModel.max_weight == max_weight
-            )
+            and_(*filter_conditions)
         ).first()
         
         if cache_entry:
@@ -362,8 +370,12 @@ def calculate_dynamic_min_weight(portfolio_count: int) -> float:
 @dataclass
 class OptimizationObjective:
     """Configuration for optimization objectives"""
-    return_weight: float = 0.6  # Weight for return in objective function
-    drawdown_weight: float = 0.4  # Weight for drawdown penalty in objective function
+    return_weight: float = 0.6  # Weight for return in objective function (for full optimization)
+    drawdown_weight: float = 0.4  # Weight for drawdown penalty in objective function (for full optimization)
+    # Simple optimization objective weights (40% CAGR, 40% Sortino, 20% Sharpe)
+    cagr_weight: float = 0.4  # Weight for CAGR in simple optimization
+    sortino_weight: float = 0.4  # Weight for Sortino ratio in simple optimization
+    sharpe_weight: float = 0.2  # Weight for Sharpe ratio in simple optimization
     # Note: min_weight and max_weight are now calculated dynamically based on portfolio count
 
 class PortfolioOptimizer:
@@ -478,8 +490,9 @@ class PortfolioOptimizer:
         Args:
             db_session: Database session
             portfolio_ids: List of portfolio IDs to optimize
-            method: Optimization method ('scipy', 'differential_evolution', 'grid_search')
-            
+            method: Optimization method ('scipy', 'differential_evolution', 'grid_search', 'simple')
+            resume_from_weights: Optional starting weights for continuation
+
         Returns:
             OptimizationResult with optimal weights and metrics
         """
@@ -496,9 +509,10 @@ class PortfolioOptimizer:
         if not resume_from_weights:
             # Only use cache for fresh optimizations, not continuations
             cached_result = OptimizationCache.lookup_cache(
-                db_session, portfolio_ids, 
+                db_session, portfolio_ids,
                 self.rf_rate, self.sma_window, self.use_trading_filter,
-                self.starting_capital, self.min_weight, self.max_weight
+                self.starting_capital, self.min_weight, self.max_weight,
+                optimization_method=method  # Include method in cache lookup
             )
         else:
             logger.info(f"Skipping cache lookup because resuming from previous weights: {resume_from_weights}")
@@ -587,12 +601,13 @@ class PortfolioOptimizer:
                         resume_from_weights: List[float] = None) -> OptimizationResult:
         """
         Optimize portfolio weights to maximize return/drawdown ratio
-        
+
         Args:
             portfolios_data: List of (name, dataframe) tuples
-            method: Optimization method ('scipy', 'differential_evolution', 'grid_search')
+            method: Optimization method ('scipy', 'differential_evolution', 'grid_search', 'simple')
             subset_caches: Cached optimization results for portfolio subsets
-            
+            resume_from_weights: Optional starting weights for continuation
+
         Returns:
             OptimizationResult with optimal weights and metrics
         """
@@ -627,6 +642,8 @@ class PortfolioOptimizer:
                 return self._optimize_with_differential_evolution(portfolios_data, subset_caches, resume_from_weights)
             elif method == 'grid_search':
                 return self._optimize_with_grid_search(portfolios_data, subset_caches, resume_from_weights)
+            elif method == 'simple':
+                return self._optimize_with_simple_grid(portfolios_data, subset_caches, resume_from_weights)
             else:
                 raise ValueError(f"Unknown optimization method: {method}")
                 
@@ -1129,7 +1146,144 @@ class PortfolioOptimizer:
         else:
             equal_weights = np.array([1.0 / num_portfolios] * num_portfolios)
             return self._create_result_from_weights(equal_weights, portfolios_data, 'grid_search', iterations, False, "No valid weights found in grid search")
-    
+
+    def _optimize_with_simple_grid(self, portfolios_data: List[Tuple[str, pd.DataFrame]],
+                                   subset_caches: List[Dict] = None,
+                                   resume_from_weights: List[float] = None) -> OptimizationResult:
+        """
+        Simple optimization using ±1 unit changes around current ratios.
+
+        This method:
+        - Starts with current ratios (or defaults to 1 for each portfolio)
+        - For each ratio N (where N >= 1), tries N-1, N, N+1 (minimum 1)
+        - Uses objective: 40% CAGR + 40% Sortino + 20% Sharpe
+        - Returns the best combination found
+
+        Args:
+            portfolios_data: List of (name, dataframe) tuples
+            subset_caches: Not used for simple optimization
+            resume_from_weights: Optional starting weights to use as baseline
+
+        Returns:
+            OptimizationResult with optimal weights and metrics
+        """
+        num_portfolios = len(portfolios_data)
+
+        logger.info(f"Starting simple grid optimization for {num_portfolios} portfolios...")
+
+        # Determine starting ratios
+        if resume_from_weights and len(resume_from_weights) == num_portfolios:
+            # Convert provided weights to ratios
+            starting_ratios = convert_weights_to_ratios(resume_from_weights, portfolio_count=num_portfolios)
+            logger.info(f"Starting from provided weights: {resume_from_weights}")
+            logger.info(f"Converted to ratios: {starting_ratios}")
+        else:
+            # Default to 1 for each portfolio
+            starting_ratios = [1] * num_portfolios
+            logger.info(f"Starting with default ratios (all 1s): {starting_ratios}")
+
+        # Generate all possible combinations with ±1 unit changes
+        # For each ratio N (where N >= 1), try [max(1, N-1), N, N+1]
+        ratio_options = []
+        for ratio in starting_ratios:
+            if ratio == 1:
+                # Can only go to 1 or 2 (not 0)
+                ratio_options.append([1, 2])
+            else:
+                # Can go to N-1, N, or N+1 (minimum 1)
+                ratio_options.append([max(1, ratio - 1), ratio, ratio + 1])
+
+        logger.info(f"Ratio options per portfolio: {ratio_options}")
+
+        # Generate all combinations using itertools.product
+        import itertools
+        all_combinations = list(itertools.product(*ratio_options))
+
+        logger.info(f"Total combinations to evaluate: {len(all_combinations)}")
+
+        best_objective_score = float('-inf')  # We want to maximize this score
+        best_weights = None
+        best_metrics = None
+        iterations = 0
+
+        # Evaluate each combination
+        for ratio_combo in all_combinations:
+            # Convert ratios to weights (normalize to sum to 1)
+            ratio_array = np.array(ratio_combo, dtype=float)
+            weights = ratio_array / np.sum(ratio_array)
+
+            try:
+                # Create blended portfolio with these weights
+                blended_df, blended_metrics, _ = create_blended_portfolio_from_files(
+                    portfolios_data,
+                    rf_rate=self.rf_rate,
+                    sma_window=self.sma_window,
+                    use_trading_filter=self.use_trading_filter,
+                    starting_capital=self.starting_capital,
+                    weights=weights.tolist(),
+                    use_capital_allocation=True
+                )
+
+                if blended_df is None or blended_metrics is None:
+                    logger.warning(f"Failed to create blended portfolio for ratios {ratio_combo}, skipping")
+                    continue
+
+                # Extract metrics
+                cagr = blended_metrics.get('cagr', 0)
+                sortino_ratio = blended_metrics.get('sortino_ratio', 0)
+                sharpe_ratio = blended_metrics.get('sharpe_ratio', 0)
+
+                # Calculate objective score: 40% CAGR + 40% Sortino + 20% Sharpe
+                # Normalize CAGR to be comparable to ratios (divide by 100 to get decimal form)
+                normalized_cagr = cagr * 100  # CAGR is already in decimal form, multiply to make comparable
+                objective_score = (
+                    self.objective.cagr_weight * normalized_cagr +
+                    self.objective.sortino_weight * sortino_ratio +
+                    self.objective.sharpe_weight * sharpe_ratio
+                )
+
+                iterations += 1
+
+                # Store combination for analysis
+                combination = {
+                    'ratios': list(ratio_combo),
+                    'weights': weights.tolist(),
+                    'cagr': float(cagr),
+                    'sortino_ratio': float(sortino_ratio),
+                    'sharpe_ratio': float(sharpe_ratio),
+                    'objective_score': float(objective_score)
+                }
+                self.explored_combinations.append(combination)
+
+                # Track best result
+                if objective_score > best_objective_score:
+                    best_objective_score = objective_score
+                    best_weights = weights.copy()
+                    best_metrics = blended_metrics.copy()
+                    logger.info(f"New best: ratios={ratio_combo}, score={objective_score:.4f} "
+                              f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, Sharpe={sharpe_ratio:.4f})")
+
+            except Exception as e:
+                logger.warning(f"Error evaluating ratios {ratio_combo}: {str(e)}")
+                continue
+
+        # Return result
+        if best_weights is not None and best_metrics is not None:
+            logger.info(f"Simple optimization completed: {iterations} combinations evaluated")
+            logger.info(f"Best objective score: {best_objective_score:.4f}")
+            return self._create_result_from_weights(
+                best_weights, portfolios_data, 'simple_grid', iterations, True,
+                "Simple optimization completed"
+            )
+        else:
+            # Fallback to equal weights
+            logger.warning("Simple optimization found no valid combinations, using equal weights")
+            equal_weights = np.array([1.0 / num_portfolios] * num_portfolios)
+            return self._create_result_from_weights(
+                equal_weights, portfolios_data, 'simple_grid', iterations, False,
+                "No valid combinations found in simple optimization"
+            )
+
     def _create_result_from_weights(self, 
                                    weights: np.ndarray, 
                                    portfolios_data: List[Tuple[str, pd.DataFrame]], 

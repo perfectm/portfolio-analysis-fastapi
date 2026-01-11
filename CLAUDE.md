@@ -315,22 +315,55 @@ The application includes garbage collection optimizations for cloud deployment, 
 - **Module**: `portfolio_optimizer.py` (requires scipy>=1.10.0)
 
 ### Optimization Methods
+
+#### Full Optimization (Extensive Search)
+These methods explore a wide range of weight combinations for optimal results:
 - **Differential Evolution**: Global optimizer, best for complex landscapes (default)
 - **Scipy SLSQP**: Local optimizer, faster but may find local optima
 - **Grid Search**: Exhaustive search, thorough but slower
+- **Objective Function**: Weighted combination of CAGR (60%) and inverse drawdown (40%)
+- **Constraints**: Dynamic min/max weights based on portfolio count
+
+#### Simple Optimization (Quick Refinement)
+Fast optimization method that explores limited weight variations around current allocations:
+- **Method Name**: `simple`
+- **Strategy**: ±1 unit change around current ratios
+- **Rules**:
+  - If portfolio ratio is 1: try 1 and 2 only (cannot reduce to 0)
+  - If portfolio ratio is N (where N > 1): try N-1, N, and N+1
+  - All combinations are evaluated exhaustively
+- **Objective Function**: 40% CAGR + 40% Sortino Ratio + 20% Sharpe Ratio
+- **Use Case**: Quick refinement of existing allocations, faster than full optimization
+- **Example**: For 3 portfolios with ratios [1, 2, 3]:
+  - Portfolio 1: tries [1, 2] (2 options)
+  - Portfolio 2: tries [1, 2, 3] (3 options)
+  - Portfolio 3: tries [2, 3, 4] (3 options)
+  - Total: 2 × 3 × 3 = 18 combinations evaluated
 
 ### Usage
 1. Select 2 or more portfolios in the frontend
 2. Click "🎯 Optimize Weights" button
-3. Algorithm finds weights that maximize return/drawdown ratio
+3. Algorithm finds optimal weights based on selected method
 4. Optimal weights are automatically applied
 5. Click "Analyze" to see full results with optimized allocation
 
-### Optimization Objective
-- **Primary Goal**: Maximize return while minimizing maximum drawdown
-- **Objective Function**: Weighted combination of CAGR and inverse drawdown
-- **Constraints**: Min weight 5%, Max weight 60% per portfolio
-- **Bonus**: Additional scoring for high Sharpe ratios
+### API Usage
+```python
+# Full optimization (default)
+POST /api/optimize-weights
+{
+  "portfolio_ids": [1, 2, 3],
+  "method": "differential_evolution"  # or "scipy", "grid_search"
+}
+
+# Simple optimization (quick refinement)
+POST /api/optimize-weights
+{
+  "portfolio_ids": [1, 2, 3],
+  "method": "simple",
+  "resume_from_weights": [0.2, 0.3, 0.5]  # optional starting weights
+}
+```
 
 ## Important Development Notes
 

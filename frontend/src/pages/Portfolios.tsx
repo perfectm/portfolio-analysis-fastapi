@@ -202,6 +202,9 @@ export default function Portfolios() {
   const [canContinue, setContinue] = useState<boolean>(false);
   const [partialResult, setPartialResult] = useState<any>(null);
   const [optimizationStartTime, setOptimizationStartTime] = useState<number>(0);
+
+  // Optimization method selection
+  const [optimizationMethod, setOptimizationMethod] = useState<string>('differential_evolution');
   
   // Load saved analysis parameters or use defaults
   const savedParams = (() => {
@@ -913,9 +916,9 @@ export default function Portfolios() {
       
       const requestBody = {
         portfolio_ids: selectedPortfolios,
-        method: "differential_evolution",
+        method: optimizationMethod,
         max_time_seconds: adjustedTimeout,
-        resume_from_weights: continueOptimization && partialResult ? 
+        resume_from_weights: continueOptimization && partialResult ?
           partialResult.optimal_weights_array : null,
       };
       
@@ -1974,6 +1977,59 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
             </button>
             {selectedPortfolios.length >= 2 && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {/* Optimization Method Selection */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <label style={{ fontSize: "0.9rem", fontWeight: "500" }}>
+                    Optimization Type:
+                  </label>
+                  <select
+                    value={optimizationMethod}
+                    onChange={(e) => setOptimizationMethod(e.target.value)}
+                    disabled={optimizing || analyzing}
+                    style={{
+                      padding: "0.4rem 0.8rem",
+                      fontSize: "0.9rem",
+                      borderRadius: "4px",
+                      border: "1px solid #ccc",
+                      backgroundColor: optimizing || analyzing ? "#f5f5f5" : "white",
+                      cursor: optimizing || analyzing ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <option value="differential_evolution">Full Optimization (Best Results)</option>
+                    <option value="simple">Simple Optimization (Quick Refinement)</option>
+                    <option value="scipy">Full - Scipy SLSQP</option>
+                    <option value="grid_search">Full - Grid Search</option>
+                  </select>
+                </div>
+
+                {/* Show description based on selected method */}
+                <div style={{ fontSize: "0.8rem", color: "#666", fontStyle: "italic" }}>
+                  {optimizationMethod === "simple" && (
+                    <span>
+                      ⚡ Quick refinement: tries ±1 unit changes around current ratios.
+                      Objective: 40% CAGR + 40% Sortino + 20% Sharpe
+                    </span>
+                  )}
+                  {optimizationMethod === "differential_evolution" && (
+                    <span>
+                      🎯 Extensive search: finds optimal weights from scratch.
+                      Objective: 60% CAGR + 40% Drawdown reduction
+                    </span>
+                  )}
+                  {optimizationMethod === "scipy" && (
+                    <span>
+                      🚀 Fast local optimizer: good for quick results.
+                      Objective: 60% CAGR + 40% Drawdown reduction
+                    </span>
+                  )}
+                  {optimizationMethod === "grid_search" && (
+                    <span>
+                      🔍 Exhaustive search: thorough but slower.
+                      Objective: 60% CAGR + 40% Drawdown reduction
+                    </span>
+                  )}
+                </div>
+
                 {/* Progressive Optimization Controls */}
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
@@ -1985,9 +2041,13 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                       fontSize: "0.9rem",
                       opacity: optimizing || analyzing ? 0.5 : 1,
                     }}
-                    title="Find optimal weights to maximize return while minimizing drawdown"
+                    title={
+                      optimizationMethod === "simple"
+                        ? "Quick refinement: tries ±1 unit changes (Objective: 40% CAGR + 40% Sortino + 20% Sharpe)"
+                        : "Find optimal weights to maximize return while minimizing drawdown"
+                    }
                   >
-                    {optimizing 
+                    {optimizing
                       ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
                       : "🎯 Optimize Weights"}
                   </button>
@@ -2116,6 +2176,31 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           </button>
           {selectedPortfolios.length >= 2 && (
             <>
+              {/* Optimization Method Selection - Second Location */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <label style={{ fontSize: "0.85rem", fontWeight: "500" }}>
+                  Type:
+                </label>
+                <select
+                  value={optimizationMethod}
+                  onChange={(e) => setOptimizationMethod(e.target.value)}
+                  disabled={optimizing || analyzing}
+                  style={{
+                    padding: "0.3rem 0.6rem",
+                    fontSize: "0.85rem",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: optimizing || analyzing ? "#f5f5f5" : "white",
+                    cursor: optimizing || analyzing ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <option value="differential_evolution">Full (Best)</option>
+                  <option value="simple">Simple (Quick)</option>
+                  <option value="scipy">Full - Scipy</option>
+                  <option value="grid_search">Full - Grid</option>
+                </select>
+              </div>
+
               <button
                 onClick={() => optimizePortfolioWeights(false)}
                 disabled={optimizing || analyzing}
@@ -2125,7 +2210,11 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                   fontSize: "0.9rem",
                   opacity: optimizing || analyzing ? 0.5 : 1,
                 }}
-                title="Find optimal weights to maximize return while minimizing drawdown"
+                title={
+                  optimizationMethod === "simple"
+                    ? "Quick refinement: tries ±1 unit changes (Objective: 40% CAGR + 40% Sortino + 20% Sharpe)"
+                    : "Find optimal weights to maximize return while minimizing drawdown"
+                }
               >
                 {optimizing
                   ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
