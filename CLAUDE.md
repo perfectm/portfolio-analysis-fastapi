@@ -336,6 +336,7 @@ Fast optimization method that explores limited weight variations around current 
 - **Portfolio Limits**:
   - **≤10 portfolios**: Exhaustive search (all combinations evaluated)
   - **>10 portfolios**: Greedy hill-climbing (iterative improvement, one portfolio at a time)
+  - **Max change**: Each portfolio limited to ±2 units from starting position
   - **No upper limit**: Works efficiently even with 38+ portfolios
 - **Use Case**: Quick refinement of existing allocations, faster than full optimization
 - **Example**: For 3 portfolios with ratios [1, 2, 3]:

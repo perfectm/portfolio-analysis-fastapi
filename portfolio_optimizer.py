@@ -1161,7 +1161,7 @@ class PortfolioOptimizer:
 
         Portfolio limits:
         - ≤10 portfolios: Exhaustive search (all combinations)
-        - >10 portfolios: Greedy hill-climbing (iterative improvement)
+        - >10 portfolios: Greedy hill-climbing (iterative improvement, max ±2 change per portfolio)
 
         Args:
             portfolios_data: List of (name, dataframe) tuples
@@ -1283,6 +1283,10 @@ class PortfolioOptimizer:
             # GREEDY HILL-CLIMBING for >10 portfolios
             logger.info(f"Greedy hill-climbing: testing one portfolio change at a time")
 
+            # Constraint: limit total change per portfolio to ±2 from starting position
+            max_change_per_portfolio = 2
+            logger.info(f"Max change per portfolio: ±{max_change_per_portfolio} units from starting position")
+
             # Start with current ratios
             current_ratios = list(starting_ratios)
             max_iterations = 50  # Limit iterations to prevent infinite loops
@@ -1306,10 +1310,19 @@ class PortfolioOptimizer:
                 for i in range(num_portfolios):
                     # Determine options for this portfolio
                     current_ratio = current_ratios[i]
+                    starting_ratio = starting_ratios[i]
+
+                    # Calculate allowed range based on starting position
+                    min_allowed = max(1, starting_ratio - max_change_per_portfolio)
+                    max_allowed = starting_ratio + max_change_per_portfolio
+
                     if current_ratio == 1:
                         test_ratios = [2]  # Only try increasing (can't go to 0)
                     else:
                         test_ratios = [max(1, current_ratio - 1), current_ratio + 1]
+
+                    # Filter test_ratios to stay within allowed range
+                    test_ratios = [r for r in test_ratios if min_allowed <= r <= max_allowed]
 
                     # Test each option
                     for new_ratio in test_ratios:
