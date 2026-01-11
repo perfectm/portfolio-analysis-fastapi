@@ -77,10 +77,20 @@ def connect_databases(prod_url, local_url):
     try:
         # Production (read-only)
         logger.info("🔌 Connecting to production database...")
+
+        # Add retry logic and better connection handling
         prod_engine = create_engine(
             prod_url,
             poolclass=NullPool,  # No connection pooling for one-off script
-            connect_args={"connect_timeout": 30},
+            connect_args={
+                "connect_timeout": 30,
+                "application_name": "sync_prod_to_dev",  # Identify in pg_stat_activity
+                "keepalives": 1,  # Enable TCP keepalives
+                "keepalives_idle": 30,  # Start keepalives after 30s
+                "keepalives_interval": 10,  # Send keepalive every 10s
+                "keepalives_count": 5  # 5 failed keepalives = dead connection
+            },
+            pool_pre_ping=True,  # Check connection health before using
             echo=False
         )
 

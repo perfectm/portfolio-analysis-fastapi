@@ -22,11 +22,23 @@ The `sync_prod_to_dev.py` script safely copies all data from production to your 
 Open a terminal and create an SSH tunnel to the production database:
 
 ```bash
-# Forward production PostgreSQL (port 5432) to local port 5433
-ssh -L 5433:localhost:5432 cotton@srv1173534
+# Option 1: Basic tunnel (recommended)
+ssh -N -L 5433:localhost:5432 cotton@srv1173534
+
+# Option 2: With compression (if connection is slow)
+ssh -N -C -L 5433:localhost:5432 cotton@srv1173534
+
+# Option 3: With verbose logging (for troubleshooting)
+ssh -v -N -L 5433:localhost:5432 cotton@srv1173534
 ```
 
-Keep this terminal open while syncing.
+**Flags explained:**
+- `-N`: Don't execute remote commands (just forward)
+- `-L`: Local port forwarding
+- `-C`: Enable compression
+- `-v`: Verbose output for debugging
+
+**Note:** Keep this terminal open while syncing. The `-N` flag means it won't give you a shell prompt - this is normal.
 
 ### Step 2: Run Sync Script
 In another terminal:
@@ -197,6 +209,59 @@ session.close()
 ### Error: "connection refused"
 - Make sure SSH tunnel is active
 - Check that port 5433 is not already in use: `lsof -i :5433`
+
+### Error: "channel XX: open failed: connect failed"
+This error appears when the SSH tunnel can't forward connections to PostgreSQL.
+
+**Test the tunnel:**
+```bash
+./test_ssh_tunnel.sh
+```
+
+**Common causes and fixes:**
+
+1. **PostgreSQL not listening on localhost**
+   ```bash
+   # Check on server
+   ssh cotton@srv1173534 'sudo netstat -tlnp | grep 5432'
+
+   # Should show: 127.0.0.1:5432 or 0.0.0.0:5432
+   ```
+
+2. **pg_hba.conf doesn't allow local connections**
+   ```bash
+   # Check configuration
+   ssh cotton@srv1173534 'sudo cat /etc/postgresql/*/main/pg_hba.conf | grep local'
+
+   # Should have: local all all trust OR local all all md5
+   ```
+
+3. **PostgreSQL service is down**
+   ```bash
+   # Check status
+   ssh cotton@srv1173534 'sudo systemctl status postgresql'
+
+   # Restart if needed
+   ssh cotton@srv1173534 'sudo systemctl restart postgresql'
+   ```
+
+4. **Too many connections or tunnel instability**
+   ```bash
+   # Kill existing tunnel
+   pkill -f "ssh.*5433.*5432"
+
+   # Restart with keep-alive options
+   ssh -N -L 5433:localhost:5432 \
+       -o ServerAliveInterval=60 \
+       -o ServerAliveCountMax=3 \
+       cotton@srv1173534
+   ```
+
+5. **Use direct database connection (if VPS allows)**
+   ```bash
+   # If PostgreSQL allows external connections (check with admin)
+   python sync_prod_to_dev.py "postgresql://cmtool:PASSWORD@srv1173534:5432/portfolio_analysis"
+   ```
 
 ### Error: "password authentication failed"
 - Verify the `cmtool` password
