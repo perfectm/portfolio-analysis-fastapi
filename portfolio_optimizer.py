@@ -1159,6 +1159,10 @@ class PortfolioOptimizer:
         - Uses objective: 40% CAGR + 40% Sortino + 20% Sharpe
         - Returns the best combination found
 
+        Portfolio limits:
+        - ≤10 portfolios: Exhaustive search (all combinations)
+        - >10 portfolios: Greedy hill-climbing (iterative improvement)
+
         Args:
             portfolios_data: List of (name, dataframe) tuples
             subset_caches: Not used for simple optimization
@@ -1170,6 +1174,10 @@ class PortfolioOptimizer:
         num_portfolios = len(portfolios_data)
 
         logger.info(f"Starting simple grid optimization for {num_portfolios} portfolios...")
+
+        # Decide strategy based on portfolio count
+        use_exhaustive = num_portfolios <= 10
+        logger.info(f"Strategy: {'Exhaustive search' if use_exhaustive else 'Greedy hill-climbing'}")
 
         # Determine starting ratios
         if resume_from_weights and len(resume_from_weights) == num_portfolios:
@@ -1195,25 +1203,18 @@ class PortfolioOptimizer:
 
         logger.info(f"Ratio options per portfolio: {ratio_options}")
 
-        # Generate all combinations using itertools.product
-        import itertools
-        all_combinations = list(itertools.product(*ratio_options))
-
-        logger.info(f"Total combinations to evaluate: {len(all_combinations)}")
-
-        best_objective_score = float('-inf')  # We want to maximize this score
+        best_objective_score = float('-inf')
         best_weights = None
         best_metrics = None
         iterations = 0
 
-        # Evaluate each combination
-        for ratio_combo in all_combinations:
-            # Convert ratios to weights (normalize to sum to 1)
+        # Helper function to evaluate a set of ratios
+        def evaluate_ratios(ratio_combo):
+            """Evaluate a specific ratio combination and return objective score and metrics"""
             ratio_array = np.array(ratio_combo, dtype=float)
             weights = ratio_array / np.sum(ratio_array)
 
             try:
-                # Create blended portfolio with these weights
                 blended_df, blended_metrics, _ = create_blended_portfolio_from_files(
                     portfolios_data,
                     rf_rate=self.rf_rate,
@@ -1225,47 +1226,135 @@ class PortfolioOptimizer:
                 )
 
                 if blended_df is None or blended_metrics is None:
-                    logger.warning(f"Failed to create blended portfolio for ratios {ratio_combo}, skipping")
-                    continue
+                    return None, None, None, None
 
-                # Extract metrics
                 cagr = blended_metrics.get('cagr', 0)
                 sortino_ratio = blended_metrics.get('sortino_ratio', 0)
                 sharpe_ratio = blended_metrics.get('sharpe_ratio', 0)
 
-                # Calculate objective score: 40% CAGR + 40% Sortino + 20% Sharpe
-                # Normalize CAGR to be comparable to ratios (divide by 100 to get decimal form)
-                normalized_cagr = cagr * 100  # CAGR is already in decimal form, multiply to make comparable
+                normalized_cagr = cagr * 100
                 objective_score = (
                     self.objective.cagr_weight * normalized_cagr +
                     self.objective.sortino_weight * sortino_ratio +
                     self.objective.sharpe_weight * sharpe_ratio
                 )
 
-                iterations += 1
-
-                # Store combination for analysis
-                combination = {
-                    'ratios': list(ratio_combo),
-                    'weights': weights.tolist(),
-                    'cagr': float(cagr),
-                    'sortino_ratio': float(sortino_ratio),
-                    'sharpe_ratio': float(sharpe_ratio),
-                    'objective_score': float(objective_score)
-                }
-                self.explored_combinations.append(combination)
-
-                # Track best result
-                if objective_score > best_objective_score:
-                    best_objective_score = objective_score
-                    best_weights = weights.copy()
-                    best_metrics = blended_metrics.copy()
-                    logger.info(f"New best: ratios={ratio_combo}, score={objective_score:.4f} "
-                              f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, Sharpe={sharpe_ratio:.4f})")
+                return objective_score, weights, blended_metrics, (cagr, sortino_ratio, sharpe_ratio)
 
             except Exception as e:
                 logger.warning(f"Error evaluating ratios {ratio_combo}: {str(e)}")
-                continue
+                return None, None, None, None
+
+        if use_exhaustive:
+            # EXHAUSTIVE SEARCH for ≤10 portfolios
+            import itertools
+
+            total_possible = 1
+            for options in ratio_options:
+                total_possible *= len(options)
+
+            logger.info(f"Exhaustive search: evaluating all {total_possible:,} combinations")
+            all_combinations = list(itertools.product(*ratio_options))
+
+            for ratio_combo in all_combinations:
+                objective_score, weights, blended_metrics, metrics = evaluate_ratios(ratio_combo)
+
+                if objective_score is not None:
+                    iterations += 1
+                    cagr, sortino_ratio, sharpe_ratio = metrics
+
+                    self.explored_combinations.append({
+                        'ratios': list(ratio_combo),
+                        'weights': weights.tolist(),
+                        'cagr': float(cagr),
+                        'sortino_ratio': float(sortino_ratio),
+                        'sharpe_ratio': float(sharpe_ratio),
+                        'objective_score': float(objective_score)
+                    })
+
+                    if objective_score > best_objective_score:
+                        best_objective_score = objective_score
+                        best_weights = weights.copy()
+                        best_metrics = blended_metrics.copy()
+                        logger.info(f"New best: ratios={ratio_combo}, score={objective_score:.4f} "
+                                  f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, Sharpe={sharpe_ratio:.4f})")
+
+        else:
+            # GREEDY HILL-CLIMBING for >10 portfolios
+            logger.info(f"Greedy hill-climbing: testing one portfolio change at a time")
+
+            # Start with current ratios
+            current_ratios = list(starting_ratios)
+            max_iterations = 50  # Limit iterations to prevent infinite loops
+
+            # Evaluate starting position
+            objective_score, weights, blended_metrics, metrics = evaluate_ratios(current_ratios)
+            if objective_score is not None:
+                best_objective_score = objective_score
+                best_weights = weights.copy()
+                best_metrics = blended_metrics.copy()
+                cagr, sortino_ratio, sharpe_ratio = metrics
+                logger.info(f"Starting point: ratios={current_ratios}, score={objective_score:.4f}")
+                iterations += 1
+
+            # Iteratively improve
+            for iteration in range(max_iterations):
+                improved = False
+                logger.info(f"Hill-climbing iteration {iteration + 1}/{max_iterations}")
+
+                # Try changing each portfolio one at a time
+                for i in range(num_portfolios):
+                    # Determine options for this portfolio
+                    current_ratio = current_ratios[i]
+                    if current_ratio == 1:
+                        test_ratios = [2]  # Only try increasing (can't go to 0)
+                    else:
+                        test_ratios = [max(1, current_ratio - 1), current_ratio + 1]
+
+                    # Test each option
+                    for new_ratio in test_ratios:
+                        if new_ratio == current_ratio:
+                            continue
+
+                        # Create test combination
+                        test_combo = current_ratios[:]
+                        test_combo[i] = new_ratio
+
+                        # Evaluate
+                        objective_score, weights, blended_metrics, metrics = evaluate_ratios(test_combo)
+
+                        if objective_score is not None:
+                            iterations += 1
+                            cagr, sortino_ratio, sharpe_ratio = metrics
+
+                            self.explored_combinations.append({
+                                'ratios': test_combo[:],
+                                'weights': weights.tolist(),
+                                'cagr': float(cagr),
+                                'sortino_ratio': float(sortino_ratio),
+                                'sharpe_ratio': float(sharpe_ratio),
+                                'objective_score': float(objective_score)
+                            })
+
+                            # If better, update current solution
+                            if objective_score > best_objective_score:
+                                best_objective_score = objective_score
+                                best_weights = weights.copy()
+                                best_metrics = blended_metrics.copy()
+                                current_ratios = test_combo[:]
+                                improved = True
+                                logger.info(f"Improved: portfolio {i} → {new_ratio}, "
+                                          f"score={objective_score:.4f} "
+                                          f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, Sharpe={sharpe_ratio:.4f})")
+                                break  # Move to next iteration after finding improvement
+
+                    if improved:
+                        break  # Move to next iteration after finding improvement
+
+                # If no improvement in this iteration, we've reached a local optimum
+                if not improved:
+                    logger.info(f"No improvement found in iteration {iteration + 1}, stopping")
+                    break
 
         # Return result
         if best_weights is not None and best_metrics is not None:

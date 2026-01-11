@@ -331,8 +331,12 @@ Fast optimization method that explores limited weight variations around current 
 - **Rules**:
   - If portfolio ratio is 1: try 1 and 2 only (cannot reduce to 0)
   - If portfolio ratio is N (where N > 1): try N-1, N, and N+1
-  - All combinations are evaluated exhaustively
+  - All combinations are evaluated (exhaustive for ≤10 portfolios, random sampling for 11-20)
 - **Objective Function**: 40% CAGR + 40% Sortino Ratio + 20% Sharpe Ratio
+- **Portfolio Limits**:
+  - **≤10 portfolios**: Exhaustive search (all combinations evaluated)
+  - **>10 portfolios**: Greedy hill-climbing (iterative improvement, one portfolio at a time)
+  - **No upper limit**: Works efficiently even with 38+ portfolios
 - **Use Case**: Quick refinement of existing allocations, faster than full optimization
 - **Example**: For 3 portfolios with ratios [1, 2, 3]:
   - Portfolio 1: tries [1, 2] (2 options)
