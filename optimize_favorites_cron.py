@@ -95,7 +95,8 @@ def optimize_favorite(db: SessionLocal, favorite: FavoriteSettings) -> dict:
         current_weights = json.loads(favorite.weights_json)
 
         logger.info(f"    Portfolios: {len(portfolio_ids)} selected")
-        logger.info(f"    Current weights: {current_weights}")
+        logger.info(f"    Current weights from database: {current_weights}")
+        logger.info(f"    Note: Optimizer will convert these to whole number ratios internally")
 
         # Fetch portfolio data
         portfolios = db.query(Portfolio).filter(Portfolio.id.in_(portfolio_ids)).all()
@@ -126,21 +127,22 @@ def optimize_favorite(db: SessionLocal, favorite: FavoriteSettings) -> dict:
             db_session=db,
             portfolio_ids=portfolio_ids,
             method=method,
-            resume_from_weights=current_weights  # Start from current weights
+            resume_from_weights=current_weights  # Optimizer will convert to ratios internally
         )
 
         if not result or not result.success:
             raise ValueError(f"Optimization failed: {result.message if result else 'No result returned'}")
 
         logger.info(f"  ✅ Optimization completed successfully!")
-        logger.info(f"    Optimized weights: {result.optimal_weights}")
+        logger.info(f"    Optimized ratios (whole numbers): {result.optimal_ratios}")
+        logger.info(f"    Optimized weights (decimal): {result.optimal_weights}")
         logger.info(f"    CAGR: {result.optimal_cagr:.2%}")
         logger.info(f"    Max Drawdown: {result.optimal_max_drawdown:.2%}")
         logger.info(f"    Sharpe Ratio: {result.optimal_sharpe_ratio:.2f}")
 
         return {
             'success': True,
-            'optimized_weights': result.optimal_weights,
+            'optimized_weights': result.optimal_ratios,  # Use whole number ratios, not decimal weights
             'method': result.optimization_method,
             'objective_value': result.optimal_return_drawdown_ratio,
             'metrics': {
