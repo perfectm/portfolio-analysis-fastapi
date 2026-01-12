@@ -26,6 +26,13 @@ from datetime import datetime
 import json
 from pathlib import Path
 
+# Load environment variables from .env file (must be before database imports)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, skip
+
 # Setup imports
 from database import SessionLocal
 from models import FavoriteSettings, Portfolio
