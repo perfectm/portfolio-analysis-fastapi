@@ -1190,16 +1190,25 @@ class PortfolioOptimizer:
             starting_ratios = [1] * num_portfolios
             logger.info(f"Starting with default ratios (all 1s): {starting_ratios}")
 
+        # Hard cap: no portfolio can exceed 3 units total
+        absolute_max_ratio = 3
+        logger.info(f"Absolute hard cap: {absolute_max_ratio} units (no portfolio can exceed this)")
+
         # Generate all possible combinations with ±1 unit changes
         # For each ratio N (where N >= 1), try [max(1, N-1), N, N+1]
+        # But enforce hard cap of 3
         ratio_options = []
         for ratio in starting_ratios:
             if ratio == 1:
                 # Can only go to 1 or 2 (not 0)
-                ratio_options.append([1, 2])
+                options = [1, 2]
             else:
-                # Can go to N-1, N, or N+1 (minimum 1)
-                ratio_options.append([max(1, ratio - 1), ratio, ratio + 1])
+                # Can go to N-1, N, or N+1 (minimum 1, maximum absolute_max_ratio)
+                options = [max(1, ratio - 1), ratio, min(ratio + 1, absolute_max_ratio)]
+
+            # Enforce hard cap and remove duplicates
+            options = sorted(list(set([opt for opt in options if opt <= absolute_max_ratio])))
+            ratio_options.append(options)
 
         logger.info(f"Ratio options per portfolio: {ratio_options}")
 
@@ -1285,7 +1294,10 @@ class PortfolioOptimizer:
 
             # Constraint: limit total change per portfolio to ±2 from starting position
             max_change_per_portfolio = 2
+            # Hard cap: no portfolio can exceed 3 units total
+            absolute_max_ratio = 3
             logger.info(f"Max change per portfolio: ±{max_change_per_portfolio} units from starting position")
+            logger.info(f"Absolute hard cap: {absolute_max_ratio} units (no portfolio can exceed this)")
 
             # Start with current ratios
             current_ratios = list(starting_ratios)
@@ -1314,15 +1326,15 @@ class PortfolioOptimizer:
 
                     # Calculate allowed range based on starting position
                     min_allowed = max(1, starting_ratio - max_change_per_portfolio)
-                    max_allowed = starting_ratio + max_change_per_portfolio
+                    max_allowed = min(starting_ratio + max_change_per_portfolio, absolute_max_ratio)
 
                     if current_ratio == 1:
                         test_ratios = [2]  # Only try increasing (can't go to 0)
                     else:
                         test_ratios = [max(1, current_ratio - 1), current_ratio + 1]
 
-                    # Filter test_ratios to stay within allowed range
-                    test_ratios = [r for r in test_ratios if min_allowed <= r <= max_allowed]
+                    # Filter test_ratios to stay within allowed range AND absolute hard cap
+                    test_ratios = [r for r in test_ratios if min_allowed <= r <= max_allowed and r <= absolute_max_ratio]
 
                     # Test each option
                     for new_ratio in test_ratios:
