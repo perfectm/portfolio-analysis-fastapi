@@ -27,22 +27,37 @@ def upgrade():
     logger.info("Adding optimization tracking fields to favorite_settings table...")
 
     with engine.connect() as conn:
-        # Check if columns already exist
-        result = conn.execute(text("""
-            SELECT COUNT(*) FROM pragma_table_info('favorite_settings')
-            WHERE name IN ('last_optimized', 'optimized_weights_json', 'optimization_method', 'has_new_optimization')
-        """))
+        # Detect database type
+        db_url = str(engine.url)
+        is_postgres = 'postgresql' in db_url
+
+        # Check if columns already exist (different query for PostgreSQL vs SQLite)
+        if is_postgres:
+            result = conn.execute(text("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_name = 'favorite_settings'
+                AND column_name IN ('last_optimized', 'optimized_weights_json', 'optimization_method', 'has_new_optimization')
+            """))
+        else:
+            result = conn.execute(text("""
+                SELECT COUNT(*) FROM pragma_table_info('favorite_settings')
+                WHERE name IN ('last_optimized', 'optimized_weights_json', 'optimization_method', 'has_new_optimization')
+            """))
+
         existing_count = result.scalar()
 
         if existing_count > 0:
             logger.warning(f"Some optimization fields already exist ({existing_count}/4). Skipping migration.")
             return
 
-        # Add columns
+        # Add columns (use TIMESTAMP WITH TIME ZONE for PostgreSQL, TIMESTAMP for SQLite)
+        timestamp_type = "TIMESTAMP WITH TIME ZONE" if is_postgres else "TIMESTAMP"
+
         try:
-            conn.execute(text("""
+            conn.execute(text(f"""
                 ALTER TABLE favorite_settings
-                ADD COLUMN last_optimized TIMESTAMP NULL
+                ADD COLUMN last_optimized {timestamp_type} NULL
             """))
             logger.info("  ✅ Added last_optimized column")
         except Exception as e:
