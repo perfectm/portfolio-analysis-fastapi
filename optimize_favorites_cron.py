@@ -108,8 +108,7 @@ def optimize_favorite(db: SessionLocal, favorite: FavoriteSettings) -> dict:
             sma_window=favorite.sma_window,
             use_trading_filter=favorite.use_trading_filter,
             starting_capital=favorite.starting_capital,
-            min_weight=0.05,  # Default constraints
-            max_weight=0.60
+            portfolio_count=len(portfolio_ids)
         )
 
         # Determine optimization method based on portfolio count
