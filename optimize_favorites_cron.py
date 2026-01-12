@@ -122,27 +122,33 @@ def optimize_favorite(db: SessionLocal, favorite: FavoriteSettings) -> dict:
             logger.info(f"    Using simple optimization (greedy hill-climbing) for {num_portfolios} portfolios")
 
         # Run optimization (with extended timeout for cron jobs - no rush)
-        result = optimizer.optimize_weights(
-            portfolio_ids=portfolio_ids,
+        result = optimizer.optimize_weights_from_ids(
             db_session=db,
+            portfolio_ids=portfolio_ids,
             method=method,
-            max_time_seconds=3600,  # 1 hour max for cron jobs
             resume_from_weights=current_weights  # Start from current weights
         )
 
-        if not result or 'optimal_weights_array' not in result:
-            raise ValueError("Optimization returned no results")
+        if not result or not result.success:
+            raise ValueError(f"Optimization failed: {result.message if result else 'No result returned'}")
 
         logger.info(f"  ✅ Optimization completed successfully!")
-        logger.info(f"    Optimized weights: {result['optimal_weights_array']}")
-        logger.info(f"    Objective value: {result.get('objective_value', 'N/A')}")
+        logger.info(f"    Optimized weights: {result.optimal_weights}")
+        logger.info(f"    CAGR: {result.optimal_cagr:.2%}")
+        logger.info(f"    Max Drawdown: {result.optimal_max_drawdown:.2%}")
+        logger.info(f"    Sharpe Ratio: {result.optimal_sharpe_ratio:.2f}")
 
         return {
             'success': True,
-            'optimized_weights': result['optimal_weights_array'],
-            'method': method,
-            'objective_value': result.get('objective_value'),
-            'metrics': result.get('metrics', {})
+            'optimized_weights': result.optimal_weights,
+            'method': result.optimization_method,
+            'objective_value': result.optimal_return_drawdown_ratio,
+            'metrics': {
+                'cagr': result.optimal_cagr,
+                'max_drawdown': result.optimal_max_drawdown,
+                'sharpe_ratio': result.optimal_sharpe_ratio,
+                'return_drawdown_ratio': result.optimal_return_drawdown_ratio
+            }
         }
 
     except Exception as e:
