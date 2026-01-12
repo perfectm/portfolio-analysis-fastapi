@@ -134,6 +134,80 @@ The application is deployed in two environments:
 
 **Note**: These Docker/Render deployment files are legacy and not actively used. The application runs directly on the local machine and serves both dev and production.
 
+## Scheduled Jobs & Background Optimization
+
+### Automatic Favorite Portfolio Optimization
+
+The application includes a cron job that automatically optimizes user favorite portfolios at midnight. This solves the timeout issues with large portfolio sets (38+ portfolios) by running optimization asynchronously in the background.
+
+#### How It Works
+
+1. **Cron Script**: `optimize_favorites_cron.py` runs daily at midnight
+2. **Smart Detection**: Only optimizes if favorites have been modified since last optimization
+3. **Efficient Algorithm**: Uses simple optimization (greedy hill-climbing) for large portfolio sets
+4. **UI Notification**: Users see a green alert banner when new optimization is available
+5. **One-Click Apply**: Users can apply optimized weights or dismiss the notification
+
+#### Setup Cron Job
+
+**For Local Development (macOS/Linux):**
+```bash
+# Open crontab editor
+crontab -e
+
+# Add this line to run daily at midnight
+0 0 * * * cd /Users/closet/projects/portfolio-analysis-fastapi && /usr/bin/python3 optimize_favorites_cron.py >> logs/optimize_cron.log 2>&1
+```
+
+**For Production (Hostinger VPS):**
+```bash
+# SSH to server
+ssh cotton@srv1173534
+
+# Edit crontab as deployuser
+sudo crontab -u deployuser -e
+
+# Add this line
+0 0 * * * cd /opt/cmtool && /opt/cmtool/venv/bin/python optimize_favorites_cron.py >> /opt/cmtool/logs/optimize_cron.log 2>&1
+```
+
+#### Manual Execution
+
+```bash
+# Optimize all users' favorites
+python optimize_favorites_cron.py
+
+# Optimize specific user only
+python optimize_favorites_cron.py --user-id 1
+
+# Force optimization even if no changes
+python optimize_favorites_cron.py --force
+
+# Force for specific user
+python optimize_favorites_cron.py --user-id 1 --force
+```
+
+#### Database Schema for Optimization Tracking
+
+The `favorite_settings` table includes these fields for tracking:
+- `last_optimized`: Timestamp when optimization last ran
+- `optimized_weights_json`: JSON array of optimized weights
+- `optimization_method`: Method used (simple, differential_evolution, etc.)
+- `has_new_optimization`: Boolean flag to trigger UI alert
+
+#### API Endpoints
+
+- `GET /api/favorites/optimization-status`: Check if new optimization is available
+- `POST /api/favorites/mark-optimization-seen`: Dismiss the UI alert
+- `POST /api/favorites/apply-optimized-weights`: Apply optimized weights to favorites
+
+#### Migration
+
+Run the migration to add optimization tracking fields:
+```bash
+python migrations/add_favorite_optimization_fields.py
+```
+
 ## Architecture Overview
 
 ### Backend Structure (Modular Router Design)

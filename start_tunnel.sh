@@ -17,7 +17,7 @@ nohup ssh -N -L 5433:localhost:5432 \
     -o ServerAliveInterval=60 \
     -o ServerAliveCountMax=3 \
     -o TCPKeepAlive=yes \
-    cotton@srv1173534 > tunnel.log 2>&1 &
+    cotton@cottonmike.com > tunnel.log 2>&1 &
 
 TUNNEL_PID=$!
 sleep 2

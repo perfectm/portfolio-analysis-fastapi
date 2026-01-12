@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { portfolioAPI, API_BASE_URL } from "../services/api";
+import { portfolioAPI, API_BASE_URL, api } from "../services/api";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { useTheme, Paper, Box, Typography } from "@mui/material";
 import { 
@@ -205,7 +205,16 @@ export default function Portfolios() {
 
   // Optimization method selection
   const [optimizationMethod, setOptimizationMethod] = useState<string>('differential_evolution');
-  
+
+  // Cron optimization alert state
+  const [newOptimization, setNewOptimization] = useState<{
+    has_new_optimization: boolean;
+    optimized_weights?: Record<string, number>;
+    optimization_method?: string;
+    last_optimized?: string;
+    portfolio_ids?: number[];
+  } | null>(null);
+
   // Load saved analysis parameters or use defaults
   const savedParams = (() => {
     try {
@@ -342,6 +351,22 @@ export default function Portfolios() {
 
   useEffect(() => {
     fetchPortfolios();
+  }, []);
+
+  // Check for new cron-optimized weights on page load
+  useEffect(() => {
+    const checkForNewOptimization = async () => {
+      try {
+        const response = await api.get('/api/favorites/optimization-status');
+        if (response.data.success && response.data.has_new_optimization) {
+          setNewOptimization(response.data);
+        }
+      } catch (error) {
+        console.log('No new optimization available or error checking:', error);
+      }
+    };
+
+    checkForNewOptimization();
   }, []);
 
   // Parse URL parameters for optimization data
@@ -741,6 +766,54 @@ export default function Portfolios() {
       resetWeights[parseInt(key)] = 1.0;
     });
     setPortfolioWeights(resetWeights);
+  };
+
+  // Handle applying cron-optimized weights
+  const handleApplyOptimizedWeights = async () => {
+    if (!newOptimization || !newOptimization.optimized_weights) {
+      return;
+    }
+
+    try {
+      // Apply the weights via API
+      const response = await api.post('/api/favorites/apply-optimized-weights');
+
+      if (response.data.success) {
+        // Update local weights state
+        const weights = response.data.weights;
+        const weightsAsNumbers: Record<number, number> = {};
+        Object.keys(weights).forEach(key => {
+          weightsAsNumbers[parseInt(key)] = weights[key];
+        });
+        setPortfolioWeights(weightsAsNumbers);
+
+        // Select the portfolios if not already selected
+        if (newOptimization.portfolio_ids) {
+          setSelectedPortfolios(newOptimization.portfolio_ids);
+        }
+
+        // Clear the alert
+        setNewOptimization(null);
+
+        // Show success message
+        alert('Optimized weights applied successfully!');
+      }
+    } catch (error) {
+      console.error('Error applying optimized weights:', error);
+      alert('Failed to apply optimized weights. Please try again.');
+    }
+  };
+
+  // Handle dismissing the optimization alert
+  const handleDismissOptimization = async () => {
+    try {
+      await api.post('/api/favorites/mark-optimization-seen');
+      setNewOptimization(null);
+    } catch (error) {
+      console.error('Error dismissing optimization:', error);
+      // Still dismiss locally even if API call fails
+      setNewOptimization(null);
+    }
   };
 
   // Get total portfolio scale for display
@@ -1799,10 +1872,117 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
       minHeight: "100vh",
       color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c"
     }}>
-      <h1 style={{ 
+      <h1 style={{
         color: theme.palette.mode === "dark" ? "#ffffff" : "#1a202c",
         marginBottom: "2rem"
       }}>Portfolio Management</h1>
+
+      {/* New Cron Optimization Alert */}
+      {newOptimization && newOptimization.has_new_optimization && (
+        <Paper
+          sx={{
+            p: 2,
+            mb: 2,
+            border: `2px solid ${theme.palette.success.main}`,
+            borderRadius: "8px",
+            background: theme.palette.mode === "dark"
+              ? "rgba(46, 125, 50, 0.15)"
+              : "rgba(46, 125, 50, 0.08)",
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              backgroundColor: theme.palette.success.main,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '20px',
+              flexShrink: 0
+            }}>
+              ✓
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: theme.palette.success.main, mb: 1 }}>
+                New Optimization Available!
+              </Typography>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                Your favorite portfolio has been optimized automatically using{' '}
+                <strong>{newOptimization.optimization_method?.replace('_', ' ')}</strong>.{' '}
+                {newOptimization.last_optimized && (
+                  <>Last optimized: {new Date(newOptimization.last_optimized).toLocaleString()}</>
+                )}
+              </Typography>
+
+              {newOptimization.optimized_weights && (
+                <Box sx={{
+                  mb: 2,
+                  p: 1.5,
+                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.5)',
+                  borderRadius: '4px'
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    Optimized Weights:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {Object.entries(newOptimization.optimized_weights).map(([portfolioId, weight]) => {
+                      const portfolio = portfolios.find(p => p.id === parseInt(portfolioId));
+                      return (
+                        <Box
+                          key={portfolioId}
+                          sx={{
+                            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.875rem'
+                          }}
+                        >
+                          <strong>{portfolio?.name || `Portfolio #${portfolioId}`}:</strong> {weight}×
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <button
+                  onClick={handleApplyOptimizedWeights}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: theme.palette.success.main,
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontWeight: 'bold',
+                    fontSize: '14px'
+                  }}
+                >
+                  ✓ Apply These Weights
+                </button>
+                <button
+                  onClick={handleDismissOptimization}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    color: theme.palette.text.primary,
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: '14px'
+                  }}
+                >
+                  Dismiss
+                </button>
+              </Box>
+            </Box>
+          </Box>
+        </Paper>
+      )}
 
       {/* Loaded Optimization Display */}
       {loadedOptimization && (

@@ -155,3 +155,134 @@ async def load_favorite_settings(
     except Exception as e:
         logger.error(f"Error loading favorite settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to load settings: {str(e)}")
+
+@router.get("/api/favorites/optimization-status")
+async def get_optimization_status(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Check if there's a new optimization available for the user's favorites
+
+    Returns:
+    - has_new_optimization: bool
+    - optimized_weights: array (if available)
+    - optimization_method: string (if available)
+    - last_optimized: timestamp (if available)
+    """
+    try:
+        favorite = db.query(FavoriteSettings).filter(
+            FavoriteSettings.user_id == current_user.id
+        ).first()
+
+        if not favorite:
+            return {
+                "success": True,
+                "has_new_optimization": False,
+                "message": "No favorite settings found"
+            }
+
+        # Check if there's a new optimization
+        if not favorite.has_new_optimization or not favorite.optimized_weights_json:
+            return {
+                "success": True,
+                "has_new_optimization": False,
+                "last_optimized": favorite.last_optimized.isoformat() if favorite.last_optimized else None
+            }
+
+        # Parse optimized weights
+        optimized_weights = json.loads(favorite.optimized_weights_json)
+        portfolio_ids = json.loads(favorite.portfolio_ids_json)
+
+        # Convert to dict format for frontend
+        weights_dict = {str(pid): weight for pid, weight in zip(portfolio_ids, optimized_weights)}
+
+        return {
+            "success": True,
+            "has_new_optimization": True,
+            "optimized_weights": weights_dict,
+            "optimized_weights_array": optimized_weights,
+            "optimization_method": favorite.optimization_method,
+            "last_optimized": favorite.last_optimized.isoformat() if favorite.last_optimized else None,
+            "portfolio_ids": portfolio_ids
+        }
+
+    except Exception as e:
+        logger.error(f"Error checking optimization status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to check optimization status: {str(e)}")
+
+@router.post("/api/favorites/mark-optimization-seen")
+async def mark_optimization_seen(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Mark the new optimization as seen by the user (dismisses the UI alert)
+    """
+    try:
+        favorite = db.query(FavoriteSettings).filter(
+            FavoriteSettings.user_id == current_user.id
+        ).first()
+
+        if not favorite:
+            raise HTTPException(status_code=404, detail="No favorite settings found")
+
+        # Clear the new optimization flag
+        favorite.has_new_optimization = False
+        db.commit()
+
+        logger.info(f"Marked optimization as seen for user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "Optimization marked as seen"
+        }
+
+    except Exception as e:
+        logger.error(f"Error marking optimization as seen: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to mark as seen: {str(e)}")
+
+@router.post("/api/favorites/apply-optimized-weights")
+async def apply_optimized_weights(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Apply the optimized weights to the user's favorite settings
+    (copies optimized_weights_json to weights_json)
+    """
+    try:
+        favorite = db.query(FavoriteSettings).filter(
+            FavoriteSettings.user_id == current_user.id
+        ).first()
+
+        if not favorite:
+            raise HTTPException(status_code=404, detail="No favorite settings found")
+
+        if not favorite.optimized_weights_json:
+            raise HTTPException(status_code=400, detail="No optimized weights available")
+
+        # Apply optimized weights
+        favorite.weights_json = favorite.optimized_weights_json
+        favorite.has_new_optimization = False  # Also clear the flag
+        favorite.updated_at = datetime.utcnow()
+        db.commit()
+
+        logger.info(f"Applied optimized weights for user {current_user.id}")
+
+        # Parse and return the applied weights
+        weights_array = json.loads(favorite.optimized_weights_json)
+        portfolio_ids = json.loads(favorite.portfolio_ids_json)
+        weights_dict = {str(pid): weight for pid, weight in zip(portfolio_ids, weights_array)}
+
+        return {
+            "success": True,
+            "message": "Optimized weights applied successfully",
+            "weights": weights_dict
+        }
+
+    except Exception as e:
+        logger.error(f"Error applying optimized weights: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to apply weights: {str(e)}")

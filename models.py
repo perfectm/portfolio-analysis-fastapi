@@ -49,6 +49,12 @@ class FavoriteSettings(Base):
     date_range_start = Column(DateTime, nullable=True)
     date_range_end = Column(DateTime, nullable=True)
 
+    # Optimization tracking
+    last_optimized = Column(DateTime(timezone=True), nullable=True)  # When last optimization ran
+    optimized_weights_json = Column(Text, nullable=True)  # JSON array of optimized weights
+    optimization_method = Column(String(50), nullable=True)  # Method used for optimization
+    has_new_optimization = Column(Boolean, default=False)  # Flag for UI alert
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
