@@ -23,6 +23,23 @@ source venv/bin/activate
 echo "✅ Virtual environment activated"
 echo ""
 
+# Install/update dependencies (in case python-dotenv is missing)
+echo "📦 Installing/updating dependencies..."
+pip install -q -r requirements.txt
+echo "✅ Dependencies up to date"
+echo ""
+
+# Verify .env file exists
+if [ -f .env ]; then
+    echo "✅ Found .env file with DATABASE_URL"
+else
+    echo "❌ ERROR: .env file not found!"
+    echo "   The migration scripts need DATABASE_URL from .env"
+    echo "   Please ensure /opt/cmtool/.env exists with DATABASE_URL set"
+    exit 1
+fi
+echo ""
+
 # Run migrations in order
 echo "🗄️  Running database migrations..."
 echo ""
