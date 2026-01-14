@@ -372,10 +372,11 @@ class OptimizationObjective:
     """Configuration for optimization objectives"""
     return_weight: float = 0.6  # Weight for return in objective function (for full optimization)
     drawdown_weight: float = 0.4  # Weight for drawdown penalty in objective function (for full optimization)
-    # Simple optimization objective weights (40% CAGR, 40% Sortino, 20% Sharpe)
-    cagr_weight: float = 0.4  # Weight for CAGR in simple optimization
-    sortino_weight: float = 0.4  # Weight for Sortino ratio in simple optimization
-    sharpe_weight: float = 0.2  # Weight for Sharpe ratio in simple optimization
+    # Simple optimization objective weights (30% CAGR, 30% Sortino, 30% MAR, 10% Loss Days)
+    cagr_weight: float = 0.3  # Weight for CAGR in simple optimization
+    sortino_weight: float = 0.3  # Weight for Sortino ratio in simple optimization
+    mar_weight: float = 0.3  # Weight for MAR (CAGR / Max Drawdown) in simple optimization
+    loss_days_weight: float = 0.1  # Weight for days with losses > 1% of starting capital (penalty)
     # Note: min_weight and max_weight are now calculated dynamically based on portfolio count
 
 class PortfolioOptimizer:
@@ -1156,7 +1157,7 @@ class PortfolioOptimizer:
         This method:
         - Starts with current ratios (or defaults to 1 for each portfolio)
         - For each ratio N (where N >= 1), tries N-1, N, N+1 (minimum 1)
-        - Uses objective: 40% CAGR + 40% Sortino + 20% Sharpe
+        - Uses objective: 30% CAGR + 30% Sortino + 30% MAR + 10% Loss Days (penalty)
         - Returns the best combination found
 
         Portfolio limits:
@@ -1239,16 +1240,24 @@ class PortfolioOptimizer:
 
                 cagr = blended_metrics.get('cagr', 0)
                 sortino_ratio = blended_metrics.get('sortino_ratio', 0)
-                sharpe_ratio = blended_metrics.get('sharpe_ratio', 0)
+                max_drawdown = abs(blended_metrics.get('max_drawdown_percent', 0.001))  # Ensure non-zero
+                loss_days = blended_metrics.get('days_loss_over_one_pct_starting_cap', 0)
 
+                # Calculate MAR (CAGR / Max Absolute Drawdown)
+                mar = abs(cagr) / max(max_drawdown, 0.001)  # Avoid division by zero
+
+                # Normalize metrics for objective function
                 normalized_cagr = cagr * 100
+                normalized_loss_days = -loss_days  # Negative because fewer loss days is better
+
                 objective_score = (
                     self.objective.cagr_weight * normalized_cagr +
                     self.objective.sortino_weight * sortino_ratio +
-                    self.objective.sharpe_weight * sharpe_ratio
+                    self.objective.mar_weight * mar +
+                    self.objective.loss_days_weight * normalized_loss_days
                 )
 
-                return objective_score, weights, blended_metrics, (cagr, sortino_ratio, sharpe_ratio)
+                return objective_score, weights, blended_metrics, (cagr, sortino_ratio, mar, loss_days)
 
             except Exception as e:
                 logger.warning(f"Error evaluating ratios {ratio_combo}: {str(e)}")
@@ -1270,14 +1279,15 @@ class PortfolioOptimizer:
 
                 if objective_score is not None:
                     iterations += 1
-                    cagr, sortino_ratio, sharpe_ratio = metrics
+                    cagr, sortino_ratio, mar, loss_days = metrics
 
                     self.explored_combinations.append({
                         'ratios': list(ratio_combo),
                         'weights': weights.tolist(),
                         'cagr': float(cagr),
                         'sortino_ratio': float(sortino_ratio),
-                        'sharpe_ratio': float(sharpe_ratio),
+                        'mar': float(mar),
+                        'loss_days': int(loss_days),
                         'objective_score': float(objective_score)
                     })
 
@@ -1286,7 +1296,7 @@ class PortfolioOptimizer:
                         best_weights = weights.copy()
                         best_metrics = blended_metrics.copy()
                         logger.info(f"New best: ratios={ratio_combo}, score={objective_score:.4f} "
-                                  f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, Sharpe={sharpe_ratio:.4f})")
+                                  f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, MAR={mar:.4f}, Loss Days={loss_days})")
 
         else:
             # GREEDY HILL-CLIMBING for >10 portfolios
@@ -1309,7 +1319,7 @@ class PortfolioOptimizer:
                 best_objective_score = objective_score
                 best_weights = weights.copy()
                 best_metrics = blended_metrics.copy()
-                cagr, sortino_ratio, sharpe_ratio = metrics
+                cagr, sortino_ratio, mar, loss_days = metrics
                 logger.info(f"Starting point: ratios={current_ratios}, score={objective_score:.4f}")
                 iterations += 1
 
@@ -1350,14 +1360,15 @@ class PortfolioOptimizer:
 
                         if objective_score is not None:
                             iterations += 1
-                            cagr, sortino_ratio, sharpe_ratio = metrics
+                            cagr, sortino_ratio, mar, loss_days = metrics
 
                             self.explored_combinations.append({
                                 'ratios': test_combo[:],
                                 'weights': weights.tolist(),
                                 'cagr': float(cagr),
                                 'sortino_ratio': float(sortino_ratio),
-                                'sharpe_ratio': float(sharpe_ratio),
+                                'mar': float(mar),
+                                'loss_days': int(loss_days),
                                 'objective_score': float(objective_score)
                             })
 
@@ -1370,7 +1381,7 @@ class PortfolioOptimizer:
                                 improved = True
                                 logger.info(f"Improved: portfolio {i} → {new_ratio}, "
                                           f"score={objective_score:.4f} "
-                                          f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, Sharpe={sharpe_ratio:.4f})")
+                                          f"(CAGR={cagr:.4f}, Sortino={sortino_ratio:.4f}, MAR={mar:.4f}, Loss Days={loss_days})")
                                 break  # Move to next iteration after finding improvement
 
                     if improved:
