@@ -36,35 +36,41 @@ def generate_params_key(rf_rate: float, sma_window: int, use_trading_filter: boo
 def convert_weights_to_ratios(weights: List[float], min_units: int = 1, max_ratio: int = 10, portfolio_count: int = None) -> List[int]:
     """
     Convert decimal weights to whole number ratios with minimum allocation.
-    
+
     Args:
         weights: List of decimal weights (e.g., [0.12, 0.07, 0.73, 0.07])
         min_units: Minimum units per strategy (default: 1)
         max_ratio: Maximum ratio allowed (default: 10)
         portfolio_count: Number of portfolios (for dynamic constraint calculation)
-        
+
     Returns:
         List of whole number ratios (e.g., [1, 1, 7, 1])
-        
+
     Examples:
         [0.12, 0.07, 0.73, 0.07] -> [1, 1, 7, 1]
         [0.25, 0.50, 0.25] -> [1, 2, 1]
         [0.10, 0.30, 0.60] -> [1, 3, 6]
+
+    HARD CAP: No portfolio can exceed 3 units regardless of calculation
     """
     if not weights or len(weights) == 0:
         return []
-    
+
+    # HARD CAP: Absolute maximum of 3 units per portfolio
+    ABSOLUTE_MAX_RATIO = 3
+
     # Calculate dynamic max_ratio if portfolio_count is provided
     if portfolio_count is not None and portfolio_count > 0:
         base_weight = 1.0 / portfolio_count
         max_weight = calculate_dynamic_max_weight(portfolio_count)
         # Use ceiling to allow the full constraint (e.g., 2.9x becomes 3x)
         dynamic_max_ratio = int(math.ceil(max_weight / base_weight))
-        max_ratio = min(max_ratio, dynamic_max_ratio)  # Use the more restrictive limit
+        max_ratio = min(max_ratio, dynamic_max_ratio, ABSOLUTE_MAX_RATIO)  # Use the most restrictive limit
         logger.info(f"[RATIO CONVERSION] Portfolio count: {portfolio_count}, base_weight: {base_weight:.3f}, max_weight: {max_weight:.3f}")
-        logger.info(f"[RATIO CONVERSION] Calculated dynamic max ratio: {max_weight/base_weight:.1f}x -> ceiling: {dynamic_max_ratio}, using max_ratio: {max_ratio}")
+        logger.info(f"[RATIO CONVERSION] Calculated dynamic max ratio: {max_weight/base_weight:.1f}x -> ceiling: {dynamic_max_ratio}, HARD CAP: {ABSOLUTE_MAX_RATIO}, using max_ratio: {max_ratio}")
     else:
-        logger.info(f"[RATIO CONVERSION] No portfolio count provided, using default max_ratio: {max_ratio}")
+        max_ratio = min(max_ratio, ABSOLUTE_MAX_RATIO)  # Apply hard cap even without portfolio count
+        logger.info(f"[RATIO CONVERSION] No portfolio count provided, using max_ratio: {max_ratio} (with HARD CAP: {ABSOLUTE_MAX_RATIO})")
     
     # Convert to numpy array for easier manipulation
     weights_array = np.array(weights)
@@ -308,33 +314,43 @@ class OptimizationCache:
 def calculate_dynamic_max_weight(portfolio_count: int) -> float:
     """
     Calculate maximum weight per portfolio based on portfolio count.
-    
+
     Dynamic scaling ensures reasonable diversification:
     - 2 portfolios: 80% max (limited options)
     - 3-6 portfolios: 70% to 50% max (moderate concentration)
     - 7+ portfolios: 40% to 22% max (diversification focus)
-    
+    - HARD CAP: Never exceed 3x the equal weight (3 units maximum)
+
     Args:
         portfolio_count: Number of portfolios in optimization
-        
+
     Returns:
         Maximum weight as decimal (e.g., 0.50 for 50%)
     """
+    # Calculate the base equal weight
+    base_weight = 1.0 / portfolio_count
+
+    # Hard cap: no portfolio can exceed 3x the equal weight (3 units)
+    hard_cap_weight = 3.0 * base_weight
+
     if portfolio_count < 2:
-        return 0.80  # Edge case: single portfolio
+        calculated_max = 0.80  # Edge case: single portfolio
     elif portfolio_count == 2:
-        return 0.80  # 2 portfolios: allow up to 80% concentration
+        calculated_max = 0.80  # 2 portfolios: allow up to 80% concentration
     elif portfolio_count <= 6:
         # Linear decrease from 70% to 50% for 3-6 portfolios
         # Formula: 70% - ((count - 3) * 6.25%)
-        return 0.70 - ((portfolio_count - 3) * 0.0625)
+        calculated_max = 0.70 - ((portfolio_count - 3) * 0.0625)
     elif portfolio_count <= 12:
         # Linear decrease from 40% to 30% for 7-12 portfolios
         # Formula: 40% - ((count - 7) * 1.67%)
-        return 0.40 - ((portfolio_count - 7) * 0.0167)
+        calculated_max = 0.40 - ((portfolio_count - 7) * 0.0167)
     else:
         # 13+ portfolios: cap at decreasing rate, minimum 20%
-        return max(0.20, 0.30 - ((portfolio_count - 12) * 0.01))
+        calculated_max = max(0.20, 0.30 - ((portfolio_count - 12) * 0.01))
+
+    # Apply the hard cap of 3 units
+    return min(calculated_max, hard_cap_weight)
 
 def calculate_dynamic_min_weight(portfolio_count: int) -> float:
     """
