@@ -2187,7 +2187,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                   {optimizationMethod === "simple" && (
                     <span>
                       ⚡ Quick refinement: tries ±1 unit changes around current ratios.
-                      Objective: 40% CAGR + 40% Sortino + 20% Sharpe
+                      Objective: 30% CAGR + 30% Sortino + 30% MAR + 10% Loss Days (penalty)
                       {selectedPortfolios.length > 10 && (
                         <span style={{ color: "#2196f3", display: "block", marginTop: "0.25rem" }}>
                           ℹ️ With {selectedPortfolios.length} portfolios, using greedy hill-climbing (iterative improvement)
@@ -2228,7 +2228,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                     }}
                     title={
                       optimizationMethod === "simple"
-                        ? "Quick refinement: tries ±1 unit changes (Objective: 40% CAGR + 40% Sortino + 20% Sharpe)"
+                        ? "Quick refinement: tries ±1 unit changes (Objective: 30% CAGR + 30% Sortino + 30% MAR + 10% Loss Days penalty)"
                         : "Find optimal weights to maximize return while minimizing drawdown"
                     }
                   >
@@ -2397,7 +2397,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                 }}
                 title={
                   optimizationMethod === "simple"
-                    ? "Quick refinement: tries ±1 unit changes (Objective: 40% CAGR + 40% Sortino + 20% Sharpe)"
+                    ? "Quick refinement: tries ±1 unit changes (Objective: 30% CAGR + 30% Sortino + 30% MAR + 10% Loss Days penalty)"
                     : "Find optimal weights to maximize return while minimizing drawdown"
                 }
               >
