@@ -816,6 +816,36 @@ export default function Portfolios() {
     }
   };
 
+  // Load backend optimized weights (from cron optimization)
+  const handleLoadBackendOptimizedWeights = async () => {
+    try {
+      // Call the API to get optimized weights
+      const response = await api.post('/api/favorites/apply-optimized-weights');
+
+      if (response.data.success) {
+        // Update local weights state
+        const weights = response.data.weights;
+        const weightsAsNumbers: Record<number, number> = {};
+        Object.keys(weights).forEach(key => {
+          weightsAsNumbers[parseInt(key)] = weights[key];
+        });
+        setPortfolioWeights(weightsAsNumbers);
+
+        // Show success message
+        alert('Backend optimized weights loaded successfully!');
+      }
+    } catch (error: any) {
+      console.error('Error loading backend optimized weights:', error);
+      if (error.response?.status === 404) {
+        alert('No saved favorites found. Please save your portfolio selection first.');
+      } else if (error.response?.status === 400) {
+        alert('No optimized weights available yet. The cron job may not have run.');
+      } else {
+        alert('Failed to load backend optimized weights. Please try again.');
+      }
+    }
+  };
+
   // Get total portfolio scale for display
   const getTotalScale = () => {
     return Object.values(portfolioWeights).reduce(
@@ -2236,7 +2266,23 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                       ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
                       : "🎯 Optimize Weights"}
                   </button>
-                  
+
+                  {/* Load Backend Optimized Weights button */}
+                  <button
+                    onClick={handleLoadBackendOptimizedWeights}
+                    className="btn btn-info"
+                    disabled={optimizing || analyzing}
+                    style={{
+                      padding: "0.5rem 1.5rem",
+                      fontSize: "0.9rem",
+                      marginLeft: "0.5rem",
+                      opacity: optimizing || analyzing ? 0.5 : 1,
+                    }}
+                    title="Load the most recent optimized weights from backend (cron optimization)"
+                  >
+                    📥 Load Backend Optimized
+                  </button>
+
                   {/* Clear Cache button */}
                   <button
                     onClick={clearOptimizationCache}
@@ -2404,6 +2450,21 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                 {optimizing
                   ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
                   : "🎯 Optimize Weights"}
+              </button>
+
+              {/* Load Backend Optimized Weights button */}
+              <button
+                onClick={handleLoadBackendOptimizedWeights}
+                className="btn btn-info"
+                disabled={optimizing || analyzing}
+                style={{
+                  padding: "0.5rem 1rem",
+                  fontSize: "0.9rem",
+                  opacity: optimizing || analyzing ? 0.5 : 1,
+                }}
+                title="Load the most recent optimized weights from backend (cron optimization)"
+              >
+                📥 Load Backend
               </button>
 
               {/* Clear Cache button */}
