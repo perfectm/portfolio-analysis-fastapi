@@ -55,9 +55,18 @@ class FavoriteSettings(Base):
     optimization_method = Column(String(50), nullable=True)  # Method used for optimization
     has_new_optimization = Column(Boolean, default=False)  # Flag for UI alert
 
+    # Multiple favorites support
+    is_default = Column(Boolean, default=False, nullable=False)  # Is this the default favorite for the user
+    tags = Column(Text, nullable=True)  # JSON array of tags for categorization (e.g., ["Experimental", "Production"])
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Unique constraint: one favorite name per user
+    __table_args__ = (
+        Index('idx_user_name_unique', 'user_id', 'name', unique=True),
+    )
 
     def __repr__(self):
         return f"<FavoriteSettings(id={self.id}, user_id={self.user_id}, name='{self.name}')>"
