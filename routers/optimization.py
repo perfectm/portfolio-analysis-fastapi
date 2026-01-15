@@ -690,13 +690,25 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
         body = await request.json()
         portfolio_ids = body.get("portfolio_ids", [])
         method = body.get("method", "differential_evolution")
+        optimization_mode = body.get("optimization_mode", "weighted")  # 'weighted' or 'constrained'
+
+        # Optional constraint overrides (only used if optimization_mode is 'constrained')
+        min_sharpe = body.get("min_sharpe", 7.0)
+        min_sortino = body.get("min_sortino", 13.0)
+        min_mar = body.get("min_mar", 30.0)
+        max_ulcer = body.get("max_ulcer", 0.22)
+
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
         if len(portfolio_ids) < 2:
             return {"success": False, "error": "Need at least 2 portfolios for weight optimization"}
         logger.info(f"[Weight Optimization] Optimizing weights for portfolios: {portfolio_ids}")
         logger.info(f"[Weight Optimization] Using optimization method: {method}")
-        
+        logger.info(f"[Weight Optimization] Optimization mode: {optimization_mode}")
+
+        if optimization_mode == "constrained":
+            logger.info(f"[Weight Optimization] Constraints: Sharpe>={min_sharpe}, Sortino>={min_sortino}, MAR>={min_mar}, Ulcer<{max_ulcer}")
+
         # Validate portfolios exist and have data
         for portfolio_id in portfolio_ids:
             portfolio = PortfolioService.get_portfolio_by_id(db, portfolio_id)
@@ -705,7 +717,7 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
             df = PortfolioService.get_portfolio_dataframe(db, portfolio_id)
             if df.empty:
                 return {"success": False, "error": f"No data found for portfolio {portfolio_id}"}
-        
+
         try:
             from portfolio_optimizer import PortfolioOptimizer, OptimizationObjective
         except ImportError as e:
@@ -714,8 +726,18 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
                 "error": "Portfolio optimization requires scipy. Please install scipy>=1.10.0",
                 "details": str(e)
             }
+
+        # Create optimization objective with specified mode and constraints
+        objective = OptimizationObjective(
+            mode=optimization_mode,
+            min_sharpe=min_sharpe,
+            min_sortino=min_sortino,
+            min_mar=min_mar,
+            max_ulcer=max_ulcer
+        )
+
         optimizer = PortfolioOptimizer(
-            objective=OptimizationObjective(),
+            objective=objective,
             rf_rate=0.043,
             sma_window=20,
             use_trading_filter=True,
@@ -836,8 +858,9 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
         logger.info(f"[Weight Optimization] Return/Drawdown Ratio: {result.optimal_return_drawdown_ratio:.4f}")
         # Create ratio mapping
         ratio_mapping = dict(zip(portfolio_names, result.optimal_ratios))
-        
-        return {
+
+        # Build response
+        response = {
             "success": True,
             "message": f"Weight optimization completed using {result.optimization_method}",
             "optimal_weights": weight_mapping,
@@ -853,11 +876,23 @@ async def optimize_portfolio_weights(request: Request, db: Session = Depends(get
             "optimization_details": {
                 "method": result.optimization_method,
                 "iterations": result.iterations,
-                "combinations_explored": len(result.explored_combinations)
+                "combinations_explored": len(result.explored_combinations),
+                "optimization_mode": optimization_mode
             },
             "portfolio_names": portfolio_names,
             "portfolio_ids": portfolio_ids
         }
+
+        # Add constraint information if in constrained mode
+        if optimization_mode == "constrained":
+            response["constraints"] = {
+                "min_sharpe": min_sharpe,
+                "min_sortino": min_sortino,
+                "min_mar": min_mar,
+                "max_ulcer": max_ulcer
+            }
+
+        return response
     except Exception as e:
         logger.error(f"[Weight Optimization] Error optimizing weights: {str(e)}", exc_info=True)
         return {"success": False, "error": f"Weight optimization failed: {str(e)}"}

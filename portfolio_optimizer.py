@@ -386,6 +386,10 @@ def calculate_dynamic_min_weight(portfolio_count: int) -> float:
 @dataclass
 class OptimizationObjective:
     """Configuration for optimization objectives"""
+    # Optimization mode: 'weighted' or 'constrained'
+    mode: str = 'weighted'  # 'weighted' uses weighted scoring, 'constrained' uses hard constraints
+
+    # Weighted mode settings (legacy)
     return_weight: float = 0.6  # Weight for return in objective function (for full optimization)
     drawdown_weight: float = 0.4  # Weight for drawdown penalty in objective function (for full optimization)
     # Simple optimization objective weights (30% CAGR, 30% Sortino, 30% MAR, 10% Loss Days)
@@ -393,6 +397,12 @@ class OptimizationObjective:
     sortino_weight: float = 0.3  # Weight for Sortino ratio in simple optimization
     mar_weight: float = 0.3  # Weight for MAR (CAGR / Max Drawdown) in simple optimization
     loss_days_weight: float = 0.1  # Weight for days with losses > 1% of starting capital (penalty)
+
+    # Constrained mode settings
+    min_sharpe: float = 7.0  # Minimum Sharpe ratio (constraint)
+    min_sortino: float = 13.0  # Minimum Sortino ratio (constraint)
+    min_mar: float = 30.0  # Minimum MAR (CAGR / Max Drawdown) (constraint)
+    max_ulcer: float = 0.22  # Maximum Ulcer Index (constraint)
     # Note: min_weight and max_weight are now calculated dynamically based on portfolio count
 
 class PortfolioOptimizer:
@@ -519,20 +529,23 @@ class PortfolioOptimizer:
         # Set dynamic constraints based on portfolio count
         self.set_dynamic_constraints(len(portfolio_ids))
         
-        # Check cache first, but skip cache if resuming from previous weights
+        # Check cache first, but skip cache if resuming from previous weights or using constrained mode
         start_time = time.time()
         cached_result = None
-        
-        if not resume_from_weights:
-            # Only use cache for fresh optimizations, not continuations
+
+        if not resume_from_weights and self.objective.mode != 'constrained':
+            # Only use cache for fresh optimizations in weighted mode
+            # Constrained mode is skipped because cache doesn't store constraint values yet
             cached_result = OptimizationCache.lookup_cache(
                 db_session, portfolio_ids,
                 self.rf_rate, self.sma_window, self.use_trading_filter,
                 self.starting_capital, self.min_weight, self.max_weight,
                 optimization_method=method  # Include method in cache lookup
             )
-        else:
+        elif resume_from_weights:
             logger.info(f"Skipping cache lookup because resuming from previous weights: {resume_from_weights}")
+        elif self.objective.mode == 'constrained':
+            logger.info(f"Skipping cache lookup for constrained optimization (constraints not cached)")
         
         if cached_result:
             logger.info(f"Found cached optimization result for portfolios {portfolio_ids}")
@@ -596,9 +609,9 @@ class PortfolioOptimizer:
         # Run optimization with smart initial guess from cached subsets or resume weights
         result = self.optimize_weights(portfolios_data, method, subset_caches, resume_from_weights)
         
-        # Store result in cache
+        # Store result in cache (skip for constrained mode until cache supports constraints)
         execution_time = time.time() - start_time
-        if result.success:
+        if result.success and self.objective.mode != 'constrained':
             try:
                 OptimizationCache.store_cache(
                     db_session, portfolio_ids, result, execution_time,
@@ -608,6 +621,8 @@ class PortfolioOptimizer:
                 logger.info(f"Stored optimization result in cache for portfolios {portfolio_ids}")
             except Exception as e:
                 logger.warning(f"Failed to store optimization result in cache: {e}")
+        elif result.success and self.objective.mode == 'constrained':
+            logger.info(f"Skipping cache storage for constrained optimization (constraints not cached)")
         
         return result
     
@@ -685,23 +700,27 @@ class PortfolioOptimizer:
     def _objective_function(self, weights: np.ndarray, portfolios_data: List[Tuple[str, pd.DataFrame]]) -> float:
         """
         Objective function to minimize (negative return-to-drawdown ratio)
-        
+
         Args:
             weights: Portfolio weights array
             portfolios_data: Portfolio data
-            
+
         Returns:
             Negative of the objective value (for minimization)
         """
+        # Use constrained optimization if mode is 'constrained'
+        if self.objective.mode == 'constrained':
+            return self._constrained_objective_function(weights, portfolios_data)
+
         try:
             # Increment iteration counters
             self.current_iteration += 1
             if hasattr(self, 'cumulative_iterations'):
                 self.cumulative_iterations += 1
-            
+
             # Ensure weights sum to 1
             weights = weights / np.sum(weights)
-            
+
             # Create blended portfolio with these weights
             blended_df, blended_metrics, _ = create_blended_portfolio_from_files(
                 portfolios_data,
@@ -712,22 +731,22 @@ class PortfolioOptimizer:
                 weights=weights.tolist(),
                 use_capital_allocation=True  # For optimization, use capital allocation
             )
-            
+
             if blended_df is None or blended_metrics is None:
                 logger.warning("Failed to create blended portfolio, returning high penalty")
                 return 1000  # High penalty for failed combinations
-            
+
             # Extract key metrics
             cagr = blended_metrics.get('cagr', 0)
             max_drawdown_pct = blended_metrics.get('max_drawdown_percent', 0.01)  # Avoid division by zero
             sharpe_ratio = blended_metrics.get('sharpe_ratio', 0)
-            
+
             # Ensure max_drawdown is positive for the ratio calculation
             max_drawdown_pct = max(abs(max_drawdown_pct), 0.001)  # Minimum 0.1% drawdown
-            
+
             # Calculate return-to-drawdown ratio
             return_drawdown_ratio = abs(cagr) / max_drawdown_pct
-            
+
             # Apply objective function with weights
             # Higher return is better (positive contribution)
             # Lower drawdown is better (subtract drawdown penalty)
@@ -735,11 +754,11 @@ class PortfolioOptimizer:
                 self.objective.return_weight * abs(cagr) -
                 self.objective.drawdown_weight * max_drawdown_pct
             )
-            
+
             # Update best result tracking (store negative value since we're minimizing)
             negative_objective = -objective_value
             self._update_best_result(weights, portfolios_data, negative_objective, self.current_iteration)
-            
+
             # Store this combination for analysis
             combination = {
                 'weights': weights.tolist(),
@@ -750,13 +769,128 @@ class PortfolioOptimizer:
                 'objective_value': float(objective_value)
             }
             self.explored_combinations.append(combination)
-            
+
             # Return negative value for minimization (we want to maximize the objective)
             return negative_objective
-            
+
         except Exception as e:
             logger.warning(f"Error in objective function with weights {weights}: {str(e)}")
             return 1000  # High penalty for error cases
+
+    def _constrained_objective_function(self, weights: np.ndarray, portfolios_data: List[Tuple[str, pd.DataFrame]]) -> float:
+        """
+        Constrained objective function that maximizes CAGR subject to minimum metric thresholds.
+
+        Constraints:
+        - Sharpe Ratio >= min_sharpe (default 7.0)
+        - Sortino Ratio >= min_sortino (default 13.0)
+        - MAR (CAGR/MaxDrawdown) >= min_mar (default 30.0)
+        - Ulcer Index < max_ulcer (default 0.22)
+
+        Args:
+            weights: Portfolio weights array
+            portfolios_data: Portfolio data
+
+        Returns:
+            Negative CAGR if constraints met (for maximization), high penalty if violated
+        """
+        try:
+            # Increment iteration counters
+            self.current_iteration += 1
+            if hasattr(self, 'cumulative_iterations'):
+                self.cumulative_iterations += 1
+
+            # Ensure weights sum to 1
+            weights = weights / np.sum(weights)
+
+            # Create blended portfolio with these weights
+            blended_df, blended_metrics, _ = create_blended_portfolio_from_files(
+                portfolios_data,
+                rf_rate=self.rf_rate,
+                sma_window=self.sma_window,
+                use_trading_filter=self.use_trading_filter,
+                starting_capital=self.starting_capital,
+                weights=weights.tolist(),
+                use_capital_allocation=True  # For optimization, use capital allocation
+            )
+
+            if blended_df is None or blended_metrics is None:
+                logger.warning("Failed to create blended portfolio, returning high penalty")
+                return 10000  # Very high penalty for failed combinations
+
+            # Extract key metrics
+            cagr = blended_metrics.get('cagr', 0)
+            sharpe_ratio = blended_metrics.get('sharpe_ratio', 0)
+            sortino_ratio = blended_metrics.get('sortino_ratio', 0)
+            ulcer_index = blended_metrics.get('ulcer_index', 1.0)
+            max_drawdown_pct = abs(blended_metrics.get('max_drawdown_percent', 0.01))
+
+            # Calculate MAR (CAGR / Max Absolute Drawdown)
+            mar = abs(cagr) / max(max_drawdown_pct, 0.001)  # Avoid division by zero
+
+            # Check constraints
+            violations = []
+            penalty = 0.0
+
+            if sharpe_ratio < self.objective.min_sharpe:
+                violation = self.objective.min_sharpe - sharpe_ratio
+                violations.append(f"Sharpe {sharpe_ratio:.2f} < {self.objective.min_sharpe}")
+                penalty += violation * 100  # Penalty proportional to violation
+
+            if sortino_ratio < self.objective.min_sortino:
+                violation = self.objective.min_sortino - sortino_ratio
+                violations.append(f"Sortino {sortino_ratio:.2f} < {self.objective.min_sortino}")
+                penalty += violation * 100
+
+            if mar < self.objective.min_mar:
+                violation = self.objective.min_mar - mar
+                violations.append(f"MAR {mar:.2f} < {self.objective.min_mar}")
+                penalty += violation * 10
+
+            if ulcer_index >= self.objective.max_ulcer:
+                violation = ulcer_index - self.objective.max_ulcer
+                violations.append(f"Ulcer {ulcer_index:.4f} >= {self.objective.max_ulcer}")
+                penalty += violation * 1000  # High penalty for ulcer violation
+
+            # Store this combination for analysis
+            combination = {
+                'weights': weights.tolist(),
+                'cagr': float(cagr),
+                'sharpe_ratio': float(sharpe_ratio),
+                'sortino_ratio': float(sortino_ratio),
+                'mar': float(mar),
+                'ulcer_index': float(ulcer_index),
+                'max_drawdown_pct': float(max_drawdown_pct),
+                'constraints_met': len(violations) == 0,
+                'violations': violations,
+                'penalty': float(penalty)
+            }
+            self.explored_combinations.append(combination)
+
+            # If any constraint is violated, return high penalty
+            if violations:
+                if self.current_iteration % 50 == 0:  # Log occasionally
+                    logger.info(f"Iteration {self.current_iteration}: Constraints violated: {', '.join(violations)}")
+                objective_value = 10000 + penalty  # Base penalty + proportional violation penalty
+                self._update_best_result(weights, portfolios_data, objective_value, self.current_iteration)
+                return objective_value
+
+            # All constraints met - maximize CAGR (return negative for minimization)
+            objective_value = -abs(cagr)  # Negative because we're minimizing
+
+            if self.current_iteration % 50 == 0:  # Log occasionally
+                logger.info(f"Iteration {self.current_iteration}: Valid solution - CAGR={cagr:.2f}%, "
+                          f"Sharpe={sharpe_ratio:.2f}, Sortino={sortino_ratio:.2f}, "
+                          f"MAR={mar:.2f}, Ulcer={ulcer_index:.4f}")
+
+            # Update best result tracking
+            self._update_best_result(weights, portfolios_data, objective_value, self.current_iteration)
+
+            return objective_value
+
+        except Exception as e:
+            logger.warning(f"Error in constrained objective function with weights {weights}: {str(e)}")
+            return 10000  # Very high penalty for error cases
     
     def _generate_smart_initial_guess(self, portfolios_data: List[Tuple[str, pd.DataFrame]], 
                                      subset_caches: List[Dict] = None) -> np.ndarray:
@@ -1425,12 +1559,12 @@ class PortfolioOptimizer:
                 "No valid combinations found in simple optimization"
             )
 
-    def _create_result_from_weights(self, 
-                                   weights: np.ndarray, 
-                                   portfolios_data: List[Tuple[str, pd.DataFrame]], 
-                                   method: str, 
-                                   iterations: int, 
-                                   success: bool, 
+    def _create_result_from_weights(self,
+                                   weights: np.ndarray,
+                                   portfolios_data: List[Tuple[str, pd.DataFrame]],
+                                   method: str,
+                                   iterations: int,
+                                   success: bool,
                                    message: str) -> OptimizationResult:
         """Create OptimizationResult from optimal weights"""
         try:
@@ -1444,7 +1578,7 @@ class PortfolioOptimizer:
                 weights=weights.tolist(),
                 use_capital_allocation=True  # For optimization, use capital allocation
             )
-            
+
             if blended_metrics is not None:
                 # Apply final discretization to weights before converting to list
                 # This ensures clean values like 0.18 instead of 0.18487394957983194
@@ -1453,10 +1587,35 @@ class PortfolioOptimizer:
                 # Final precision cleanup
                 decimal_places = max(2, int(-np.log10(self.weight_precision)) + 1)
                 clean_weights = np.round(clean_weights, decimal_places)
-                
+
                 # Convert weights to ratios with dynamic constraints
                 ratios = convert_weights_to_ratios(clean_weights.tolist(), portfolio_count=self.portfolio_count)
-                
+
+                # If in constrained mode, validate that constraints are met
+                if self.objective.mode == 'constrained' and success:
+                    sharpe_ratio = float(blended_metrics.get('sharpe_ratio', 0))
+                    sortino_ratio = float(blended_metrics.get('sortino_ratio', 0))
+                    ulcer_index = float(blended_metrics.get('ulcer_index', 1.0))
+                    cagr = float(blended_metrics.get('cagr', 0))
+                    max_drawdown_pct = abs(float(blended_metrics.get('max_drawdown_percent', 0.01)))
+                    mar = abs(cagr) / max(max_drawdown_pct, 0.001)
+
+                    violations = []
+                    if sharpe_ratio < self.objective.min_sharpe:
+                        violations.append(f"Sharpe {sharpe_ratio:.2f} < {self.objective.min_sharpe}")
+                    if sortino_ratio < self.objective.min_sortino:
+                        violations.append(f"Sortino {sortino_ratio:.2f} < {self.objective.min_sortino}")
+                    if mar < self.objective.min_mar:
+                        violations.append(f"MAR {mar:.2f} < {self.objective.min_mar}")
+                    if ulcer_index >= self.objective.max_ulcer:
+                        violations.append(f"Ulcer {ulcer_index:.4f} >= {self.objective.max_ulcer}")
+
+                    if violations:
+                        # Constraints not met - mark as failed
+                        success = False
+                        message = f"No solution found meeting constraints: {', '.join(violations)}"
+                        logger.warning(f"[Constrained Optimization] {message}")
+
                 return OptimizationResult(
                     optimal_weights=clean_weights.tolist(),
                     optimal_ratios=ratios,
