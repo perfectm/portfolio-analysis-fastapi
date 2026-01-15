@@ -1,7 +1,43 @@
 import React, { useState, useEffect } from "react";
 import { portfolioAPI, API_BASE_URL, api } from "../services/api";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { useTheme, Paper, Box, Typography } from "@mui/material";
+import {
+  useTheme,
+  Paper,
+  Box,
+  Typography,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  IconButton,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Autocomplete,
+  Divider
+} from "@mui/material";
+import {
+  Add as AddIcon,
+  Settings as SettingsIcon,
+  Star,
+  StarBorder,
+  Edit,
+  Save,
+  Cancel,
+  ContentCopy,
+  Delete
+} from "@mui/icons-material";
 import { 
   LineChart, 
   Line, 
@@ -39,6 +75,26 @@ const loadFromLocalStorage = (key: string, defaultValue: any = null) => {
     return defaultValue;
   }
 };
+
+// Interface for Favorite Settings
+interface FavoriteSetting {
+  id: number;
+  name: string;
+  is_default: boolean;
+  tags: string[];
+  portfolio_ids: number[];
+  weights: Record<string, number>;
+  starting_capital: number;
+  risk_free_rate: number;
+  sma_window: number;
+  use_trading_filter: boolean;
+  date_range_start: string | null;
+  date_range_end: string | null;
+  last_optimized: string | null;
+  has_new_optimization: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 // Helper function to format date strings without timezone issues
 const formatDateString = (dateStr: string | null | undefined): string => {
@@ -299,6 +355,15 @@ export default function Portfolios() {
   const [savingFavorites, setSavingFavorites] = useState<boolean>(false);
   const [loadingFavorites, setLoadingFavorites] = useState<boolean>(false);
 
+  // Multiple favorites state
+  const [favorites, setFavorites] = useState<FavoriteSetting[]>([]);
+  const [selectedFavoriteId, setSelectedFavoriteId] = useState<number | null>(null);
+  const [manageFavoritesModalOpen, setManageFavoritesModalOpen] = useState(false);
+  const [createFavoriteDialogOpen, setCreateFavoriteDialogOpen] = useState(false);
+  const [newFavoriteName, setNewFavoriteName] = useState("");
+  const [editingNameId, setEditingNameId] = useState<number | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState("");
+
   // localStorage persistence helpers
   const saveSelectedPortfolios = (selections: number[]) => {
     try {
@@ -412,10 +477,10 @@ export default function Portfolios() {
         // Auto-select the portfolios from the optimization
         setSelectedPortfolios(optimization.portfolio_ids);
 
-        // Apply the optimal ratios to the portfolio weights state (ratios are multipliers, not percentages)
+        // Apply the optimal ratios to the portfolio weights state - round to whole integers
         const weightMapping: Record<number, number> = {};
         optimization.portfolio_ids.forEach((portfolioId, index) => {
-          weightMapping[portfolioId] = optimization.ratios[index];
+          weightMapping[portfolioId] = Math.round(optimization.ratios[index]);
         });
         setPortfolioWeights(weightMapping);
 
@@ -463,6 +528,11 @@ export default function Portfolios() {
   useEffect(() => {
     saveSelectedPortfolios(selectedPortfolios);
   }, [selectedPortfolios]);
+
+  // Load favorites list on mount
+  useEffect(() => {
+    loadFavoritesList();
+  }, []);  // Empty dependency array = run once on mount
 
   // Save analysis parameters whenever they change
   useEffect(() => {
@@ -714,18 +784,18 @@ export default function Portfolios() {
   // Initialize multipliers for selected portfolios
   const initializeWeights = (portfolioIds: number[]) => {
     if (weightingMethod === "equal") {
-      // Equal weighting now means 1.0x (full scale) for each portfolio
-      const equalMultiplier = 1.0;
+      // Equal weighting now means 1x (full scale) for each portfolio
+      const equalMultiplier = 1;
       const newWeights: Record<number, number> = {};
       portfolioIds.forEach((id) => {
         newWeights[id] = equalMultiplier;
       });
       setPortfolioWeights(newWeights);
     } else {
-      // For custom multipliers, initialize with 1.0x if not already set
+      // For custom multipliers, initialize with 1x if not already set
       setPortfolioWeights((prev) => {
         const newWeights = { ...prev };
-        const defaultMultiplier = 1.0; // Default to full scale
+        const defaultMultiplier = 1; // Default to full scale
         portfolioIds.forEach((id) => {
           if (!(id in newWeights)) {
             newWeights[id] = defaultMultiplier;
@@ -759,11 +829,11 @@ export default function Portfolios() {
     }));
   };
 
-  // Reset all multipliers to 1.0x (full scale)
+  // Reset all multipliers to 1x (full scale)
   const resetMultipliers = () => {
     const resetWeights: Record<number, number> = {};
     Object.keys(portfolioWeights).forEach((key) => {
-      resetWeights[parseInt(key)] = 1.0;
+      resetWeights[parseInt(key)] = 1;
     });
     setPortfolioWeights(resetWeights);
   };
@@ -779,11 +849,11 @@ export default function Portfolios() {
       const response = await api.post('/api/favorites/apply-optimized-weights');
 
       if (response.data.success) {
-        // Update local weights state
+        // Update local weights state - round to whole integers
         const weights = response.data.weights;
         const weightsAsNumbers: Record<number, number> = {};
         Object.keys(weights).forEach(key => {
-          weightsAsNumbers[parseInt(key)] = weights[key];
+          weightsAsNumbers[parseInt(key)] = Math.round(weights[key]);
         });
         setPortfolioWeights(weightsAsNumbers);
 
@@ -791,6 +861,9 @@ export default function Portfolios() {
         if (newOptimization.portfolio_ids) {
           setSelectedPortfolios(newOptimization.portfolio_ids);
         }
+
+        // Set weighting method to custom since we're applying specific weights
+        setWeightingMethod("custom");
 
         // Clear the alert
         setNewOptimization(null);
@@ -823,13 +896,16 @@ export default function Portfolios() {
       const response = await api.post('/api/favorites/apply-optimized-weights');
 
       if (response.data.success) {
-        // Update local weights state
+        // Update local weights state - round to whole integers
         const weights = response.data.weights;
         const weightsAsNumbers: Record<number, number> = {};
         Object.keys(weights).forEach(key => {
-          weightsAsNumbers[parseInt(key)] = weights[key];
+          weightsAsNumbers[parseInt(key)] = Math.round(weights[key]);
         });
         setPortfolioWeights(weightsAsNumbers);
+
+        // Set weighting method to custom since we're applying specific weights
+        setWeightingMethod("custom");
 
         // Show success message
         alert('Backend optimized weights loaded successfully!');
@@ -1123,19 +1199,20 @@ export default function Portfolios() {
               } else if (typeof rawValue === 'string' && !isNaN(parseFloat(rawValue))) {
                 numericValue = parseFloat(rawValue);
               } else {
-                console.warn(`Invalid ratio value for portfolio ${portfolioId}: ${rawValue}, using default 1.0`);
-                numericValue = 1.0;
+                console.warn(`Invalid ratio value for portfolio ${portfolioId}: ${rawValue}, using default 1`);
+                numericValue = 1;
                 hasProcessingErrors = true;
               }
               
               const validatedValue = Math.max(0.1, Math.min(10.0, numericValue));
               console.log(`DEBUG: Validated value for portfolio ${portfolioId}:`, validatedValue);
-              
-              optimizedWeights[portfolioId] = Math.round(validatedValue * 100) / 100;
+
+              // Round to whole number integer
+              optimizedWeights[portfolioId] = Math.round(validatedValue);
             } catch (error) {
               console.error(`DEBUG: Error processing portfolio ${portfolioId} at index ${index}:`, error);
               // Don't fail the whole optimization for one portfolio - use fallback
-              optimizedWeights[portfolioId] = 1.0;
+              optimizedWeights[portfolioId] = 1;
               hasProcessingErrors = true;
             }
           });
@@ -1316,7 +1393,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
       // Reset portfolio weights to default
       const defaultWeights: Record<number, number> = {};
       selectedPortfolios.forEach(id => {
-        defaultWeights[id] = 1.0;
+        defaultWeights[id] = 1;
       });
       setPortfolioWeights(defaultWeights);
       
@@ -1525,7 +1602,12 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
   };
 
   // Save favorite settings
-  const saveFavoriteSettings = async () => {
+  const saveFavoriteSettings = async (name: string) => {
+    if (!name || !name.trim()) {
+      alert("Please enter a name for this favorite");
+      return;
+    }
+
     if (selectedPortfolios.length === 0) {
       alert("Please select at least one portfolio before saving");
       return;
@@ -1547,14 +1629,16 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
+          name: name.trim(),
           portfolio_ids: selectedPortfolios,
           weights: portfolioWeights,
           starting_capital: startingCapital,
-          risk_free_rate: riskFreeRate,
+          risk_free_rate: riskFreeRate / 100,  // Convert percentage to decimal
           sma_window: 20,
           use_trading_filter: true,
           date_range_start: dateRangeStart,
           date_range_end: dateRangeEnd,
+          tags: [],  // Default empty, can be edited later
         }),
       });
 
@@ -1564,8 +1648,11 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
       }
 
       const result = await response.json();
-      alert("✅ Favorite settings saved successfully!");
+      alert(`✅ Favorite "${name}" saved successfully!`);
       console.log("Saved favorite settings:", result);
+
+      // Refresh favorites list
+      await loadFavoritesList();
     } catch (error) {
       console.error("Failed to save favorite settings:", error);
       alert(
@@ -1578,66 +1665,206 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
     }
   };
 
-  // Load favorite settings
-  const loadFavoriteSettings = async () => {
-    // Get auth token
+  // Load all favorites list
+  const loadFavoritesList = async () => {
     const token = localStorage.getItem('auth_token');
-    if (!token) {
-      alert("Please log in to load favorites");
-      return;
-    }
+    if (!token) return;
 
     setLoadingFavorites(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/favorites/load`, {
         method: "GET",
         headers: {
-          "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to load favorite settings");
+        throw new Error(errorData.detail || "Failed to load favorites");
       }
 
       const result = await response.json();
 
-      if (!result.has_favorites) {
-        alert("No favorite settings found. Save your current settings first!");
-        return;
+      if (result.success && result.favorites) {
+        setFavorites(result.favorites);
       }
-
-      // Apply the loaded settings
-      const settings = result.settings;
-      setSelectedPortfolios(settings.portfolio_ids);
-      setPortfolioWeights(settings.weights);
-      setStartingCapital(settings.starting_capital);
-      setRiskFreeRate(settings.risk_free_rate);
-      if (settings.date_range_start) {
-        setDateRangeStart(settings.date_range_start.split('T')[0]);
-      }
-      if (settings.date_range_end) {
-        setDateRangeEnd(settings.date_range_end.split('T')[0]);
-      }
-
-      // Update weighting method based on loaded weights
-      const hasCustomWeights = Object.values(settings.weights).some((w: any) => w !== 1.0);
-      setWeightingMethod(hasCustomWeights ? "custom" : "equal");
-
-      alert(`✅ Favorite settings loaded successfully!\n\nLoaded ${settings.portfolio_ids.length} portfolio(s)`);
-      console.log("Loaded favorite settings:", settings);
     } catch (error) {
-      console.error("Failed to load favorite settings:", error);
-      alert(
-        `Failed to load favorite settings: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      console.error("Error loading favorites:", error);
     } finally {
       setLoadingFavorites(false);
     }
+  };
+
+  // Load and apply a specific favorite
+  const loadSpecificFavorite = async (favoriteId: number) => {
+    const favorite = favorites.find(f => f.id === favoriteId);
+    if (!favorite) return;
+
+    // Apply settings to UI state
+    setSelectedPortfolios(favorite.portfolio_ids);
+
+    // Convert weights Record<string, number> to Record<number, number> - round to whole integers
+    const weightsAsNumbers: Record<number, number> = {};
+    Object.keys(favorite.weights).forEach(key => {
+      weightsAsNumbers[parseInt(key)] = Math.round(favorite.weights[key]);
+    });
+    setPortfolioWeights(weightsAsNumbers);
+
+    setStartingCapital(favorite.starting_capital);
+    setRiskFreeRate(favorite.risk_free_rate * 100);  // Convert decimal to percentage
+
+    // Handle dates
+    if (favorite.date_range_start) {
+      setDateRangeStart(favorite.date_range_start.split('T')[0]);
+    } else {
+      setDateRangeStart("2022-05-01");
+    }
+
+    if (favorite.date_range_end) {
+      setDateRangeEnd(favorite.date_range_end.split('T')[0]);
+    } else {
+      setDateRangeEnd(new Date().toISOString().split('T')[0]);
+    }
+
+    // Update weighting method based on loaded weights
+    const hasCustomWeights = Object.values(favorite.weights).some(w => w !== 1.0);
+    setWeightingMethod(hasCustomWeights ? "custom" : "equal");
+
+    setSelectedFavoriteId(favoriteId);
+    alert(`✅ Loaded favorite: ${favorite.name}`);
+  };
+
+  // Set favorite as default
+  const handleSetDefaultFavorite = async (favoriteId: number) => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/favorites/${favoriteId}/default`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        // Update local state
+        setFavorites(favorites.map(f => ({
+          ...f,
+          is_default: f.id === favoriteId
+        })));
+      }
+    } catch (error) {
+      console.error("Error setting default:", error);
+    }
+  };
+
+  // Update favorite tags
+  const handleUpdateTags = async (favoriteId: number, newTags: string[]) => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+      await fetch(`${API_BASE_URL}/api/favorites/${favoriteId}/tags`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tags: newTags }),
+      });
+
+      // Update local state
+      setFavorites(favorites.map(f =>
+        f.id === favoriteId ? { ...f, tags: newTags } : f
+      ));
+    } catch (error) {
+      console.error("Error updating tags:", error);
+    }
+  };
+
+  // Duplicate favorite
+  const handleDuplicateFavorite = async (favoriteId: number) => {
+    const original = favorites.find(f => f.id === favoriteId);
+    if (!original) return;
+
+    const newName = `${original.name} (Copy)`;
+
+    // Apply original settings to current UI
+    await loadSpecificFavorite(favoriteId);
+
+    // Save as new favorite
+    await saveFavoriteSettings(newName);
+  };
+
+  // Delete favorite
+  const handleDeleteFavorite = async (favoriteId: number) => {
+    const favorite = favorites.find(f => f.id === favoriteId);
+    if (!favorite) return;
+
+    if (!window.confirm(`Delete "${favorite.name}"? This cannot be undone.`)) {
+      return;
+    }
+
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+      await fetch(`${API_BASE_URL}/api/favorites/${favoriteId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      setFavorites(favorites.filter(f => f.id !== favoriteId));
+    } catch (error) {
+      console.error("Error deleting favorite:", error);
+      alert("Failed to delete favorite");
+    }
+  };
+
+  // Start editing favorite name
+  const handleEditName = (favorite: FavoriteSetting) => {
+    setEditingNameId(favorite.id);
+    setEditingNameValue(favorite.name);
+  };
+
+  // Save edited favorite name
+  const handleSaveName = async (favoriteId: number) => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/favorites/${favoriteId}/name`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: editingNameValue }),
+      });
+
+      if (response.ok) {
+        setFavorites(favorites.map(f =>
+          f.id === favoriteId ? { ...f, name: editingNameValue } : f
+        ));
+        setEditingNameId(null);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.detail || "Failed to rename favorite");
+      }
+    } catch (error) {
+      console.error("Error saving name:", error);
+      alert("Failed to rename favorite");
+    }
+  };
+
+  // Cancel editing favorite name
+  const handleCancelEdit = () => {
+    setEditingNameId(null);
+    setEditingNameValue("");
   };
 
   // Download blended portfolio CSV
@@ -2379,32 +2606,61 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           >
             Clear Selection
           </button>
-          <button
-            onClick={saveFavoriteSettings}
-            disabled={selectedPortfolios.length === 0 || savingFavorites || analyzing || optimizing}
-            className="btn btn-primary"
-            style={{
-              padding: "0.5rem 1rem",
-              fontSize: "0.9rem",
-              opacity: selectedPortfolios.length === 0 || savingFavorites || analyzing || optimizing ? 0.5 : 1,
-            }}
-            title="Save current settings as favorites"
+          {/* Save to Favorite Dropdown */}
+          <FormControl size="small" style={{ minWidth: 200 }}>
+            <Select
+              value={selectedFavoriteId?.toString() || ""}
+              onChange={(e) => {
+                const value = e.target.value as string;
+                if (value === "new") {
+                  setCreateFavoriteDialogOpen(true);
+                  // Don't update selectedFavoriteId - keep it as is
+                } else if (value && value !== "") {
+                  const favoriteId = parseInt(value);
+                  const favorite = favorites.find(f => f.id === favoriteId);
+                  if (favorite) {
+                    saveFavoriteSettings(favorite.name);
+                  }
+                }
+              }}
+              disabled={selectedPortfolios.length === 0 || savingFavorites}
+              displayEmpty
+              renderValue={(selected) => {
+                if (!selected || selected === "") {
+                  return <span style={{ color: "#999", fontSize: "0.875rem" }}>Save to Favorite...</span>;
+                }
+                const favorite = favorites.find(f => f.id.toString() === selected);
+                return favorite ? favorite.name : "";
+              }}
+            >
+              <MenuItem value="new">
+                <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                Create New...
+              </MenuItem>
+              <Divider />
+              {favorites.map(fav => (
+                <MenuItem key={fav.id} value={fav.id.toString()}>
+                  {fav.is_default && <Star fontSize="small" style={{ marginRight: 8, color: "#FFC107" }} />}
+                  {fav.name}
+                  {fav.tags.length > 0 && (
+                    <span style={{ marginLeft: 8, fontSize: "0.8em", color: "#666" }}>
+                      ({fav.tags.join(", ")})
+                    </span>
+                  )}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* Manage Favorites Button */}
+          <Button
+            variant="outlined"
+            onClick={() => setManageFavoritesModalOpen(true)}
+            startIcon={<SettingsIcon />}
+            disabled={loadingFavorites}
           >
-            {savingFavorites ? "Saving..." : "⭐ Save Favorites"}
-          </button>
-          <button
-            onClick={loadFavoriteSettings}
-            disabled={loadingFavorites || analyzing || optimizing}
-            className="btn btn-success"
-            style={{
-              padding: "0.5rem 1rem",
-              fontSize: "0.9rem",
-              opacity: loadingFavorites || analyzing || optimizing ? 0.5 : 1,
-            }}
-            title="Load your favorite settings"
-          >
-            {loadingFavorites ? "Loading..." : "📂 Load Favorites"}
-          </button>
+            Manage Favorites
+          </Button>
           {selectedPortfolios.length >= 2 && (
             <>
               {/* Optimization Method Selection - Second Location */}
@@ -6729,6 +6985,253 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           </div>
         </>
       )}
+
+      {/* Create New Favorite Dialog */}
+      <Dialog
+        open={createFavoriteDialogOpen}
+        onClose={() => setCreateFavoriteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Create New Favorite</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Favorite Name"
+            type="text"
+            fullWidth
+            value={newFavoriteName}
+            onChange={(e) => setNewFavoriteName(e.target.value)}
+            placeholder="e.g., Conservative Mix, Experimental Setup"
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && newFavoriteName.trim()) {
+                saveFavoriteSettings(newFavoriteName);
+                setCreateFavoriteDialogOpen(false);
+                setNewFavoriteName("");
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setCreateFavoriteDialogOpen(false);
+            setNewFavoriteName("");
+          }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              saveFavoriteSettings(newFavoriteName);
+              setCreateFavoriteDialogOpen(false);
+              setNewFavoriteName("");
+            }}
+            variant="contained"
+            disabled={!newFavoriteName.trim()}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manage Favorites Modal Dialog */}
+      <Dialog
+        open={manageFavoritesModalOpen}
+        onClose={() => setManageFavoritesModalOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">Manage Favorites</Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setManageFavoritesModalOpen(false);
+                setCreateFavoriteDialogOpen(true);
+              }}
+            >
+              Create New
+            </Button>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent>
+          {favorites.length === 0 ? (
+            <Box textAlign="center" py={4}>
+              <Typography color="textSecondary">
+                No favorites saved yet. Create your first favorite to get started!
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell width="50" align="center">Default</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Tags</TableCell>
+                    <TableCell align="center">Portfolios</TableCell>
+                    <TableCell>Last Optimized</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {favorites.map((fav) => (
+                    <TableRow key={fav.id} hover>
+                      {/* Star icon for default */}
+                      <TableCell align="center">
+                        <IconButton
+                          onClick={() => handleSetDefaultFavorite(fav.id)}
+                          color={fav.is_default ? "primary" : "default"}
+                          size="small"
+                        >
+                          {fav.is_default ? <Star /> : <StarBorder />}
+                        </IconButton>
+                      </TableCell>
+
+                      {/* Inline editable name */}
+                      <TableCell>
+                        {editingNameId === fav.id ? (
+                          <Box display="flex" gap={1} alignItems="center">
+                            <TextField
+                              size="small"
+                              value={editingNameValue}
+                              onChange={(e) => setEditingNameValue(e.target.value)}
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') handleSaveName(fav.id);
+                                if (e.key === 'Escape') handleCancelEdit();
+                              }}
+                              autoFocus
+                            />
+                            <IconButton size="small" onClick={() => handleSaveName(fav.id)}>
+                              <Save fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" onClick={() => handleCancelEdit()}>
+                              <Cancel fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ) : (
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <Typography>{fav.name}</Typography>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleEditName(fav)}
+                              style={{ opacity: 0.5 }}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        )}
+                      </TableCell>
+
+                      {/* Tags with Autocomplete */}
+                      <TableCell>
+                        <Autocomplete
+                          multiple
+                          freeSolo
+                          options={Array.from(new Set(favorites.flatMap(f => f.tags)))}
+                          value={fav.tags}
+                          onChange={(e, newTags) => handleUpdateTags(fav.id, newTags as string[])}
+                          renderTags={(value, getTagProps) =>
+                            value.map((option, index) => {
+                              const { key, ...tagProps } = getTagProps({ index });
+                              return (
+                                <Chip
+                                  key={key}
+                                  label={option}
+                                  size="small"
+                                  {...tagProps}
+                                />
+                              );
+                            })
+                          }
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              variant="standard"
+                              placeholder="Add tags..."
+                              size="small"
+                            />
+                          )}
+                          size="small"
+                          style={{ minWidth: 200 }}
+                        />
+                      </TableCell>
+
+                      {/* Portfolio count */}
+                      <TableCell align="center">
+                        <Chip
+                          label={fav.portfolio_ids.length}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </TableCell>
+
+                      {/* Last optimized with alert */}
+                      <TableCell>
+                        <Box>
+                          {fav.has_new_optimization && (
+                            <Chip
+                              label="New optimization!"
+                              color="success"
+                              size="small"
+                              style={{ marginBottom: 4 }}
+                            />
+                          )}
+                          <Typography variant="caption" display="block">
+                            {fav.last_optimized
+                              ? new Date(fav.last_optimized).toLocaleString()
+                              : "Never"}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            loadSpecificFavorite(fav.id);
+                            setManageFavoritesModalOpen(false);
+                          }}
+                          style={{ marginRight: 4 }}
+                        >
+                          Load
+                        </Button>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDuplicateFavorite(fav.id)}
+                          title="Duplicate"
+                        >
+                          <ContentCopy fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteFavorite(fav.id)}
+                          color="error"
+                          title="Delete"
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setManageFavoritesModalOpen(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }
