@@ -262,6 +262,13 @@ export default function Portfolios() {
   // Optimization method selection
   const [optimizationMethod, setOptimizationMethod] = useState<string>('differential_evolution');
 
+  // Optimization mode and constraints (for constrained optimization)
+  const [optimizationMode, setOptimizationMode] = useState<string>('weighted'); // 'weighted' or 'constrained'
+  const [minSharpe, setMinSharpe] = useState<number>(7.0);
+  const [minSortino, setMinSortino] = useState<number>(13.0);
+  const [minMAR, setMinMAR] = useState<number>(30.0);
+  const [maxUlcer, setMaxUlcer] = useState<number>(0.22);
+
   // Cron optimization alert state
   const [newOptimization, setNewOptimization] = useState<{
     has_new_optimization: boolean;
@@ -1099,6 +1106,13 @@ export default function Portfolios() {
         max_time_seconds: adjustedTimeout,
         resume_from_weights: continueOptimization && partialResult ?
           partialResult.optimal_weights_array : null,
+        optimization_mode: optimizationMode,
+        ...(optimizationMode === 'constrained' && {
+          min_sharpe: minSharpe,
+          min_sortino: minSortino,
+          min_mar: minMAR,
+          max_ulcer: maxUlcer
+        })
       };
       
       console.log("DEBUG: Request body:", requestBody);
@@ -2439,38 +2453,178 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                   </select>
                 </div>
 
-                {/* Show description based on selected method */}
-                <div style={{ fontSize: "0.8rem", color: "#666", fontStyle: "italic" }}>
-                  {optimizationMethod === "simple" && (
-                    <span>
-                      ⚡ Quick refinement: tries ±1 unit changes around current ratios.
-                      Objective: 30% CAGR + 30% Sortino + 30% MAR + 10% Loss Days (penalty)
-                      {selectedPortfolios.length > 10 && (
-                        <span style={{ color: "#2196f3", display: "block", marginTop: "0.25rem" }}>
-                          ℹ️ With {selectedPortfolios.length} portfolios, using greedy hill-climbing (iterative improvement)
+                {/* Optimization Mode Selection */}
+                <div style={{ marginTop: "1rem" }}>
+                  <label style={{ fontSize: "0.9rem", fontWeight: "500", display: "block", marginBottom: "0.5rem" }}>
+                    Optimization Mode:
+                  </label>
+                  <div style={{ display: "flex", gap: "1.5rem" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                      <input
+                        type="radio"
+                        value="weighted"
+                        checked={optimizationMode === 'weighted'}
+                        onChange={(e) => setOptimizationMode(e.target.value)}
+                        disabled={optimizing || analyzing}
+                        style={{ cursor: optimizing || analyzing ? "not-allowed" : "pointer" }}
+                      />
+                      <span style={{ fontSize: "0.9rem" }}>Weighted Scoring</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                      <input
+                        type="radio"
+                        value="constrained"
+                        checked={optimizationMode === 'constrained'}
+                        onChange={(e) => setOptimizationMode(e.target.value)}
+                        disabled={optimizing || analyzing}
+                        style={{ cursor: optimizing || analyzing ? "not-allowed" : "pointer" }}
+                      />
+                      <span style={{ fontSize: "0.9rem" }}>Constrained (Max CAGR with Minimums)</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Show description based on selected mode and method */}
+                <div style={{ fontSize: "0.8rem", color: "#666", fontStyle: "italic", marginTop: "0.5rem" }}>
+                  {optimizationMode === 'weighted' && (
+                    <>
+                      {optimizationMethod === "simple" && (
+                        <span>
+                          ⚡ Quick refinement: tries ±1 unit changes around current ratios.
+                          Objective: 30% CAGR + 30% Sortino + 30% MAR + 10% Loss Days (penalty)
+                          {selectedPortfolios.length > 10 && (
+                            <span style={{ color: "#2196f3", display: "block", marginTop: "0.25rem" }}>
+                              ℹ️ With {selectedPortfolios.length} portfolios, using greedy hill-climbing (iterative improvement)
+                            </span>
+                          )}
                         </span>
                       )}
-                    </span>
+                      {optimizationMethod === "differential_evolution" && (
+                        <span>
+                          🎯 Extensive search: finds optimal weights from scratch.
+                          Objective: 60% CAGR + 40% Drawdown reduction
+                        </span>
+                      )}
+                      {optimizationMethod === "scipy" && (
+                        <span>
+                          🚀 Fast local optimizer: good for quick results.
+                          Objective: 60% CAGR + 40% Drawdown reduction
+                        </span>
+                      )}
+                      {optimizationMethod === "grid_search" && (
+                        <span>
+                          🔍 Exhaustive search: thorough but slower.
+                          Objective: 60% CAGR + 40% Drawdown reduction
+                        </span>
+                      )}
+                    </>
                   )}
-                  {optimizationMethod === "differential_evolution" && (
+                  {optimizationMode === 'constrained' && (
                     <span>
-                      🎯 Extensive search: finds optimal weights from scratch.
-                      Objective: 60% CAGR + 40% Drawdown reduction
-                    </span>
-                  )}
-                  {optimizationMethod === "scipy" && (
-                    <span>
-                      🚀 Fast local optimizer: good for quick results.
-                      Objective: 60% CAGR + 40% Drawdown reduction
-                    </span>
-                  )}
-                  {optimizationMethod === "grid_search" && (
-                    <span>
-                      🔍 Exhaustive search: thorough but slower.
-                      Objective: 60% CAGR + 40% Drawdown reduction
+                      🎯 Maximizes CAGR while ensuring all constraints are met. If no combination satisfies the constraints, optimization will fail.
                     </span>
                   )}
                 </div>
+
+                {/* Constraint inputs (only show when constrained mode is selected) */}
+                {optimizationMode === 'constrained' && (
+                  <div style={{
+                    marginTop: "1rem",
+                    padding: "1rem",
+                    backgroundColor: "#f8f9fa",
+                    borderRadius: "4px",
+                    border: "1px solid #dee2e6"
+                  }}>
+                    <div style={{ fontSize: "0.9rem", fontWeight: "500", marginBottom: "0.75rem" }}>
+                      Minimum Thresholds:
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                      <div>
+                        <label style={{ fontSize: "0.85rem", display: "block", marginBottom: "0.25rem" }}>
+                          Sharpe Ratio ≥
+                        </label>
+                        <input
+                          type="number"
+                          value={minSharpe}
+                          onChange={(e) => setMinSharpe(parseFloat(e.target.value))}
+                          disabled={optimizing || analyzing}
+                          step="0.1"
+                          min="0"
+                          style={{
+                            width: "100%",
+                            padding: "0.4rem",
+                            fontSize: "0.9rem",
+                            borderRadius: "4px",
+                            border: "1px solid #ccc"
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "0.85rem", display: "block", marginBottom: "0.25rem" }}>
+                          Sortino Ratio ≥
+                        </label>
+                        <input
+                          type="number"
+                          value={minSortino}
+                          onChange={(e) => setMinSortino(parseFloat(e.target.value))}
+                          disabled={optimizing || analyzing}
+                          step="0.1"
+                          min="0"
+                          style={{
+                            width: "100%",
+                            padding: "0.4rem",
+                            fontSize: "0.9rem",
+                            borderRadius: "4px",
+                            border: "1px solid #ccc"
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "0.85rem", display: "block", marginBottom: "0.25rem" }}>
+                          MAR (CAGR/MaxDD) ≥
+                        </label>
+                        <input
+                          type="number"
+                          value={minMAR}
+                          onChange={(e) => setMinMAR(parseFloat(e.target.value))}
+                          disabled={optimizing || analyzing}
+                          step="0.5"
+                          min="0"
+                          style={{
+                            width: "100%",
+                            padding: "0.4rem",
+                            fontSize: "0.9rem",
+                            borderRadius: "4px",
+                            border: "1px solid #ccc"
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "0.85rem", display: "block", marginBottom: "0.25rem" }}>
+                          Ulcer Index &lt;
+                        </label>
+                        <input
+                          type="number"
+                          value={maxUlcer}
+                          onChange={(e) => setMaxUlcer(parseFloat(e.target.value))}
+                          disabled={optimizing || analyzing}
+                          step="0.01"
+                          min="0"
+                          style={{
+                            width: "100%",
+                            padding: "0.4rem",
+                            fontSize: "0.9rem",
+                            borderRadius: "4px",
+                            border: "1px solid #ccc"
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "#666", marginTop: "0.5rem", fontStyle: "italic" }}>
+                      💡 Tip: Lower the constraints if optimization fails to find a valid combination
+                    </div>
+                  </div>
+                )}
 
                 {/* Progressive Optimization Controls */}
                 <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -2687,6 +2841,89 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                   <option value="grid_search">Full - Grid</option>
                 </select>
               </div>
+
+              {/* Optimization Mode Selection - Second Location */}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <label style={{ fontSize: "0.85rem", fontWeight: "500" }}>
+                  Mode:
+                </label>
+                <select
+                  value={optimizationMode}
+                  onChange={(e) => setOptimizationMode(e.target.value)}
+                  disabled={optimizing || analyzing}
+                  style={{
+                    padding: "0.3rem 0.6rem",
+                    fontSize: "0.85rem",
+                    borderRadius: "4px",
+                    border: "1px solid #ccc",
+                    backgroundColor: optimizing || analyzing ? "#f5f5f5" : "white",
+                    cursor: optimizing || analyzing ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <option value="weighted">Weighted Scoring</option>
+                  <option value="constrained">Constrained (Max CAGR)</option>
+                </select>
+              </div>
+
+              {/* Constraint inputs (compact version for second location) */}
+              {optimizationMode === 'constrained' && (
+                <div style={{
+                  marginTop: "0.5rem",
+                  padding: "0.5rem",
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: "4px",
+                  border: "1px solid #dee2e6",
+                  fontSize: "0.75rem"
+                }}>
+                  <div style={{ fontWeight: "500", marginBottom: "0.5rem" }}>Constraints:</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "0.2rem" }}>Sharpe ≥</label>
+                      <input
+                        type="number"
+                        value={minSharpe}
+                        onChange={(e) => setMinSharpe(parseFloat(e.target.value))}
+                        disabled={optimizing || analyzing}
+                        step="0.1"
+                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "0.2rem" }}>Sortino ≥</label>
+                      <input
+                        type="number"
+                        value={minSortino}
+                        onChange={(e) => setMinSortino(parseFloat(e.target.value))}
+                        disabled={optimizing || analyzing}
+                        step="0.1"
+                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "0.2rem" }}>MAR ≥</label>
+                      <input
+                        type="number"
+                        value={minMAR}
+                        onChange={(e) => setMinMAR(parseFloat(e.target.value))}
+                        disabled={optimizing || analyzing}
+                        step="0.5"
+                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "0.2rem" }}>Ulcer &lt;</label>
+                      <input
+                        type="number"
+                        value={maxUlcer}
+                        onChange={(e) => setMaxUlcer(parseFloat(e.target.value))}
+                        disabled={optimizing || analyzing}
+                        step="0.01"
+                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <button
                 onClick={() => optimizePortfolioWeights(false)}

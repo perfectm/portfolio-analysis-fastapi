@@ -572,11 +572,21 @@ async def optimize_portfolio_weights_progressive(request: Request, db: Session =
         method = body.get("method", "differential_evolution")
         max_time_seconds = body.get("max_time_seconds", None)
         resume_from_weights = body.get("resume_from_weights", None)
-        
+        optimization_mode = body.get("optimization_mode", "weighted")  # 'weighted' or 'constrained'
+
+        # Optional constraint overrides (only used if optimization_mode is 'constrained')
+        min_sharpe = body.get("min_sharpe", 7.0)
+        min_sortino = body.get("min_sortino", 13.0)
+        min_mar = body.get("min_mar", 30.0)
+        max_ulcer = body.get("max_ulcer", 0.22)
+
         # Debug logging
         logger.info(f"[DEBUG] Received optimization request: portfolio_ids={portfolio_ids}, method={method}, max_time_seconds={max_time_seconds}")
         logger.info(f"[DEBUG] Request body type checks: portfolio_ids type={type(portfolio_ids)}, method type={type(method)}")
-        
+        logger.info(f"[DEBUG] Optimization mode: {optimization_mode}")
+        if optimization_mode == "constrained":
+            logger.info(f"[DEBUG] Constraints: Sharpe>={min_sharpe}, Sortino>={min_sortino}, MAR>={min_mar}, Ulcer<{max_ulcer}")
+
         # Validate data types
         if not isinstance(portfolio_ids, list):
             return {"success": False, "error": f"portfolio_ids must be a list, received {type(portfolio_ids)}"}
@@ -584,7 +594,7 @@ async def optimize_portfolio_weights_progressive(request: Request, db: Session =
             return {"success": False, "error": f"method must be a string, received {type(method)}"}
         if max_time_seconds is not None and not isinstance(max_time_seconds, (int, float)):
             return {"success": False, "error": f"max_time_seconds must be a number, received {type(max_time_seconds)}"}
-        
+
         if not portfolio_ids:
             return {"success": False, "error": "No portfolio IDs provided"}
         if len(portfolio_ids) < 2:
@@ -612,10 +622,19 @@ async def optimize_portfolio_weights_progressive(request: Request, db: Session =
                 "error": "Portfolio optimization requires scipy. Please install scipy>=1.10.0",
                 "details": str(e)
             }
-        
+
+        # Create optimization objective with specified mode and constraints
+        objective = OptimizationObjective(
+            mode=optimization_mode,
+            min_sharpe=min_sharpe,
+            min_sortino=min_sortino,
+            min_mar=min_mar,
+            max_ulcer=max_ulcer
+        )
+
         # Create optimizer with timeout support
         optimizer = PortfolioOptimizer(
-            objective=OptimizationObjective(),
+            objective=objective,
             rf_rate=0.043,
             sma_window=20,
             use_trading_filter=True,
