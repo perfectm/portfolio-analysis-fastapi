@@ -313,6 +313,9 @@ Modern React application with Material-UI components and Recharts for data visua
 ### Favorites & User Preferences
 - `POST /api/favorites/save`: Save current portfolio analysis settings as user favorites
 - `GET /api/favorites/load`: Load user's saved favorite settings
+- `GET /api/favorites/optimization-status`: Check if new optimized weights are available from cron job
+- `POST /api/favorites/mark-optimization-seen`: Dismiss the optimization alert notification
+- `POST /api/favorites/apply-optimized-weights`: Apply cron-optimized weights to current favorites
 
 ### File Processing
 - **Supported formats**: CSV files with date and P/L columns
@@ -369,6 +372,12 @@ The project includes comprehensive test files:
 - **test_weighting.py**: Portfolio weighting logic tests
 - **test_modules.py**: Module-level testing
 - **test_fix.py**: Bug fix validation
+- **test_regime_analysis.py**: Market regime analysis testing
+- **test_optimization.py**: Portfolio optimization algorithm testing
+- **test_constrained_optimization.py**: Constrained optimization with metric thresholds
+- **test_constrained_optimization_v2.py**: Achievable constraint testing
+- **test_metrics_check.py**: Metrics calculation validation
+- **test_metrics_check_v2.py**: Extended metrics validation
 
 ## Database Synchronization (Production to Development)
 
@@ -446,6 +455,31 @@ These methods explore a wide range of weight combinations for optimal results:
 - **Objective Function**: Weighted combination of CAGR (60%) and inverse drawdown (40%)
 - **Constraints**: Dynamic min/max weights based on portfolio count
 
+#### Constrained Optimization (Maximize CAGR with Metric Thresholds)
+Advanced optimization mode that maximizes CAGR while ensuring minimum acceptable risk metrics:
+- **Method Name**: Available with `optimization_mode: "constrained"`
+- **Primary Objective**: Maximize CAGR (compound annual growth rate)
+- **Constraints**: Enforce minimum thresholds for risk-adjusted metrics:
+  - `min_sharpe`: Minimum Sharpe ratio (risk-adjusted return)
+  - `min_sortino`: Minimum Sortino ratio (downside deviation adjusted return)
+  - `min_mar`: Minimum MAR ratio (CAGR/MaxDrawdown)
+  - `max_ulcer`: Maximum Ulcer Index (drawdown severity)
+- **Use Case**: When you want maximum growth but need to maintain minimum acceptable risk levels
+- **API Example**:
+  ```python
+  POST /api/optimize-weights
+  {
+    "portfolio_ids": [1, 2, 3],
+    "method": "differential_evolution",
+    "optimization_mode": "constrained",
+    "min_sharpe": 1.0,
+    "min_sortino": 1.5,
+    "min_mar": 2.0,
+    "max_ulcer": 5.0
+  }
+  ```
+- **Frontend**: UI controls allow users to toggle between standard and constrained optimization modes
+
 #### Simple Optimization (Quick Refinement)
 Fast optimization method that explores limited weight variations around current allocations:
 - **Method Name**: `simple`
@@ -454,7 +488,8 @@ Fast optimization method that explores limited weight variations around current 
   - If portfolio ratio is 1: try 1 and 2 only (cannot reduce to 0)
   - If portfolio ratio is N (where N > 1): try N-1, N, and N+1
   - All combinations are evaluated (exhaustive for ≤10 portfolios, random sampling for 11-20)
-- **Objective Function**: 40% CAGR + 40% Sortino Ratio + 20% Sharpe Ratio
+  - **Hard cap**: 3 units maximum per portfolio (enforced across ALL optimization methods)
+- **Objective Function**: 30% CAGR + 30% Sortino Ratio + 30% MAR + 10% Loss Days Penalty
 - **Portfolio Limits**:
   - **≤10 portfolios**: Exhaustive search (all combinations evaluated)
   - **>10 portfolios**: Greedy hill-climbing (iterative improvement, one portfolio at a time)
@@ -464,8 +499,8 @@ Fast optimization method that explores limited weight variations around current 
 - **Example**: For 3 portfolios with ratios [1, 2, 3]:
   - Portfolio 1: tries [1, 2] (2 options)
   - Portfolio 2: tries [1, 2, 3] (3 options)
-  - Portfolio 3: tries [2, 3, 4] (3 options)
-  - Total: 2 × 3 × 3 = 18 combinations evaluated
+  - Portfolio 3: tries [2, 3] (2 options, capped at 3)
+  - Total: 2 × 3 × 2 = 12 combinations evaluated
 
 ### Usage
 1. Select 2 or more portfolios in the frontend

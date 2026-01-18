@@ -7026,6 +7026,30 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                   </div>
                                 )}
 
+                                {/* Sortino Ratio */}
+                                {portfolio.latest_analysis.metrics.sortino_ratio !== undefined && (
+                                  <div style={{ textAlign: "center" }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        color: theme.palette.text.secondary,
+                                        marginBottom: "0.25rem",
+                                      }}
+                                    >
+                                      Sortino Ratio
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: "600",
+                                        color: portfolio.latest_analysis.metrics.sortino_ratio >= 0 ? "#22c55e" : "#ef4444",
+                                      }}
+                                    >
+                                      {portfolio.latest_analysis.metrics.sortino_ratio.toFixed(2)}
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* Beta vs SPX */}
                                 {portfolio.latest_analysis.metrics.beta !== undefined && (
                                   <div style={{ textAlign: "center" }}>
