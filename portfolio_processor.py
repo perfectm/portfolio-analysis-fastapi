@@ -591,7 +591,14 @@ def _calculate_sortino_ratio(
     clean_df: pd.DataFrame,
     rf_rate: float
 ) -> float:
-    """Calculate Sortino ratio (risk-adjusted return using downside deviation) using only trading days"""
+    """Calculate Sortino ratio (risk-adjusted return using downside deviation) using only trading days
+
+    Uses semi-standard deviation formula (industry standard):
+    downside_deviation = sqrt(mean((min(0, excess_returns))²))
+
+    This includes all data points but treats positive excess returns as 0 in the denominator,
+    which is the academically preferred method for calculating downside risk.
+    """
     # For trading strategies, we should only evaluate performance on actual trading days
     # Filter to only days with actual trades
     trading_days = clean_df[clean_df['Has_Trade']].copy()
@@ -613,18 +620,20 @@ def _calculate_sortino_ratio(
     # Calculate excess returns
     excess_returns = portfolio_returns - daily_rf
 
-    # Calculate downside deviation (only negative excess returns)
-    downside_returns = excess_returns[excess_returns < 0]
-    downside_deviation = downside_returns.std() if len(downside_returns) > 0 else 0
+    # Calculate downside deviation using semi-standard deviation formula (industry standard)
+    # This includes ALL data points, but treats positive excess returns as 0
+    # Formula: sqrt(mean((min(0, excess_returns))²))
+    downside_squared = (np.minimum(0, excess_returns)) ** 2
+    downside_deviation = np.sqrt(downside_squared.mean())
 
     # Annualized Sortino ratio (using 252 trading days per year)
     mean_excess_return = excess_returns.mean()
     sortino_ratio = (mean_excess_return / downside_deviation) * np.sqrt(252) if downside_deviation != 0 else 0
 
-    logger.info(f"Sortino Ratio Calculation (Trading Days Only):")
+    logger.info(f"Sortino Ratio Calculation (Semi-Std Dev, Trading Days Only):")
     logger.info(f"Number of trading days: {len(trading_days)}")
     logger.info(f"Mean daily excess return: {mean_excess_return:.6f}")
-    logger.info(f"Downside deviation: {downside_deviation:.6f}")
+    logger.info(f"Downside deviation (semi-std): {downside_deviation:.6f}")
     logger.info(f"Annualized Sortino Ratio: {sortino_ratio:.4f}")
 
     return sortino_ratio
