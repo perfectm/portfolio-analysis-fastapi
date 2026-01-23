@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import Any, List
+from typing import Any, List, Tuple
 import logging
 from database import get_db
 from portfolio_service import PortfolioService
@@ -82,6 +82,50 @@ def calculate_starting_capital_from_margins(db: Session, portfolio_ids: List[int
     except Exception as e:
         logger.error(f"[MARGIN CAPITAL] Error calculating margin-based starting capital: {e}")
         return 1000000.0
+
+
+def get_individual_portfolio_starting_capital(db: Session, portfolio_id: int, margin_multiplier: float = 3.0, fallback_capital: float = None) -> Tuple[float, float, bool]:
+    """
+    Calculate appropriate starting capital for an individual portfolio based on its margin requirements.
+
+    Uses 3x the maximum daily margin requirement to account for drawdown buffer.
+    This provides more realistic Sharpe/Sortino ratios for individual strategy evaluation.
+
+    Args:
+        db: Database session
+        portfolio_id: The portfolio ID to calculate capital for
+        margin_multiplier: Multiplier for margin (default 3x for drawdown buffer)
+        fallback_capital: Capital to use if no margin data exists (default None = use user's capital)
+
+    Returns:
+        Tuple of (starting_capital, max_margin, has_margin_data)
+    """
+    try:
+        # Get the maximum daily total margin requirement for this portfolio
+        daily_totals_subquery = db.query(
+            PortfolioMarginData.date,
+            func.sum(PortfolioMarginData.margin_requirement).label('daily_total')
+        ).filter(
+            PortfolioMarginData.portfolio_id == portfolio_id
+        ).group_by(PortfolioMarginData.date).subquery()
+
+        max_daily_total = db.query(
+            func.max(daily_totals_subquery.c.daily_total)
+        ).scalar()
+
+        if max_daily_total and float(max_daily_total) > 0:
+            max_margin = float(max_daily_total)
+            individual_capital = max_margin * margin_multiplier
+            logger.info(f"[INDIVIDUAL CAPITAL] Portfolio {portfolio_id}: max margin ${max_margin:,.2f} x {margin_multiplier}x = ${individual_capital:,.2f}")
+            return individual_capital, max_margin, True
+        else:
+            logger.info(f"[INDIVIDUAL CAPITAL] Portfolio {portfolio_id}: No margin data, using fallback capital")
+            return fallback_capital, 0.0, False
+
+    except Exception as e:
+        logger.error(f"[INDIVIDUAL CAPITAL] Error calculating capital for portfolio {portfolio_id}: {e}")
+        return fallback_capital, 0.0, False
+
 
 # Add a helper function to check for a matching AnalysisResult for a portfolio and parameters.
 def get_cached_analysis_result(db, portfolio_id, rf_rate, sma_window, use_trading_filter, starting_capital):
@@ -1075,45 +1119,62 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
         logger.info(f"[Analyze Portfolios] Processing {len(portfolios_data)} portfolios")
         individual_results = []
         for i, (name, df) in enumerate(portfolios_data):
+            portfolio_id = valid_portfolio_ids[i]
+
+            # Calculate individual portfolio starting capital based on margin (3x margin for drawdown buffer)
+            # This provides more realistic Sharpe/Sortino for individual strategy evaluation
+            individual_capital, max_margin, has_margin_data = get_individual_portfolio_starting_capital(
+                db, portfolio_id, margin_multiplier=3.0, fallback_capital=starting_capital
+            )
+
+            # Use margin-based capital for individual analysis, fall back to user's starting capital
+            effective_individual_capital = individual_capital if has_margin_data else starting_capital
+
             # Skip cache if date range filtering is applied (cache doesn't include date range in key)
             cached = None
             if not date_range_start and not date_range_end:
-                cached = get_cached_analysis_result(db, valid_portfolio_ids[i], rf_rate, sma_window, use_trading_filter, starting_capital)
+                cached = get_cached_analysis_result(db, portfolio_id, rf_rate, sma_window, use_trading_filter, effective_individual_capital)
             if cached:
                 import json
                 metrics = json.loads(cached.metrics_json) if cached.metrics_json else {}
-                df = PortfolioService.get_portfolio_dataframe(db, valid_portfolio_ids[i], columns=["Date", "P/L", "Daily_Return"])
+                df = PortfolioService.get_portfolio_dataframe(db, portfolio_id, columns=["Date", "P/L", "Daily_Return"])
                 # Check for missing/zero metrics
                 if not metrics or any(metrics.get(k, 0) == 0 for k in ["sharpe_ratio", "total_return", "final_account_value"]):
-                    individual_processing_results = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)
+                    individual_processing_results = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=effective_individual_capital, date_range_start=date_range_start, date_range_end=date_range_end)
                     if not individual_processing_results:
-                        logger.warning(f"[Analyze Portfolios] Skipping portfolio {valid_portfolio_ids[i]} - insufficient data after filtering")
+                        logger.warning(f"[Analyze Portfolios] Skipping portfolio {portfolio_id} - insufficient data after filtering")
                         continue
                     result = individual_processing_results[0]
-                    logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={valid_portfolio_ids[i]}")
-                    PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
+                    logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={portfolio_id}")
+                    PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": effective_individual_capital})
                     metrics = result['metrics']
                     clean_df = result['clean_df']
                 else:
                     clean_df = df
                 individual_results.append({
-                    'portfolio_id': valid_portfolio_ids[i],
+                    'portfolio_id': portfolio_id,
                     'filename': name,
                     'metrics': metrics,
                     'type': 'file',
                     'plots': [],
-                    'clean_df': clean_df
+                    'clean_df': clean_df,
+                    'individual_starting_capital': effective_individual_capital,
+                    'max_margin': max_margin,
+                    'has_margin_data': has_margin_data
                 })
             else:
                 # Run process_individual_portfolios for this portfolio only
-                individual_processing_results = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=starting_capital, date_range_start=date_range_start, date_range_end=date_range_end)
+                individual_processing_results = process_individual_portfolios([(name, df)], rf_rate=rf_rate, sma_window=sma_window, use_trading_filter=use_trading_filter, starting_capital=effective_individual_capital, date_range_start=date_range_start, date_range_end=date_range_end)
                 if not individual_processing_results:
-                    logger.warning(f"[Analyze Portfolios] Skipping portfolio {valid_portfolio_ids[i]} - insufficient data after filtering")
+                    logger.warning(f"[Analyze Portfolios] Skipping portfolio {portfolio_id} - insufficient data after filtering")
                     continue
                 result = individual_processing_results[0]
-                logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={valid_portfolio_ids[i]}")
-                PortfolioService.store_analysis_result(db, valid_portfolio_ids[i], "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": starting_capital})
-                result['portfolio_id'] = valid_portfolio_ids[i]  # Add portfolio_id to result
+                logger.debug(f"[ROUTER:optimization] Storing analysis result for portfolio_id={portfolio_id}")
+                PortfolioService.store_analysis_result(db, portfolio_id, "individual", result['metrics'], {"rf_rate": rf_rate, "sma_window": sma_window, "use_trading_filter": use_trading_filter, "starting_capital": effective_individual_capital})
+                result['portfolio_id'] = portfolio_id
+                result['individual_starting_capital'] = effective_individual_capital
+                result['max_margin'] = max_margin
+                result['has_margin_data'] = has_margin_data
                 individual_results.append(result)
         simplified_individual_results = []
         for i, result in enumerate(individual_results):
@@ -1146,6 +1207,9 @@ async def analyze_selected_portfolios(request: Request, db: Session = Depends(ge
                     'filename': result.get('filename', 'Unknown'),
                     'type': result.get('type', 'file'),
                     'plots': plots_list,
+                    'individual_starting_capital': safe_float(result.get('individual_starting_capital'), starting_capital),
+                    'max_margin': safe_float(result.get('max_margin'), 0),
+                    'has_margin_data': result.get('has_margin_data', False),
                     'metrics': {
                         'sharpe_ratio': safe_float(result['metrics'].get('sharpe_ratio'), 0),
                         'sortino_ratio': safe_float(result['metrics'].get('sortino_ratio'), 0),
