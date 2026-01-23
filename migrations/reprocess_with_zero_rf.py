@@ -150,7 +150,6 @@ def reprocess_portfolio(db, portfolio: Portfolio) -> bool:
             existing.sortino_ratio = metrics.get('sortino_ratio', 0)
             existing.cagr = metrics.get('cagr', 0)
             existing.metrics_json = json.dumps(metrics)
-            existing.parameters = json.dumps(params)
             logger.info(f"  Updated existing analysis result (id={existing.id})")
         else:
             # Create new result
@@ -164,8 +163,7 @@ def reprocess_portfolio(db, portfolio: Portfolio) -> bool:
                 sharpe_ratio=metrics.get('sharpe_ratio', 0),
                 sortino_ratio=metrics.get('sortino_ratio', 0),
                 cagr=metrics.get('cagr', 0),
-                metrics_json=json.dumps(metrics),
-                parameters=json.dumps(params)
+                metrics_json=json.dumps(metrics)
             )
             db.add(analysis_result)
             logger.info(f"  Created new analysis result")
