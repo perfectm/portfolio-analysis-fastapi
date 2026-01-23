@@ -23,7 +23,20 @@ if os.path.exists(env_path):
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:
                 key, value = line.split('=', 1)
-                os.environ.setdefault(key.strip(), value.strip())
+                key = key.strip()
+                value = value.strip()
+                # Remove surrounding quotes if present
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                # Use direct assignment to override any existing value
+                os.environ[key] = value
+                if key == 'DATABASE_URL':
+                    # Mask password in output
+                    masked = value.replace(value.split('@')[0].split('://')[-1], '***') if '@' in value else value
+                    print(f"  Loaded DATABASE_URL: {masked}")
+else:
+    print(f"WARNING: .env file not found at {env_path}")
 
 from database import SessionLocal
 from models import Portfolio, PortfolioMarginData, AnalysisResult, PortfolioData
