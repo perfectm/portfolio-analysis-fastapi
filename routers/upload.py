@@ -8,6 +8,8 @@ from database import get_db
 from portfolio_service import PortfolioService
 from portfolio_blender import create_blended_portfolio, process_individual_portfolios
 from plotting import create_plots, create_correlation_heatmap, create_monte_carlo_simulation
+from portfolio_processor import extract_margin_data_from_df
+from margin_service import MarginService
 import pandas as pd
 import os
 
@@ -87,6 +89,21 @@ async def upload_files_api(
 
                 PortfolioService.store_portfolio_data(db, portfolio.id, df)
                 logger.info(f"[API Upload] Stored {len(df)} data rows for portfolio {portfolio.id}")
+
+                # Automatically extract and store margin data if present in the CSV
+                try:
+                    margin_df = extract_margin_data_from_df(df)
+                    if not margin_df.empty:
+                        success = MarginService.store_margin_data(db, portfolio.id, margin_df)
+                        if success:
+                            logger.info(f"[API Upload] Automatically extracted and stored {len(margin_df)} margin records for portfolio {portfolio.id}")
+                        else:
+                            logger.warning(f"[API Upload] Failed to store margin data for portfolio {portfolio.id}")
+                    else:
+                        logger.info(f"[API Upload] No margin data found in file for portfolio {portfolio.id}")
+                except Exception as margin_error:
+                    logger.warning(f"[API Upload] Error extracting margin data for portfolio {portfolio.id}: {margin_error}")
+
                 files_data.append((file.filename, df))
                 portfolio_ids.append(portfolio.id)
             except Exception as e:

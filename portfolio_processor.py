@@ -7,9 +7,9 @@ import logging
 from typing import Tuple, Dict, Any
 
 from config import (
-    DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS,
+    DATE_COLUMNS, PL_COLUMNS, PREMIUM_COLUMNS, CONTRACTS_COLUMNS, MARGIN_COLUMNS,
     TRADE_STEWARD_IDENTIFIER_COLUMNS, TRADE_STEWARD_DATE_COLUMN,
-    TRADE_STEWARD_PL_COLUMN, TRADE_STEWARD_ENTRY_DATE_COLUMN
+    TRADE_STEWARD_PL_COLUMN, TRADE_STEWARD_ENTRY_DATE_COLUMN, TRADE_STEWARD_MARGIN_COLUMN
 )
 from beta_calculator import calculate_portfolio_beta
 
@@ -345,10 +345,117 @@ def _clean_portfolio_data(df: pd.DataFrame) -> pd.DataFrame:
     return clean_df
 
 
+def extract_margin_data_from_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Extract margin/buying power data from a portfolio DataFrame.
+
+    Supports both Trade Steward format (Buying Power column) and
+    standard formats with various margin column names.
+
+    Args:
+        df: Raw DataFrame from uploaded CSV
+
+    Returns:
+        DataFrame with columns ['Date', 'Margin Requirement'] or empty DataFrame if no margin data found
+    """
+    vendor = _detect_vendor(df)
+
+    if vendor == 'trade_steward':
+        # Trade Steward uses 'Buying Power' column and 'Exit Date' for date
+        if TRADE_STEWARD_MARGIN_COLUMN in df.columns:
+            logger.info(f"[MARGIN EXTRACT] Found Trade Steward format with '{TRADE_STEWARD_MARGIN_COLUMN}' column")
+
+            # Filter to only rows with an Exit Date (closed trades)
+            df_closed = df[df[TRADE_STEWARD_DATE_COLUMN].notna() & (df[TRADE_STEWARD_DATE_COLUMN] != '')]
+
+            if len(df_closed) == 0:
+                logger.warning("[MARGIN EXTRACT] No closed trades found for margin extraction")
+                return pd.DataFrame()
+
+            df_closed = df_closed.copy()
+            df_closed['Date'] = pd.to_datetime(df_closed[TRADE_STEWARD_DATE_COLUMN])
+
+            # Clean margin data - remove currency symbols and convert to float
+            margin_values = df_closed[TRADE_STEWARD_MARGIN_COLUMN].astype(str).str.replace('$', '').str.replace(',', '').str.replace('(', '-').str.replace(')', '')
+            df_closed['Margin Requirement'] = pd.to_numeric(margin_values, errors='coerce').fillna(0)
+
+            # Aggregate by date (sum margin for multiple trades on same day)
+            margin_df = df_closed.groupby('Date', as_index=False).agg({
+                'Margin Requirement': 'sum'
+            })
+
+            logger.info(f"[MARGIN EXTRACT] Extracted {len(margin_df)} margin records from Trade Steward file")
+            logger.info(f"[MARGIN EXTRACT] Margin range: ${margin_df['Margin Requirement'].min():,.2f} to ${margin_df['Margin Requirement'].max():,.2f}")
+
+            return margin_df
+        else:
+            logger.info(f"[MARGIN EXTRACT] Trade Steward format but no '{TRADE_STEWARD_MARGIN_COLUMN}' column found")
+            return pd.DataFrame()
+
+    else:
+        # Standard format - look for margin columns
+        margin_column = None
+        for col in MARGIN_COLUMNS:
+            if col in df.columns:
+                margin_column = col
+                break
+
+        # Try case-insensitive match
+        if margin_column is None:
+            df_columns_lower = {col.lower(): col for col in df.columns}
+            for margin_col in MARGIN_COLUMNS:
+                if margin_col.lower() in df_columns_lower:
+                    margin_column = df_columns_lower[margin_col.lower()]
+                    break
+
+        if margin_column is None:
+            logger.info("[MARGIN EXTRACT] No margin column found in standard format file")
+            return pd.DataFrame()
+
+        logger.info(f"[MARGIN EXTRACT] Found standard format with '{margin_column}' column")
+
+        # Find date column
+        date_column = None
+        for col in DATE_COLUMNS:
+            if col in df.columns:
+                date_column = col
+                break
+
+        if date_column is None:
+            logger.warning("[MARGIN EXTRACT] No date column found for margin extraction")
+            return pd.DataFrame()
+
+        # Create margin DataFrame
+        margin_df = pd.DataFrame()
+        margin_df['Date'] = pd.to_datetime(df[date_column])
+
+        # Clean margin data
+        margin_values = df[margin_column].astype(str).str.replace('$', '').str.replace(',', '').str.replace('(', '-').str.replace(')', '')
+        margin_df['Margin Requirement'] = pd.to_numeric(margin_values, errors='coerce').fillna(0)
+
+        # Remove invalid rows
+        margin_df = margin_df.dropna(subset=['Date'])
+        margin_df = margin_df[margin_df['Margin Requirement'] > 0]
+
+        if len(margin_df) == 0:
+            logger.info("[MARGIN EXTRACT] No valid margin data found after cleaning")
+            return pd.DataFrame()
+
+        # Aggregate by date
+        margin_df = margin_df.groupby('Date', as_index=False).agg({
+            'Margin Requirement': 'sum'
+        })
+
+        logger.info(f"[MARGIN EXTRACT] Extracted {len(margin_df)} margin records from standard format file")
+        logger.info(f"[MARGIN EXTRACT] Margin range: ${margin_df['Margin Requirement'].min():,.2f} to ${margin_df['Margin Requirement'].max():,.2f}")
+
+        return margin_df
+
+
 def _calculate_portfolio_metrics(
-    clean_df: pd.DataFrame, 
-    rf_rate: float, 
-    daily_rf_rate: float, 
+    clean_df: pd.DataFrame,
+    rf_rate: float,
+    daily_rf_rate: float,
     original_starting_capital: float,
     actual_starting_capital: float
 ) -> Dict[str, Any]:

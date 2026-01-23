@@ -75,12 +75,21 @@ PL_COLUMNS = ['P/L', 'PnL', 'Profit/Loss', 'Net P/L', 'Realized P/L', 'Total P/L
 PREMIUM_COLUMNS = ['Premium', 'Premium Collected', 'Premium Received', 'Initial Premium', 'Option Premium']
 CONTRACTS_COLUMNS = ['No. of Contracts', 'Contracts', 'Contract Count', 'Number of Contracts', 'Qty', 'Quantity']
 
+# Margin/Buying Power column mappings (for automatic extraction during upload)
+MARGIN_COLUMNS = [
+    'Buying Power', 'BuyingPower', 'Margin', 'Margin Requirement', 'MarginRequirement',
+    'Initial Margin', 'InitialMargin', 'Required Margin', 'RequiredMargin',
+    'Capital Required', 'CapitalRequired', 'Position Value', 'PositionValue',
+    'Notional Value', 'NotionalValue', 'buying power', 'BUYING POWER'
+]
+
 # Vendor-specific column mappings
 # Trade Steward format columns
 TRADE_STEWARD_IDENTIFIER_COLUMNS = ['Backtick UID', 'Trade Number', 'Exit Date', 'Trade P/L']
 TRADE_STEWARD_DATE_COLUMN = 'Exit Date'
 TRADE_STEWARD_PL_COLUMN = 'Trade P/L'
 TRADE_STEWARD_ENTRY_DATE_COLUMN = 'Entry Date'
+TRADE_STEWARD_MARGIN_COLUMN = 'Buying Power'  # Trade Steward uses "Buying Power" for margin
 
 # Monte Carlo simulation settings
 DEFAULT_SIMULATIONS = 1000
