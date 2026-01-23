@@ -10,7 +10,20 @@ Run with: python migrations/reprocess_with_zero_rf.py
 
 import sys
 import os
+
+# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Load .env file if it exists (for production DATABASE_URL)
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+if os.path.exists(env_path):
+    print(f"Loading environment from {env_path}")
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                os.environ.setdefault(key.strip(), value.strip())
 
 from database import SessionLocal
 from models import Portfolio, PortfolioMarginData, AnalysisResult, PortfolioData
