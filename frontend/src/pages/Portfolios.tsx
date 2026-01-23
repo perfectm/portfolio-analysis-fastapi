@@ -353,7 +353,8 @@ export default function Portfolios() {
   const [riskFreeRate, setRiskFreeRate] = useState<number>(
     savedParams?.riskFreeRate || 4.3
   );
-  
+  const [useZeroRiskFreeRate, setUseZeroRiskFreeRate] = useState<boolean>(false);
+
   // Margin-based starting capital
   const [marginCapital, setMarginCapital] = useState<number | null>(null);
   const [marginCalculating, setMarginCalculating] = useState<boolean>(false);
@@ -1512,11 +1513,14 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
         selectedPortfolios.length > 1 &&
         (weightingMethod === "custom" || weightingMethod === "equal");
 
+      // Calculate effective RF rate (0 if toggle is on, otherwise use input value)
+      const effectiveRfRate = useZeroRiskFreeRate ? 0 : riskFreeRate / 100;
+
       let endpoint = `${API_BASE_URL}/api/analyze-portfolios`;
       let requestBody: any = {
         portfolio_ids: selectedPortfolios,
         starting_capital: startingCapital,
-        rf_rate: riskFreeRate / 100, // Convert percentage to decimal
+        rf_rate: effectiveRfRate,
         sma_window: loadedOptimization?.parameters?.sma_window || 20,
         use_trading_filter: loadedOptimization?.parameters?.use_trading_filter !== undefined
           ? loadedOptimization.parameters.use_trading_filter : true,
@@ -1905,7 +1909,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           (id) => portfolioWeights[id] || 1.0
         ),
         starting_capital: startingCapital,
-        rf_rate: riskFreeRate / 100, // Convert percentage to decimal
+        rf_rate: useZeroRiskFreeRate ? 0 : riskFreeRate / 100, // Use 0% if toggle is on, otherwise convert percentage to decimal
         sma_window: loadedOptimization?.parameters?.sma_window || 20,
         use_trading_filter: loadedOptimization?.parameters?.use_trading_filter !== undefined
           ? loadedOptimization.parameters.use_trading_filter : true,
@@ -1984,7 +1988,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           (id) => portfolioWeights[id] || 1.0
         ),
         starting_capital: startingCapital,
-        rf_rate: riskFreeRate / 100, // Convert percentage to decimal
+        rf_rate: useZeroRiskFreeRate ? 0 : riskFreeRate / 100, // Use 0% if toggle is on, otherwise convert percentage to decimal
         sma_window: loadedOptimization?.parameters?.sma_window || 20,
         use_trading_filter: loadedOptimization?.parameters?.use_trading_filter !== undefined
           ? loadedOptimization.parameters.use_trading_filter : true,
@@ -3145,28 +3149,50 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                 >
                   📈 Risk-Free Rate (%)
                 </label>
-                <input
-                  id="riskFreeRate"
-                  type="number"
-                  min="0"
-                  max="20"
-                  step="0.1"
-                  value={riskFreeRate}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value >= 0) {
-                      setRiskFreeRate(value);
-                    }
-                  }}
-                  style={{
-                    padding: "0.5rem",
-                    border: "1px solid #ced4da",
-                    borderRadius: "4px",
-                    width: "200px",
-                    fontSize: "1rem",
-                  }}
-                  placeholder="4.3"
-                />
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.5rem" }}>
+                  <input
+                    id="riskFreeRate"
+                    type="number"
+                    min="0"
+                    max="20"
+                    step="0.1"
+                    value={riskFreeRate}
+                    disabled={useZeroRiskFreeRate}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= 0) {
+                        setRiskFreeRate(value);
+                      }
+                    }}
+                    style={{
+                      padding: "0.5rem",
+                      border: "1px solid #ced4da",
+                      borderRadius: "4px",
+                      width: "120px",
+                      fontSize: "1rem",
+                      opacity: useZeroRiskFreeRate ? 0.5 : 1,
+                    }}
+                    placeholder="4.3"
+                  />
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      cursor: "pointer",
+                      fontSize: "0.9rem",
+                      color: theme.palette.text.primary,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={useZeroRiskFreeRate}
+                      onChange={(e) => setUseZeroRiskFreeRate(e.target.checked)}
+                      style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                    />
+                    Use 0% RF
+                  </label>
+                </div>
                 <div
                   style={{
                     fontSize: "0.85rem",
@@ -3174,8 +3200,13 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                     marginTop: "0.25rem",
                   }}
                 >
-                  The risk-free rate used for Sharpe ratio and UPI calculations.
-                  Default is 4.3%.
+                  {useZeroRiskFreeRate ? (
+                    <span style={{ color: theme.palette.info.main }}>
+                      Using 0% risk-free rate. Sharpe/Sortino will be consistent across starting capitals.
+                    </span>
+                  ) : (
+                    "The risk-free rate used for Sharpe ratio and UPI calculations. Default is 4.3%."
+                  )}
                 </div>
               </div>
 
