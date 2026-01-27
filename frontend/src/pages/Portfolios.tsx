@@ -2749,288 +2749,63 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                     selectedPortfolios.length !== 1 ? "s" : ""
                   }`}
             </button>
-          </Paper>
-          <button
-            onClick={selectAllPortfolios}
-            className="btn btn-secondary"
-            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
-          >
-            Select All
-          </button>
-          <button
-            onClick={clearSelection}
-            className="btn btn-secondary"
-            style={{ padding: "0.5rem 1rem", fontSize: "0.9rem" }}
-          >
-            Clear Selection
-          </button>
-          {/* Save to Favorite Dropdown */}
-          <FormControl size="small" style={{ minWidth: 200 }}>
-            <Select
-              value={selectedFavoriteId?.toString() || ""}
-              onChange={(e) => {
-                const value = e.target.value as string;
-                if (value === "new") {
-                  setCreateFavoriteDialogOpen(true);
-                  // Don't update selectedFavoriteId - keep it as is
-                } else if (value && value !== "") {
-                  const favoriteId = parseInt(value);
-                  const favorite = favorites.find(f => f.id === favoriteId);
-                  if (favorite) {
-                    saveFavoriteSettings(favorite.name);
+
+            {/* Save to Favorite Dropdown */}
+            <FormControl size="small" style={{ minWidth: 200 }}>
+              <Select
+                value={selectedFavoriteId?.toString() || ""}
+                onChange={(e) => {
+                  const value = e.target.value as string;
+                  if (value === "new") {
+                    setCreateFavoriteDialogOpen(true);
+                  } else if (value && value !== "") {
+                    const favoriteId = parseInt(value);
+                    const favorite = favorites.find(f => f.id === favoriteId);
+                    if (favorite) {
+                      saveFavoriteSettings(favorite.name);
+                    }
                   }
-                }
-              }}
-              disabled={selectedPortfolios.length === 0 || savingFavorites}
-              displayEmpty
-              renderValue={(selected) => {
-                if (!selected || selected === "") {
-                  return <span style={{ color: "#999", fontSize: "0.875rem" }}>Save to Favorite...</span>;
-                }
-                const favorite = favorites.find(f => f.id.toString() === selected);
-                return favorite ? favorite.name : "";
-              }}
-            >
-              <MenuItem value="new">
-                <AddIcon fontSize="small" style={{ marginRight: 8 }} />
-                Create New...
-              </MenuItem>
-              <Divider />
-              {favorites.map(fav => (
-                <MenuItem key={fav.id} value={fav.id.toString()}>
-                  {fav.is_default && <Star fontSize="small" style={{ marginRight: 8, color: "#FFC107" }} />}
-                  {fav.name}
-                  {fav.tags.length > 0 && (
-                    <span style={{ marginLeft: 8, fontSize: "0.8em", color: "#666" }}>
-                      ({fav.tags.join(", ")})
-                    </span>
-                  )}
+                }}
+                disabled={selectedPortfolios.length === 0 || savingFavorites}
+                displayEmpty
+                renderValue={(selected) => {
+                  if (!selected || selected === "") {
+                    return <span style={{ color: "#999", fontSize: "0.875rem" }}>Save to Favorite...</span>;
+                  }
+                  const favorite = favorites.find(f => f.id.toString() === selected);
+                  return favorite ? favorite.name : "";
+                }}
+              >
+                <MenuItem value="new">
+                  <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                  Create New...
                 </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                <Divider />
+                {favorites.map(fav => (
+                  <MenuItem key={fav.id} value={fav.id.toString()}>
+                    {fav.is_default && <Star fontSize="small" style={{ marginRight: 8, color: "#FFC107" }} />}
+                    {fav.name}
+                    {fav.tags.length > 0 && (
+                      <span style={{ marginLeft: 8, fontSize: "0.8em", color: "#666" }}>
+                        ({fav.tags.join(", ")})
+                      </span>
+                    )}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-          {/* Manage Favorites Button */}
-          <Button
-            variant="outlined"
-            onClick={() => setManageFavoritesModalOpen(true)}
-            startIcon={<SettingsIcon />}
-            disabled={loadingFavorites}
-          >
-            Manage Favorites
-          </Button>
-          {selectedPortfolios.length >= 2 && (
-            <>
-              {/* Optimization Method Selection - Second Location */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
-                <label style={{ fontSize: "0.85rem", fontWeight: "500" }}>
-                  Type:
-                </label>
-                <select
-                  value={optimizationMethod}
-                  onChange={(e) => setOptimizationMethod(e.target.value)}
-                  disabled={optimizing || analyzing}
-                  style={{
-                    padding: "0.3rem 0.6rem",
-                    fontSize: "0.85rem",
-                    borderRadius: "4px",
-                    border: "1px solid #ccc",
-                    backgroundColor: optimizing || analyzing ? "#f5f5f5" : "white",
-                    cursor: optimizing || analyzing ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <option value="differential_evolution">Full (Best)</option>
-                  <option value="simple">Simple (Quick)</option>
-                  <option value="scipy">Full - Scipy</option>
-                  <option value="grid_search">Full - Grid</option>
-                </select>
-              </div>
-
-              {/* Optimization Mode Selection - Second Location */}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
-                <label style={{ fontSize: "0.85rem", fontWeight: "500" }}>
-                  Mode:
-                </label>
-                <select
-                  value={optimizationMode}
-                  onChange={(e) => setOptimizationMode(e.target.value)}
-                  disabled={optimizing || analyzing}
-                  style={{
-                    padding: "0.3rem 0.6rem",
-                    fontSize: "0.85rem",
-                    borderRadius: "4px",
-                    border: "1px solid #ccc",
-                    backgroundColor: optimizing || analyzing ? "#f5f5f5" : "white",
-                    cursor: optimizing || analyzing ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <option value="weighted">Weighted Scoring</option>
-                  <option value="constrained">Constrained (Max CAGR)</option>
-                </select>
-              </div>
-
-              {/* Constraint inputs (compact version for second location) */}
-              {optimizationMode === 'constrained' && (
-                <div style={{
-                  marginTop: "0.5rem",
-                  padding: "0.5rem",
-                  backgroundColor: "#f8f9fa",
-                  borderRadius: "4px",
-                  border: "1px solid #dee2e6",
-                  fontSize: "0.75rem"
-                }}>
-                  <div style={{ fontWeight: "500", marginBottom: "0.5rem" }}>Constraints:</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                    <div>
-                      <label style={{ display: "block", marginBottom: "0.2rem" }}>Sharpe ≥</label>
-                      <input
-                        type="number"
-                        value={minSharpe}
-                        onChange={(e) => setMinSharpe(parseFloat(e.target.value))}
-                        disabled={optimizing || analyzing}
-                        step="0.1"
-                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", marginBottom: "0.2rem" }}>Sortino ≥</label>
-                      <input
-                        type="number"
-                        value={minSortino}
-                        onChange={(e) => setMinSortino(parseFloat(e.target.value))}
-                        disabled={optimizing || analyzing}
-                        step="0.1"
-                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", marginBottom: "0.2rem" }}>MAR ≥</label>
-                      <input
-                        type="number"
-                        value={minMAR}
-                        onChange={(e) => setMinMAR(parseFloat(e.target.value))}
-                        disabled={optimizing || analyzing}
-                        step="0.5"
-                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", marginBottom: "0.2rem" }}>Ulcer &lt;</label>
-                      <input
-                        type="number"
-                        value={maxUlcer}
-                        onChange={(e) => setMaxUlcer(parseFloat(e.target.value))}
-                        disabled={optimizing || analyzing}
-                        step="0.01"
-                        style={{ width: "100%", padding: "0.2rem", fontSize: "0.75rem", borderRadius: "4px", border: "1px solid #ccc" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => optimizePortfolioWeights(false)}
-                disabled={optimizing || analyzing}
-                className="btn btn-success"
-                style={{
-                  padding: "0.5rem 1rem",
-                  fontSize: "0.9rem",
-                  opacity: optimizing || analyzing ? 0.5 : 1,
-                }}
-                title={
-                  optimizationMethod === "simple"
-                    ? "Quick refinement: tries ±1 unit changes (Objective: 30% CAGR + 30% Sortino + 30% MAR + 10% Loss Days penalty)"
-                    : "Find optimal weights to maximize return while minimizing drawdown"
-                }
-              >
-                {optimizing
-                  ? `Optimizing... ${optimizationProgress > 0 ? `(${optimizationProgress.toFixed(0)}%)` : ''}`
-                  : "🎯 Optimize Weights"}
-              </button>
-
-              {/* Load Backend Optimized Weights button */}
-              <button
-                onClick={handleLoadBackendOptimizedWeights}
-                className="btn btn-info"
-                disabled={optimizing || analyzing}
-                style={{
-                  padding: "0.5rem 1rem",
-                  fontSize: "0.9rem",
-                  opacity: optimizing || analyzing ? 0.5 : 1,
-                }}
-                title="Load the most recent optimized weights from backend (cron optimization)"
-              >
-                📥 Load Backend
-              </button>
-
-              {/* Clear Cache button */}
-              <button
-                onClick={clearOptimizationCache}
-                className="btn btn-secondary"
-                style={{
-                  padding: "0.5rem 1rem",
-                  fontSize: "0.9rem"
-                }}
-                title="Clear optimization cache and reset state"
-              >
-                🗑️ Clear Cache
-              </button>
-                
-                {/* Continue and Accept buttons for partial results */}
-                {isPartialResult && optimizing && (
-                  <>
-                    <button
-                      onClick={() => {
-                        console.log("DEBUG: Continue button clicked (2nd location)");
-                        console.log("DEBUG: About to call optimizePortfolioWeights(true)");
-                        console.log("DEBUG: Current partialResult:", partialResult);
-                        console.log("DEBUG: Current canContinue:", canContinue);
-                        optimizePortfolioWeights(true);
-                      }}
-                      disabled={!canContinue}
-                      className="btn btn-warning"
-                      style={{
-                        padding: "0.5rem 1rem",
-                        fontSize: "0.9rem",
-                        opacity: canContinue ? 1 : 0.5,
-                      }}
-                      title="Continue optimization for better results"
-                    >
-                      ⏱️ Continue
-                    </button>
-                    <button
-                      onClick={acceptPartialResult}
-                      className="btn btn-info"
-                      style={{
-                        padding: "0.5rem 1rem",
-                        fontSize: "0.9rem",
-                      }}
-                      title="Use current partial optimization results"
-                    >
-                      ✅ Use These
-                    </button>
-                  </>
-                )}
-            </>
-          )}
-          <button
-            onClick={analyzeSelectedPortfolios}
-            disabled={selectedPortfolios.length === 0 || analyzing || optimizing}
-            className="btn btn-primary"
-            style={{
-              padding: "0.5rem 1.5rem",
-              fontSize: "0.9rem",
-              marginLeft: selectedPortfolios.length >= 2 ? "0" : "auto",
-              opacity: selectedPortfolios.length === 0 || analyzing || optimizing ? 0.5 : 1,
-            }}
-          >
-            {analyzing
-              ? "Analyzing..."
-              : `Analyze ${selectedPortfolios.length} Portfolio${
-                  selectedPortfolios.length !== 1 ? "s" : ""
-                }`}
-          </button>
+            {/* Manage Favorites Button */}
+            <Button
+              variant="outlined"
+              onClick={() => setManageFavoritesModalOpen(true)}
+              startIcon={<SettingsIcon />}
+              disabled={loadingFavorites}
+              size="small"
+            >
+              Manage Favorites
+            </Button>
+          </Paper>
           {/* End Selection Controls */}
 
           {/* Analysis Parameters */}
