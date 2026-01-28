@@ -17,6 +17,20 @@ from portfolio_processor import process_portfolio_data
 logger = logging.getLogger(__name__)
 
 
+def _to_python_float(value) -> Optional[float]:
+    """Convert numpy/pandas numeric types to Python float."""
+    if value is None:
+        return None
+    if isinstance(value, (np.floating, np.integer)):
+        return float(value)
+    if pd.isna(value):
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+
 class RollingPeriodService:
     """Service for rolling period calculations and storage"""
 
@@ -222,6 +236,21 @@ class RollingPeriodService:
             True if successful, False otherwise
         """
         try:
+            # Convert numpy types to Python native types
+            best_total_profit = _to_python_float(best_period['total_profit'])
+            best_cagr = _to_python_float(best_period.get('cagr'))
+            best_sharpe = _to_python_float(best_period.get('sharpe_ratio'))
+            best_sortino = _to_python_float(best_period.get('sortino_ratio'))
+            best_max_dd = _to_python_float(best_period.get('max_drawdown_percent'))
+            best_mar = _to_python_float(best_period.get('mar_ratio'))
+
+            worst_total_profit = _to_python_float(worst_period['total_profit'])
+            worst_cagr = _to_python_float(worst_period.get('cagr'))
+            worst_sharpe = _to_python_float(worst_period.get('sharpe_ratio'))
+            worst_sortino = _to_python_float(worst_period.get('sortino_ratio'))
+            worst_max_dd = _to_python_float(worst_period.get('max_drawdown_percent'))
+            worst_mar = _to_python_float(worst_period.get('mar_ratio'))
+
             # Store best period
             existing_best = db.query(RollingPeriodStats).filter(
                 and_(
@@ -235,12 +264,12 @@ class RollingPeriodService:
                 # Update existing record
                 existing_best.start_date = best_period['start_date']
                 existing_best.end_date = best_period['end_date']
-                existing_best.total_profit = best_period['total_profit']
-                existing_best.cagr = best_period.get('cagr')
-                existing_best.sharpe_ratio = best_period.get('sharpe_ratio')
-                existing_best.sortino_ratio = best_period.get('sortino_ratio')
-                existing_best.max_drawdown_percent = best_period.get('max_drawdown_percent')
-                existing_best.mar_ratio = best_period.get('mar_ratio')
+                existing_best.total_profit = best_total_profit
+                existing_best.cagr = best_cagr
+                existing_best.sharpe_ratio = best_sharpe
+                existing_best.sortino_ratio = best_sortino
+                existing_best.max_drawdown_percent = best_max_dd
+                existing_best.mar_ratio = best_mar
                 existing_best.updated_at = datetime.utcnow()
             else:
                 # Create new record
@@ -250,12 +279,12 @@ class RollingPeriodService:
                     period_length_days=period_length_days,
                     start_date=best_period['start_date'],
                     end_date=best_period['end_date'],
-                    total_profit=best_period['total_profit'],
-                    cagr=best_period.get('cagr'),
-                    sharpe_ratio=best_period.get('sharpe_ratio'),
-                    sortino_ratio=best_period.get('sortino_ratio'),
-                    max_drawdown_percent=best_period.get('max_drawdown_percent'),
-                    mar_ratio=best_period.get('mar_ratio')
+                    total_profit=best_total_profit,
+                    cagr=best_cagr,
+                    sharpe_ratio=best_sharpe,
+                    sortino_ratio=best_sortino,
+                    max_drawdown_percent=best_max_dd,
+                    mar_ratio=best_mar
                 )
                 db.add(new_best)
 
@@ -272,12 +301,12 @@ class RollingPeriodService:
                 # Update existing record
                 existing_worst.start_date = worst_period['start_date']
                 existing_worst.end_date = worst_period['end_date']
-                existing_worst.total_profit = worst_period['total_profit']
-                existing_worst.cagr = worst_period.get('cagr')
-                existing_worst.sharpe_ratio = worst_period.get('sharpe_ratio')
-                existing_worst.sortino_ratio = worst_period.get('sortino_ratio')
-                existing_worst.max_drawdown_percent = worst_period.get('max_drawdown_percent')
-                existing_worst.mar_ratio = worst_period.get('mar_ratio')
+                existing_worst.total_profit = worst_total_profit
+                existing_worst.cagr = worst_cagr
+                existing_worst.sharpe_ratio = worst_sharpe
+                existing_worst.sortino_ratio = worst_sortino
+                existing_worst.max_drawdown_percent = worst_max_dd
+                existing_worst.mar_ratio = worst_mar
                 existing_worst.updated_at = datetime.utcnow()
             else:
                 # Create new record
@@ -287,12 +316,12 @@ class RollingPeriodService:
                     period_length_days=period_length_days,
                     start_date=worst_period['start_date'],
                     end_date=worst_period['end_date'],
-                    total_profit=worst_period['total_profit'],
-                    cagr=worst_period.get('cagr'),
-                    sharpe_ratio=worst_period.get('sharpe_ratio'),
-                    sortino_ratio=worst_period.get('sortino_ratio'),
-                    max_drawdown_percent=worst_period.get('max_drawdown_percent'),
-                    mar_ratio=worst_period.get('mar_ratio')
+                    total_profit=worst_total_profit,
+                    cagr=worst_cagr,
+                    sharpe_ratio=worst_sharpe,
+                    sortino_ratio=worst_sortino,
+                    max_drawdown_percent=worst_max_dd,
+                    mar_ratio=worst_mar
                 )
                 db.add(new_worst)
 
