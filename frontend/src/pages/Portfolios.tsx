@@ -162,6 +162,33 @@ interface Portfolio {
   };
 }
 
+interface RollingPeriodData {
+  start_date: string;
+  end_date: string;
+  total_profit: number;
+  cagr: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown_percent: number;
+  mar_ratio: number;
+}
+
+interface BlendedRollingPeriodData {
+  total_profit: number;
+  cagr: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown_percent: number;
+  mar_ratio: number;
+  portfolio_periods?: Array<{
+    portfolio_id: number;
+    weight: number;
+    start_date: string;
+    end_date: string;
+    total_profit: number;
+  }>;
+}
+
 interface AnalysisResult {
   filename: string;
   weighting_method?: string;
@@ -190,6 +217,12 @@ interface AnalysisResult {
     filename: string;
     url: string;
   }>;
+  rolling_periods?: {
+    best?: RollingPeriodData | null;
+    worst?: RollingPeriodData | null;
+    best_period?: BlendedRollingPeriodData | null;
+    worst_period?: BlendedRollingPeriodData | null;
+  } | null;
 }
 
 interface AnalysisResults {
@@ -4810,6 +4843,199 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                         </div>
                       </div>
                     </div>
+
+                    {/* Rolling Period Analysis - Best/Worst 365-Day Periods */}
+                    {analysisResults.blended_result.rolling_periods && (
+                      analysisResults.blended_result.rolling_periods.best_period ||
+                      analysisResults.blended_result.rolling_periods.worst_period
+                    ) && (
+                      <div style={{ marginTop: "2rem" }}>
+                        <h5 style={{
+                          marginBottom: "1rem",
+                          color: theme.palette.text.primary,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem"
+                        }}>
+                          📊 Best & Worst 365-Day Rolling Periods
+                        </h5>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
+                            gap: "1.5rem",
+                          }}
+                        >
+                          {/* Best Period */}
+                          {analysisResults.blended_result.rolling_periods.best_period && (
+                            <div
+                              style={{
+                                backgroundColor: theme.palette.mode === 'dark'
+                                  ? 'rgba(76, 175, 80, 0.1)'
+                                  : 'rgba(76, 175, 80, 0.05)',
+                                border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(76, 175, 80, 0.3)' : 'rgba(76, 175, 80, 0.2)'}`,
+                                borderRadius: "8px",
+                                padding: "1.25rem",
+                              }}
+                            >
+                              <div style={{
+                                fontSize: "1rem",
+                                fontWeight: "600",
+                                color: "#4CAF50",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem"
+                              }}>
+                                🏆 Best 365-Day Period
+                              </div>
+                              <div style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(3, 1fr)",
+                                gap: "1rem"
+                              }}>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Total Profit
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#4CAF50" }}>
+                                    ${analysisResults.blended_result.rolling_periods.best_period.total_profit?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    CAGR
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#4CAF50" }}>
+                                    {((analysisResults.blended_result.rolling_periods.best_period.cagr || 0) * 100).toFixed(2)}%
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Sharpe
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: theme.palette.text.primary }}>
+                                    {analysisResults.blended_result.rolling_periods.best_period.sharpe_ratio?.toFixed(2)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Sortino
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: theme.palette.text.primary }}>
+                                    {analysisResults.blended_result.rolling_periods.best_period.sortino_ratio?.toFixed(2)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Max Drawdown
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#f44336" }}>
+                                    {((analysisResults.blended_result.rolling_periods.best_period.max_drawdown_percent || 0) * 100).toFixed(2)}%
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    MAR
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: theme.palette.text.primary }}>
+                                    {analysisResults.blended_result.rolling_periods.best_period.mar_ratio?.toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Worst Period */}
+                          {analysisResults.blended_result.rolling_periods.worst_period && (
+                            <div
+                              style={{
+                                backgroundColor: theme.palette.mode === 'dark'
+                                  ? 'rgba(244, 67, 54, 0.1)'
+                                  : 'rgba(244, 67, 54, 0.05)',
+                                border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(244, 67, 54, 0.3)' : 'rgba(244, 67, 54, 0.2)'}`,
+                                borderRadius: "8px",
+                                padding: "1.25rem",
+                              }}
+                            >
+                              <div style={{
+                                fontSize: "1rem",
+                                fontWeight: "600",
+                                color: "#f44336",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem"
+                              }}>
+                                📉 Worst 365-Day Period
+                              </div>
+                              <div style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(3, 1fr)",
+                                gap: "1rem"
+                              }}>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Total Profit
+                                  </div>
+                                  <div style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: (analysisResults.blended_result.rolling_periods.worst_period.total_profit || 0) >= 0 ? "#4CAF50" : "#f44336"
+                                  }}>
+                                    ${analysisResults.blended_result.rolling_periods.worst_period.total_profit?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    CAGR
+                                  </div>
+                                  <div style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "bold",
+                                    color: (analysisResults.blended_result.rolling_periods.worst_period.cagr || 0) >= 0 ? "#4CAF50" : "#f44336"
+                                  }}>
+                                    {((analysisResults.blended_result.rolling_periods.worst_period.cagr || 0) * 100).toFixed(2)}%
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Sharpe
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: theme.palette.text.primary }}>
+                                    {analysisResults.blended_result.rolling_periods.worst_period.sharpe_ratio?.toFixed(2)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Sortino
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: theme.palette.text.primary }}>
+                                    {analysisResults.blended_result.rolling_periods.worst_period.sortino_ratio?.toFixed(2)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    Max Drawdown
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#f44336" }}>
+                                    {((analysisResults.blended_result.rolling_periods.worst_period.max_drawdown_percent || 0) * 100).toFixed(2)}%
+                                  </div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: "0.75rem", color: theme.palette.text.secondary, marginBottom: "0.25rem" }}>
+                                    MAR
+                                  </div>
+                                  <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: theme.palette.text.primary }}>
+                                    {analysisResults.blended_result.rolling_periods.worst_period.mar_ratio?.toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Blended Portfolio Plots */}
                     {analysisResults.blended_result.plots &&
