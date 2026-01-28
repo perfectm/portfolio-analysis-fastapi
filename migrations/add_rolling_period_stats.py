@@ -11,7 +11,30 @@ from urllib.parse import urlparse
 import logging
 
 # Add parent directory to path to import database config
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Load .env file if it exists (for production DATABASE_URL)
+# Must be done BEFORE importing from database module
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+if os.path.exists(env_path):
+    print(f"Loading environment from {env_path}")
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                # Remove surrounding quotes if present
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                os.environ[key] = value
+                if key == 'DATABASE_URL':
+                    masked = value.replace(value.split('@')[0].split('://')[-1], '***') if '@' in value else value
+                    print(f"  Loaded DATABASE_URL: {masked}")
+else:
+    print(f"WARNING: .env file not found at {env_path}")
 
 from database import DATABASE_URL
 
