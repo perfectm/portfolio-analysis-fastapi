@@ -10,6 +10,7 @@ from portfolio_blender import create_blended_portfolio, process_individual_portf
 from plotting import create_plots, create_correlation_heatmap, create_monte_carlo_simulation
 from portfolio_processor import extract_margin_data_from_df
 from margin_service import MarginService
+from rolling_period_service import RollingPeriodService
 import pandas as pd
 import os
 
@@ -103,6 +104,18 @@ async def upload_files_api(
                         logger.info(f"[API Upload] No margin data found in file for portfolio {portfolio.id}")
                 except Exception as margin_error:
                     logger.warning(f"[API Upload] Error extracting margin data for portfolio {portfolio.id}: {margin_error}")
+
+                # Calculate and store rolling period statistics (best/worst 365-day periods)
+                try:
+                    success = RollingPeriodService.calculate_and_store_rolling_stats(
+                        db, portfolio.id, period_length_days=365, starting_capital=starting_capital
+                    )
+                    if success:
+                        logger.info(f"[API Upload] Calculated and stored rolling period stats for portfolio {portfolio.id}")
+                    else:
+                        logger.info(f"[API Upload] Could not calculate rolling period stats for portfolio {portfolio.id} (insufficient data)")
+                except Exception as rolling_error:
+                    logger.warning(f"[API Upload] Error calculating rolling period stats for portfolio {portfolio.id}: {rolling_error}")
 
                 files_data.append((file.filename, df))
                 portfolio_ids.append(portfolio.id)

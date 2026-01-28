@@ -94,6 +94,7 @@ class Portfolio(Base):
     margin_data = relationship("PortfolioMarginData", back_populates="portfolio", cascade="all, delete-orphan")
     regime_performance = relationship("RegimePerformance", back_populates="portfolio", cascade="all, delete-orphan")
     blended_mappings = relationship("BlendedPortfolioMapping", back_populates="portfolio", cascade="all, delete-orphan")
+    rolling_period_stats = relationship("RollingPeriodStats", back_populates="portfolio", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Portfolio(id={self.id}, name='{self.name}', filename='{self.filename}')>"
@@ -579,11 +580,11 @@ class RobustnessStatistic(Base):
     Model for storing descriptive statistics for robustness test metrics
     """
     __tablename__ = "robustness_statistics"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     robustness_test_id = Column(Integer, ForeignKey("robustness_tests.id"), nullable=False)
     metric_name = Column(String(50), nullable=False)
-    
+
     # Descriptive statistics
     max_value = Column(Float)
     min_value = Column(Float)
@@ -592,21 +593,61 @@ class RobustnessStatistic(Base):
     std_deviation = Column(Float)
     q1_value = Column(Float)  # 25th percentile
     q3_value = Column(Float)  # 75th percentile
-    
+
     # Comparison with full dataset
     full_dataset_value = Column(Float)
     robustness_component_score = Column(Float)
     relative_deviation = Column(Float)  # (mean_value - full_dataset_value) / full_dataset_value
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationship
     robustness_test = relationship("RobustnessTest", back_populates="statistics")
-    
+
     # Indexes
     __table_args__ = (
         Index('idx_robustness_test_metric', 'robustness_test_id', 'metric_name'),
     )
-    
+
     def __repr__(self):
         return f"<RobustnessStatistic(id={self.id}, test_id={self.robustness_test_id}, metric='{self.metric_name}', score={self.robustness_component_score})>"
+
+
+class RollingPeriodStats(Base):
+    """
+    Model for storing best/worst rolling period statistics for portfolios.
+    Each portfolio has two records: one for 'best' and one for 'worst' period.
+    """
+    __tablename__ = "rolling_period_stats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    period_type = Column(String(20), nullable=False)  # 'best' or 'worst'
+    period_length_days = Column(Integer, nullable=False, default=365)
+
+    # Period date range
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+
+    # Key metrics for the period
+    total_profit = Column(Float, nullable=False)
+    cagr = Column(Float)
+    sharpe_ratio = Column(Float)
+    sortino_ratio = Column(Float)
+    max_drawdown_percent = Column(Float)
+    mar_ratio = Column(Float)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationship
+    portfolio = relationship("Portfolio", back_populates="rolling_period_stats")
+
+    # Unique constraint: one best/worst record per portfolio per period length
+    __table_args__ = (
+        Index('idx_portfolio_period_type', 'portfolio_id', 'period_type', 'period_length_days', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<RollingPeriodStats(id={self.id}, portfolio_id={self.portfolio_id}, type='{self.period_type}', profit={self.total_profit})>"

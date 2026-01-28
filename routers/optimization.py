@@ -9,6 +9,7 @@ from portfolio_blender import create_blended_portfolio, process_individual_portf
 from plotting import create_plots, create_correlation_heatmap, create_monte_carlo_simulation
 from correlation_utils import create_correlation_data_for_plotting, calculate_correlation_matrix_from_dataframe
 from models import PortfolioMarginData
+from rolling_period_service import RollingPeriodService
 from sqlalchemy import func
 import gc
 import pandas as pd
@@ -318,6 +319,15 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         logger.error(f"[Weighted Analysis] Error creating plots for portfolio {i+1}: {str(plot_error)}")
                 else:
                     logger.warning(f"[Weighted Analysis] No 'clean_df' key found in result {i+1}")
+                # Get rolling period stats for this portfolio
+                rolling_periods = None
+                portfolio_id = result.get('portfolio_id')
+                if portfolio_id:
+                    try:
+                        rolling_periods = RollingPeriodService.get_rolling_period_stats(db, portfolio_id)
+                    except Exception as rolling_error:
+                        logger.warning(f"[Weighted Analysis] Error getting rolling period stats for portfolio {portfolio_id}: {rolling_error}")
+
                 simplified_result = {
                     'filename': result.get('filename', 'Unknown'),
                     'type': result.get('type', 'file'),
@@ -361,7 +371,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                         'days_gain_over_one_pct_starting_cap': int(result['metrics'].get('days_gain_over_one_pct_starting_cap') or 0),
                         'largest_profit_day': safe_float(result['metrics'].get('largest_profit_day'), 0),
                         'largest_profit_date': result['metrics'].get('largest_profit_date', '')
-                    }
+                    },
+                    'rolling_periods': rolling_periods
                 }
                 simplified_individual_results.append(simplified_result)
         simplified_blended_result = None
@@ -520,6 +531,16 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             if i < len(portfolio_weights):
                                 portfolio_composition[name] = portfolio_weights[i]
 
+                    # Calculate blended rolling period stats
+                    blended_rolling_periods = None
+                    try:
+                        blended_rolling_periods = RollingPeriodService.calculate_blended_rolling_stats(
+                            db, successfully_processed_ids, successful_weights
+                        )
+                        logger.info(f"[Weighted Analysis] Calculated blended rolling period stats")
+                    except Exception as rolling_error:
+                        logger.warning(f"[Weighted Analysis] Error calculating blended rolling period stats: {rolling_error}")
+
                     simplified_blended_result = {
                         'filename': f'Weighted Blended Portfolio ({len(portfolios_data)} strategies)',
                         'type': 'blended',
@@ -570,7 +591,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                             'days_gain_over_one_pct_starting_cap': int(blended_metrics.get('days_gain_over_one_pct_starting_cap') or 0),
                             'largest_profit_day': safe_float(blended_metrics.get('largest_profit_day'), 0),
                             'largest_profit_date': blended_metrics.get('largest_profit_date', '')
-                        }
+                        },
+                        'rolling_periods': blended_rolling_periods
                     }
                     logger.info("[Weighted Analysis] Weighted blended portfolio created successfully")
                     for result in individual_results:
