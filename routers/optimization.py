@@ -535,7 +535,8 @@ async def analyze_selected_portfolios_weighted(request: Request, db: Session = D
                     blended_rolling_periods = None
                     try:
                         blended_rolling_periods = RollingPeriodService.calculate_blended_rolling_stats(
-                            db, successfully_processed_ids, successful_weights
+                            db, successfully_processed_ids, successful_weights,
+                            starting_capital=starting_capital
                         )
                         logger.info(f"[Weighted Analysis] Calculated blended rolling period stats")
                     except Exception as rolling_error:

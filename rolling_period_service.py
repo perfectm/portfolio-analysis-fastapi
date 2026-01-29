@@ -393,7 +393,8 @@ class RollingPeriodService:
         db: Session,
         portfolio_ids: List[int],
         weights: List[float],
-        period_length_days: int = 365
+        period_length_days: int = 365,
+        starting_capital: float = 100000.0
     ) -> Dict[str, Optional[Dict[str, Any]]]:
         """
         Calculate blended rolling period statistics by combining individual portfolio stats.
@@ -406,6 +407,7 @@ class RollingPeriodService:
             portfolio_ids: List of portfolio IDs
             weights: List of weights corresponding to portfolio IDs
             period_length_days: Period length in days
+            starting_capital: Starting capital for CAGR calculation
 
         Returns:
             Dictionary with 'best_period' and 'worst_period' blended stats
@@ -443,12 +445,12 @@ class RollingPeriodService:
 
         # Calculate blended metrics for best period
         best_blended = RollingPeriodService._blend_period_metrics(
-            individual_stats, 'best', weights
+            individual_stats, 'best', weights, starting_capital, period_length_days
         )
 
         # Calculate blended metrics for worst period
         worst_blended = RollingPeriodService._blend_period_metrics(
-            individual_stats, 'worst', weights
+            individual_stats, 'worst', weights, starting_capital, period_length_days
         )
 
         return {
@@ -460,7 +462,9 @@ class RollingPeriodService:
     def _blend_period_metrics(
         individual_stats: List[Dict[str, Any]],
         period_type: str,
-        weights: List[float]
+        weights: List[float],
+        starting_capital: float = 100000.0,
+        period_length_days: int = 365
     ) -> Dict[str, Any]:
         """
         Blend metrics from individual portfolios for a specific period type.
@@ -469,18 +473,18 @@ class RollingPeriodService:
             individual_stats: List of individual portfolio stats
             period_type: 'best' or 'worst'
             weights: Original weights (not normalized)
+            starting_capital: Starting capital for deriving blended CAGR
+            period_length_days: Period length in days for annualization
 
         Returns:
             Blended metrics dictionary
         """
         # Weight-combine metrics
         total_profit = 0.0
-        weighted_cagr = 0.0
         weighted_sharpe = 0.0
         weighted_sortino = 0.0
         weighted_max_dd = 0.0
         weighted_mar = 0.0
-        total_weight = sum(s['weight'] for s in individual_stats)
 
         portfolio_periods = []
 
@@ -493,7 +497,6 @@ class RollingPeriodService:
             total_profit += (period.get('total_profit') or 0) * weight
 
             # Other metrics are weight-averaged
-            weighted_cagr += (period.get('cagr') or 0) * norm_weight
             weighted_sharpe += (period.get('sharpe_ratio') or 0) * norm_weight
             weighted_sortino += (period.get('sortino_ratio') or 0) * norm_weight
             weighted_max_dd += (period.get('max_drawdown_percent') or 0) * norm_weight
@@ -507,9 +510,21 @@ class RollingPeriodService:
                 'total_profit': period.get('total_profit')
             })
 
+        # Calculate blended CAGR from actual total profit and starting capital
+        # rather than weight-averaging individual CAGRs (which is mathematically incorrect)
+        num_years = period_length_days / 365.0
+        if starting_capital > 0:
+            total_return = total_profit / starting_capital
+            if num_years > 0:
+                blended_cagr = (1 + total_return) ** (1 / num_years) - 1
+            else:
+                blended_cagr = total_return
+        else:
+            blended_cagr = 0.0
+
         return {
             'total_profit': total_profit,
-            'cagr': weighted_cagr,
+            'cagr': blended_cagr,
             'sharpe_ratio': weighted_sharpe,
             'sortino_ratio': weighted_sortino,
             'max_drawdown_percent': weighted_max_dd,
