@@ -55,6 +55,7 @@ async def save_favorite_settings(
         date_range_end = settings.get("date_range_end")
         is_default = settings.get("is_default", False)
         tags = settings.get("tags", [])
+        is_shared = settings.get("is_shared", False)
 
         # Validate
         if not portfolio_ids:
@@ -90,6 +91,7 @@ async def save_favorite_settings(
             existing.date_range_end = datetime.fromisoformat(date_range_end) if date_range_end else None
             existing.is_default = is_default
             existing.tags = tags_json
+            existing.is_shared = is_shared
             existing.updated_at = datetime.utcnow()
 
             db.commit()
@@ -114,7 +116,8 @@ async def save_favorite_settings(
                 date_range_start=datetime.fromisoformat(date_range_start) if date_range_start else None,
                 date_range_end=datetime.fromisoformat(date_range_end) if date_range_end else None,
                 is_default=is_default,
-                tags=tags_json
+                tags=tags_json,
+                is_shared=is_shared
             )
 
             db.add(favorite)
@@ -175,6 +178,7 @@ async def load_favorite_settings(
                 "id": fav.id,
                 "name": fav.name,
                 "is_default": fav.is_default,
+                "is_shared": fav.is_shared,
                 "tags": tags,
                 "portfolio_ids": portfolio_ids,
                 "weights": weights,
@@ -332,6 +336,160 @@ async def apply_optimized_weights(
         raise HTTPException(status_code=500, detail=f"Failed to apply weights: {str(e)}")
 
 
+# ==================== Sharing Endpoints ====================
+
+
+@router.put("/api/favorites/{favorite_id}/share")
+async def toggle_favorite_sharing(
+    favorite_id: int,
+    data: Dict,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Toggle sharing for a favorite
+
+    Request body: {"is_shared": true/false}
+    """
+    try:
+        is_shared = data.get("is_shared", False)
+
+        favorite = db.query(FavoriteSettings).filter(
+            FavoriteSettings.id == favorite_id,
+            FavoriteSettings.user_id == current_user.id
+        ).first()
+
+        if not favorite:
+            raise HTTPException(status_code=404, detail="Favorite not found")
+
+        favorite.is_shared = bool(is_shared)
+        favorite.updated_at = datetime.utcnow()
+        db.commit()
+
+        status = "shared" if is_shared else "unshared"
+        logger.info(f"Favorite {favorite_id} {status} by user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": f"Favorite '{favorite.name}' is now {'shared' if is_shared else 'private'}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling sharing: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update sharing: {str(e)}")
+
+
+@router.get("/api/favorites/shared")
+async def browse_shared_favorites(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Browse all shared favorites from other users
+
+    Returns lightweight list for browsing.
+    """
+    try:
+        favorites = db.query(FavoriteSettings).join(
+            User, FavoriteSettings.user_id == User.id
+        ).filter(
+            FavoriteSettings.is_shared == True,
+            FavoriteSettings.user_id != current_user.id
+        ).order_by(
+            FavoriteSettings.updated_at.desc()
+        ).all()
+
+        shared_list = []
+        for fav in favorites:
+            # Get the owner user
+            owner = db.query(User).filter(User.id == fav.user_id).first()
+            portfolio_ids = json.loads(fav.portfolio_ids_json)
+            tags = json.loads(fav.tags) if fav.tags else []
+
+            shared_by = owner.full_name or owner.username if owner else "Unknown"
+
+            shared_list.append({
+                "id": fav.id,
+                "name": fav.name,
+                "tags": tags,
+                "portfolio_count": len(portfolio_ids),
+                "shared_by": shared_by,
+                "created_at": fav.created_at.isoformat(),
+                "updated_at": fav.updated_at.isoformat()
+            })
+
+        return {
+            "success": True,
+            "shared_favorites": shared_list
+        }
+
+    except Exception as e:
+        logger.error(f"Error browsing shared favorites: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to browse shared favorites: {str(e)}")
+
+
+@router.get("/api/favorites/shared/{favorite_id}")
+async def get_shared_favorite(
+    favorite_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db)
+):
+    """
+    Load a shared favorite's full settings (read-only)
+
+    Returns full settings for applying to UI. No ownership check — sharing is the point.
+    """
+    try:
+        favorite = db.query(FavoriteSettings).filter(
+            FavoriteSettings.id == favorite_id,
+            FavoriteSettings.is_shared == True
+        ).first()
+
+        if not favorite:
+            raise HTTPException(status_code=404, detail="Shared favorite not found")
+
+        # Get the owner user
+        owner = db.query(User).filter(User.id == favorite.user_id).first()
+        shared_by = owner.full_name or owner.username if owner else "Unknown"
+
+        # Parse JSON fields
+        portfolio_ids = json.loads(favorite.portfolio_ids_json)
+        weights_array = json.loads(favorite.weights_json)
+        tags = json.loads(favorite.tags) if favorite.tags else []
+
+        # Convert weights array to dict
+        weights = {str(pid): weight for pid, weight in zip(portfolio_ids, weights_array)}
+
+        return {
+            "success": True,
+            "favorite": {
+                "id": favorite.id,
+                "name": favorite.name,
+                "shared_by": shared_by,
+                "tags": tags,
+                "portfolio_ids": portfolio_ids,
+                "weights": weights,
+                "starting_capital": favorite.starting_capital,
+                "risk_free_rate": favorite.risk_free_rate,
+                "sma_window": favorite.sma_window,
+                "use_trading_filter": favorite.use_trading_filter,
+                "date_range_start": favorite.date_range_start.isoformat() if favorite.date_range_start else None,
+                "date_range_end": favorite.date_range_end.isoformat() if favorite.date_range_end else None,
+                "created_at": favorite.created_at.isoformat(),
+                "updated_at": favorite.updated_at.isoformat()
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading shared favorite: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load shared favorite: {str(e)}")
+
+
 # ==================== Multiple Favorites CRUD Endpoints ====================
 
 
@@ -362,6 +520,7 @@ async def list_favorites(
                 "id": fav.id,
                 "name": fav.name,
                 "is_default": fav.is_default,
+                "is_shared": fav.is_shared,
                 "tags": tags,
                 "portfolio_count": len(portfolio_ids),
                 "last_optimized": fav.last_optimized.isoformat() if fav.last_optimized else None,
@@ -414,6 +573,7 @@ async def get_favorite(
                 "id": favorite.id,
                 "name": favorite.name,
                 "is_default": favorite.is_default,
+                "is_shared": favorite.is_shared,
                 "tags": tags,
                 "portfolio_ids": portfolio_ids,
                 "weights": weights,

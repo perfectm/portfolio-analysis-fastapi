@@ -58,6 +58,7 @@ class FavoriteSettings(Base):
     # Multiple favorites support
     is_default = Column(Boolean, default=False, nullable=False)  # Is this the default favorite for the user
     tags = Column(Text, nullable=True)  # JSON array of tags for categorization (e.g., ["Experimental", "Production"])
+    is_shared = Column(Boolean, default=False, nullable=False)  # Whether this favorite is publicly shared
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

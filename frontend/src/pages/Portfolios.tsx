@@ -25,7 +25,11 @@ import {
   TableHead,
   TableRow,
   Autocomplete,
-  Divider
+  Divider,
+  Switch,
+  Tab,
+  Tabs,
+  CircularProgress
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -36,7 +40,9 @@ import {
   Save,
   Cancel,
   ContentCopy,
-  Delete
+  Delete,
+  Share as ShareIcon,
+  Download as DownloadIcon
 } from "@mui/icons-material";
 import { 
   LineChart, 
@@ -81,6 +87,7 @@ interface FavoriteSetting {
   id: number;
   name: string;
   is_default: boolean;
+  is_shared: boolean;
   tags: string[];
   portfolio_ids: number[];
   weights: Record<string, number>;
@@ -92,6 +99,16 @@ interface FavoriteSetting {
   date_range_end: string | null;
   last_optimized: string | null;
   has_new_optimization: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SharedFavoriteSetting {
+  id: number;
+  name: string;
+  tags: string[];
+  portfolio_count: number;
+  shared_by: string;
   created_at: string;
   updated_at: string;
 }
@@ -404,6 +421,9 @@ export default function Portfolios() {
   const [newFavoriteName, setNewFavoriteName] = useState("");
   const [editingNameId, setEditingNameId] = useState<number | null>(null);
   const [editingNameValue, setEditingNameValue] = useState("");
+  const [sharedFavorites, setSharedFavorites] = useState<SharedFavoriteSetting[]>([]);
+  const [favoritesTabIndex, setFavoritesTabIndex] = useState(0);
+  const [loadingShared, setLoadingShared] = useState(false);
   const [rollingPeriodModalOpen, setRollingPeriodModalOpen] = useState(false);
   const [rollingPeriodModalType, setRollingPeriodModalType] = useState<'best' | 'worst'>('best');
 
@@ -1875,6 +1895,116 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
     } catch (error) {
       console.error("Error deleting favorite:", error);
       alert("Failed to delete favorite");
+    }
+  };
+
+  // Toggle sharing for a favorite
+  const handleToggleSharing = async (favoriteId: number, isShared: boolean) => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/favorites/${favoriteId}/share`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ is_shared: isShared }),
+      });
+
+      if (response.ok) {
+        setFavorites(favorites.map(f =>
+          f.id === favoriteId ? { ...f, is_shared: isShared } : f
+        ));
+      }
+    } catch (error) {
+      console.error("Error toggling sharing:", error);
+      alert("Failed to update sharing");
+    }
+  };
+
+  // Fetch shared favorites from other users
+  const fetchSharedFavorites = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    setLoadingShared(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/favorites/shared`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setSharedFavorites(result.shared_favorites);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching shared favorites:", error);
+    } finally {
+      setLoadingShared(false);
+    }
+  };
+
+  // Load a shared favorite and apply its settings
+  const handleLoadSharedFavorite = async (favoriteId: number) => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/favorites/shared/${favoriteId}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to load shared favorite");
+      }
+
+      const result = await response.json();
+      if (result.success && result.favorite) {
+        const fav = result.favorite;
+
+        // Apply settings to UI state (same as loadSpecificFavorite)
+        setSelectedPortfolios(fav.portfolio_ids);
+
+        const weightsAsNumbers: Record<number, number> = {};
+        Object.keys(fav.weights).forEach(key => {
+          weightsAsNumbers[parseInt(key)] = Math.round(fav.weights[key]);
+        });
+        setPortfolioWeights(weightsAsNumbers);
+
+        setStartingCapital(fav.starting_capital);
+        setRiskFreeRate(fav.risk_free_rate * 100);
+
+        if (fav.date_range_start) {
+          setDateRangeStart(fav.date_range_start.split('T')[0]);
+        } else {
+          setDateRangeStart("2022-05-01");
+        }
+
+        if (fav.date_range_end) {
+          setDateRangeEnd(fav.date_range_end.split('T')[0]);
+        } else {
+          setDateRangeEnd(new Date().toISOString().split('T')[0]);
+        }
+
+        const hasCustomWeights = Object.values(fav.weights).some((w: number) => w !== 1.0);
+        setWeightingMethod(hasCustomWeights ? "custom" : "equal");
+
+        setManageFavoritesModalOpen(false);
+        alert(`Loaded shared favorite: ${fav.name} (by ${fav.shared_by})`);
+      }
+    } catch (error) {
+      console.error("Error loading shared favorite:", error);
+      alert("Failed to load shared favorite");
     }
   };
 
@@ -7362,197 +7492,304 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
       {/* Manage Favorites Modal Dialog */}
       <Dialog
         open={manageFavoritesModalOpen}
-        onClose={() => setManageFavoritesModalOpen(false)}
+        onClose={() => { setManageFavoritesModalOpen(false); setFavoritesTabIndex(0); }}
         maxWidth="lg"
         fullWidth
       >
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h6">Manage Favorites</Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setManageFavoritesModalOpen(false);
-                setCreateFavoriteDialogOpen(true);
-              }}
-            >
-              Create New
-            </Button>
+            {favoritesTabIndex === 0 && (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setManageFavoritesModalOpen(false);
+                  setCreateFavoriteDialogOpen(true);
+                }}
+              >
+                Create New
+              </Button>
+            )}
           </Box>
+          <Tabs
+            value={favoritesTabIndex}
+            onChange={(_e, newVal) => {
+              setFavoritesTabIndex(newVal);
+              if (newVal === 1) {
+                fetchSharedFavorites();
+              }
+            }}
+            sx={{ mt: 1 }}
+          >
+            <Tab label="My Favorites" />
+            <Tab label="Browse Shared" icon={<ShareIcon />} iconPosition="start" />
+          </Tabs>
         </DialogTitle>
 
         <DialogContent>
-          {favorites.length === 0 ? (
-            <Box textAlign="center" py={4}>
-              <Typography color="textSecondary">
-                No favorites saved yet. Create your first favorite to get started!
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell width="50" align="center">Default</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Tags</TableCell>
-                    <TableCell align="center">Portfolios</TableCell>
-                    <TableCell>Last Optimized</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {favorites.map((fav) => (
-                    <TableRow key={fav.id} hover>
-                      {/* Star icon for default */}
-                      <TableCell align="center">
-                        <IconButton
-                          onClick={() => handleSetDefaultFavorite(fav.id)}
-                          color={fav.is_default ? "primary" : "default"}
-                          size="small"
-                        >
-                          {fav.is_default ? <Star /> : <StarBorder />}
-                        </IconButton>
-                      </TableCell>
-
-                      {/* Inline editable name */}
-                      <TableCell>
-                        {editingNameId === fav.id ? (
-                          <Box display="flex" gap={1} alignItems="center">
-                            <TextField
+          {/* My Favorites Tab */}
+          {favoritesTabIndex === 0 && (
+            <>
+              {favorites.length === 0 ? (
+                <Box textAlign="center" py={4}>
+                  <Typography color="textSecondary">
+                    No favorites saved yet. Create your first favorite to get started!
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell width="50" align="center">Default</TableCell>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Tags</TableCell>
+                        <TableCell align="center">Portfolios</TableCell>
+                        <TableCell align="center">Shared</TableCell>
+                        <TableCell>Last Optimized</TableCell>
+                        <TableCell align="right">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {favorites.map((fav) => (
+                        <TableRow key={fav.id} hover>
+                          {/* Star icon for default */}
+                          <TableCell align="center">
+                            <IconButton
+                              onClick={() => handleSetDefaultFavorite(fav.id)}
+                              color={fav.is_default ? "primary" : "default"}
                               size="small"
-                              value={editingNameValue}
-                              onChange={(e) => setEditingNameValue(e.target.value)}
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter') handleSaveName(fav.id);
-                                if (e.key === 'Escape') handleCancelEdit();
-                              }}
-                              autoFocus
+                            >
+                              {fav.is_default ? <Star /> : <StarBorder />}
+                            </IconButton>
+                          </TableCell>
+
+                          {/* Inline editable name */}
+                          <TableCell>
+                            {editingNameId === fav.id ? (
+                              <Box display="flex" gap={1} alignItems="center">
+                                <TextField
+                                  size="small"
+                                  value={editingNameValue}
+                                  onChange={(e) => setEditingNameValue(e.target.value)}
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') handleSaveName(fav.id);
+                                    if (e.key === 'Escape') handleCancelEdit();
+                                  }}
+                                  autoFocus
+                                />
+                                <IconButton size="small" onClick={() => handleSaveName(fav.id)}>
+                                  <Save fontSize="small" />
+                                </IconButton>
+                                <IconButton size="small" onClick={() => handleCancelEdit()}>
+                                  <Cancel fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            ) : (
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <Typography>{fav.name}</Typography>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleEditName(fav)}
+                                  style={{ opacity: 0.5 }}
+                                >
+                                  <Edit fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            )}
+                          </TableCell>
+
+                          {/* Tags with Autocomplete */}
+                          <TableCell>
+                            <Autocomplete
+                              multiple
+                              freeSolo
+                              options={Array.from(new Set(favorites.flatMap(f => f.tags)))}
+                              value={fav.tags}
+                              onChange={(e, newTags) => handleUpdateTags(fav.id, newTags as string[])}
+                              renderTags={(value, getTagProps) =>
+                                value.map((option, index) => {
+                                  const { key, ...tagProps } = getTagProps({ index });
+                                  return (
+                                    <Chip
+                                      key={key}
+                                      label={option}
+                                      size="small"
+                                      {...tagProps}
+                                    />
+                                  );
+                                })
+                              }
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  variant="standard"
+                                  placeholder="Add tags..."
+                                  size="small"
+                                />
+                              )}
+                              size="small"
+                              style={{ minWidth: 200 }}
                             />
-                            <IconButton size="small" onClick={() => handleSaveName(fav.id)}>
-                              <Save fontSize="small" />
-                            </IconButton>
-                            <IconButton size="small" onClick={() => handleCancelEdit()}>
-                              <Cancel fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        ) : (
-                          <Box display="flex" alignItems="center" gap={1}>
-                            <Typography>{fav.name}</Typography>
+                          </TableCell>
+
+                          {/* Portfolio count */}
+                          <TableCell align="center">
+                            <Chip
+                              label={fav.portfolio_ids.length}
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                            />
+                          </TableCell>
+
+                          {/* Shared toggle */}
+                          <TableCell align="center">
+                            <Switch
+                              checked={fav.is_shared}
+                              onChange={(e) => handleToggleSharing(fav.id, e.target.checked)}
+                              size="small"
+                            />
+                          </TableCell>
+
+                          {/* Last optimized with alert */}
+                          <TableCell>
+                            <Box>
+                              {fav.has_new_optimization && (
+                                <Chip
+                                  label="New optimization!"
+                                  color="success"
+                                  size="small"
+                                  style={{ marginBottom: 4 }}
+                                />
+                              )}
+                              <Typography variant="caption" display="block">
+                                {fav.last_optimized
+                                  ? new Date(fav.last_optimized).toLocaleString()
+                                  : "Never"}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+
+                          {/* Actions */}
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => {
+                                loadSpecificFavorite(fav.id);
+                                setManageFavoritesModalOpen(false);
+                              }}
+                              style={{ marginRight: 4 }}
+                            >
+                              Load
+                            </Button>
                             <IconButton
                               size="small"
-                              onClick={() => handleEditName(fav)}
-                              style={{ opacity: 0.5 }}
+                              onClick={() => handleDuplicateFavorite(fav.id)}
+                              title="Duplicate"
                             >
-                              <Edit fontSize="small" />
+                              <ContentCopy fontSize="small" />
                             </IconButton>
-                          </Box>
-                        )}
-                      </TableCell>
-
-                      {/* Tags with Autocomplete */}
-                      <TableCell>
-                        <Autocomplete
-                          multiple
-                          freeSolo
-                          options={Array.from(new Set(favorites.flatMap(f => f.tags)))}
-                          value={fav.tags}
-                          onChange={(e, newTags) => handleUpdateTags(fav.id, newTags as string[])}
-                          renderTags={(value, getTagProps) =>
-                            value.map((option, index) => {
-                              const { key, ...tagProps } = getTagProps({ index });
-                              return (
-                                <Chip
-                                  key={key}
-                                  label={option}
-                                  size="small"
-                                  {...tagProps}
-                                />
-                              );
-                            })
-                          }
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              variant="standard"
-                              placeholder="Add tags..."
+                            <IconButton
                               size="small"
-                            />
-                          )}
-                          size="small"
-                          style={{ minWidth: 200 }}
-                        />
-                      </TableCell>
+                              onClick={() => handleDeleteFavorite(fav.id)}
+                              color="error"
+                              title="Delete"
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </>
+          )}
 
-                      {/* Portfolio count */}
-                      <TableCell align="center">
-                        <Chip
-                          label={fav.portfolio_ids.length}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      </TableCell>
-
-                      {/* Last optimized with alert */}
-                      <TableCell>
-                        <Box>
-                          {fav.has_new_optimization && (
+          {/* Browse Shared Tab */}
+          {favoritesTabIndex === 1 && (
+            <>
+              {loadingShared ? (
+                <Box textAlign="center" py={4}>
+                  <CircularProgress size={32} />
+                  <Typography color="textSecondary" sx={{ mt: 1 }}>
+                    Loading shared favorites...
+                  </Typography>
+                </Box>
+              ) : sharedFavorites.length === 0 ? (
+                <Box textAlign="center" py={4}>
+                  <Typography color="textSecondary">
+                    No shared favorites from other users yet.
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Shared By</TableCell>
+                        <TableCell>Tags</TableCell>
+                        <TableCell align="center">Portfolios</TableCell>
+                        <TableCell>Last Updated</TableCell>
+                        <TableCell align="right">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {sharedFavorites.map((sf) => (
+                        <TableRow key={sf.id} hover>
+                          <TableCell>
+                            <Typography>{sf.name}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="textSecondary">
+                              {sf.shared_by}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {sf.tags.map((tag) => (
+                              <Chip key={tag} label={tag} size="small" sx={{ mr: 0.5 }} />
+                            ))}
+                          </TableCell>
+                          <TableCell align="center">
                             <Chip
-                              label="New optimization!"
-                              color="success"
+                              label={sf.portfolio_count}
                               size="small"
-                              style={{ marginBottom: 4 }}
+                              color="primary"
+                              variant="outlined"
                             />
-                          )}
-                          <Typography variant="caption" display="block">
-                            {fav.last_optimized
-                              ? new Date(fav.last_optimized).toLocaleString()
-                              : "Never"}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => {
-                            loadSpecificFavorite(fav.id);
-                            setManageFavoritesModalOpen(false);
-                          }}
-                          style={{ marginRight: 4 }}
-                        >
-                          Load
-                        </Button>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDuplicateFavorite(fav.id)}
-                          title="Duplicate"
-                        >
-                          <ContentCopy fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDeleteFavorite(fav.id)}
-                          color="error"
-                          title="Delete"
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption">
+                              {new Date(sf.updated_at).toLocaleString()}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<DownloadIcon />}
+                              onClick={() => handleLoadSharedFavorite(sf.id)}
+                            >
+                              Load
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </>
           )}
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setManageFavoritesModalOpen(false)}>
+          <Button onClick={() => { setManageFavoritesModalOpen(false); setFavoritesTabIndex(0); }}>
             Close
           </Button>
         </DialogActions>
