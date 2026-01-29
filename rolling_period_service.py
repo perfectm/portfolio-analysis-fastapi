@@ -89,6 +89,14 @@ class RollingPeriodService:
         unique_dates = df['Date'].unique()
         unique_dates = sorted(unique_dates)
 
+        # Calculate the last valid start date - must allow for a complete period
+        # If data ends on Jan 16, 2026, last valid start is Jan 16, 2025
+        last_data_date = df['Date'].max()
+        last_valid_start_date = last_data_date - pd.Timedelta(days=period_length_days)
+
+        logger.info(f"[Rolling Period] Data range: {df['Date'].min().strftime('%Y-%m-%d')} to {last_data_date.strftime('%Y-%m-%d')}")
+        logger.info(f"[Rolling Period] Last valid start date for complete {period_length_days}-day period: {last_valid_start_date.strftime('%Y-%m-%d')}")
+
         best_period = None
         worst_period = None
         best_profit = float('-inf')
@@ -96,8 +104,12 @@ class RollingPeriodService:
 
         periods_analyzed = 0
 
-        # Iterate through each potential start date
+        # Iterate through each potential start date (only dates that allow complete periods)
         for start_date in unique_dates:
+            # Skip if this start date wouldn't allow a complete period
+            if start_date > last_valid_start_date:
+                continue
+
             end_date = start_date + pd.Timedelta(days=period_length_days)
 
             # Filter data for this period
