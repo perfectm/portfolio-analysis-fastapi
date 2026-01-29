@@ -404,6 +404,8 @@ export default function Portfolios() {
   const [newFavoriteName, setNewFavoriteName] = useState("");
   const [editingNameId, setEditingNameId] = useState<number | null>(null);
   const [editingNameValue, setEditingNameValue] = useState("");
+  const [rollingPeriodModalOpen, setRollingPeriodModalOpen] = useState(false);
+  const [rollingPeriodModalType, setRollingPeriodModalType] = useState<'best' | 'worst'>('best');
 
   // localStorage persistence helpers
   const saveSelectedPortfolios = (selections: number[]) => {
@@ -4869,6 +4871,10 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           {/* Best Period */}
                           {analysisResults.blended_result.rolling_periods.best_period && (
                             <div
+                              onClick={() => {
+                                setRollingPeriodModalType('best');
+                                setRollingPeriodModalOpen(true);
+                              }}
                               style={{
                                 backgroundColor: theme.palette.mode === 'dark'
                                   ? 'rgba(76, 175, 80, 0.1)'
@@ -4876,6 +4882,16 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(76, 175, 80, 0.3)' : 'rgba(76, 175, 80, 0.2)'}`,
                                 borderRadius: "8px",
                                 padding: "1.25rem",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = "translateY(-2px)";
+                                e.currentTarget.style.boxShadow = "0 4px 12px rgba(76, 175, 80, 0.2)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = "translateY(0)";
+                                e.currentTarget.style.boxShadow = "none";
                               }}
                             >
                               <div style={{
@@ -4888,6 +4904,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 gap: "0.5rem"
                               }}>
                                 🏆 Best 365-Day Period
+                                <span style={{ fontSize: "0.75rem", fontWeight: "normal", color: theme.palette.text.secondary }}>(click for details)</span>
                               </div>
                               <div style={{
                                 display: "grid",
@@ -4949,6 +4966,10 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           {/* Worst Period */}
                           {analysisResults.blended_result.rolling_periods.worst_period && (
                             <div
+                              onClick={() => {
+                                setRollingPeriodModalType('worst');
+                                setRollingPeriodModalOpen(true);
+                              }}
                               style={{
                                 backgroundColor: theme.palette.mode === 'dark'
                                   ? 'rgba(244, 67, 54, 0.1)'
@@ -4956,6 +4977,16 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(244, 67, 54, 0.3)' : 'rgba(244, 67, 54, 0.2)'}`,
                                 borderRadius: "8px",
                                 padding: "1.25rem",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = "translateY(-2px)";
+                                e.currentTarget.style.boxShadow = "0 4px 12px rgba(244, 67, 54, 0.2)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = "translateY(0)";
+                                e.currentTarget.style.boxShadow = "none";
                               }}
                             >
                               <div style={{
@@ -4968,6 +4999,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 gap: "0.5rem"
                               }}>
                                 📉 Worst 365-Day Period
+                                <span style={{ fontSize: "0.75rem", fontWeight: "normal", color: theme.palette.text.secondary }}>(click for details)</span>
                               </div>
                               <div style={{
                                 display: "grid",
@@ -7521,6 +7553,107 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
 
         <DialogActions>
           <Button onClick={() => setManageFavoritesModalOpen(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rolling Period Details Modal */}
+      <Dialog
+        open={rollingPeriodModalOpen}
+        onClose={() => setRollingPeriodModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{
+          backgroundColor: rollingPeriodModalType === 'best'
+            ? theme.palette.mode === 'dark' ? 'rgba(76, 175, 80, 0.15)' : 'rgba(76, 175, 80, 0.1)'
+            : theme.palette.mode === 'dark' ? 'rgba(244, 67, 54, 0.15)' : 'rgba(244, 67, 54, 0.1)',
+          borderBottom: `1px solid ${theme.palette.divider}`
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {rollingPeriodModalType === 'best' ? '🏆' : '📉'}
+            <span style={{ color: rollingPeriodModalType === 'best' ? '#4CAF50' : '#f44336' }}>
+              {rollingPeriodModalType === 'best' ? 'Best' : 'Worst'} 365-Day Period - Portfolio Breakdown
+            </span>
+          </div>
+        </DialogTitle>
+        <DialogContent sx={{ paddingTop: "1.5rem !important" }}>
+          {analysisResults?.blended_result?.rolling_periods && (
+            (() => {
+              const periodData = rollingPeriodModalType === 'best'
+                ? analysisResults.blended_result.rolling_periods.best_period
+                : analysisResults.blended_result.rolling_periods.worst_period;
+
+              if (!periodData?.portfolio_periods || periodData.portfolio_periods.length === 0) {
+                return (
+                  <div style={{ textAlign: "center", padding: "2rem", color: theme.palette.text.secondary }}>
+                    No individual portfolio data available for this period.
+                  </div>
+                );
+              }
+
+              // Helper function to get portfolio name by ID
+              const getPortfolioName = (portfolioId: number): string => {
+                const portfolio = portfolios.find(p => p.id === portfolioId);
+                return portfolio?.name || `Portfolio ${portfolioId}`;
+              };
+
+              return (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: "bold" }}>Portfolio</TableCell>
+                        <TableCell sx={{ fontWeight: "bold" }}>Weight</TableCell>
+                        <TableCell sx={{ fontWeight: "bold" }}>Date Range</TableCell>
+                        <TableCell sx={{ fontWeight: "bold", textAlign: "right" }}>Net Profit</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {periodData.portfolio_periods.map((period, index) => (
+                        <TableRow key={index} hover>
+                          <TableCell sx={{ fontWeight: 500 }}>
+                            {getPortfolioName(period.portfolio_id)}
+                          </TableCell>
+                          <TableCell>
+                            {period.weight.toFixed(2)}x
+                          </TableCell>
+                          <TableCell>
+                            {period.start_date} → {period.end_date}
+                          </TableCell>
+                          <TableCell sx={{
+                            textAlign: "right",
+                            fontWeight: "bold",
+                            color: (period.total_profit || 0) >= 0 ? "#4CAF50" : "#f44336"
+                          }}>
+                            ${period.total_profit?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {/* Total Row */}
+                      <TableRow sx={{ backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}>
+                        <TableCell sx={{ fontWeight: "bold" }} colSpan={3}>
+                          Blended Total
+                        </TableCell>
+                        <TableCell sx={{
+                          textAlign: "right",
+                          fontWeight: "bold",
+                          fontSize: "1.1rem",
+                          color: (periodData.total_profit || 0) >= 0 ? "#4CAF50" : "#f44336"
+                        }}>
+                          ${periodData.total_profit?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              );
+            })()
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRollingPeriodModalOpen(false)}>
             Close
           </Button>
         </DialogActions>
