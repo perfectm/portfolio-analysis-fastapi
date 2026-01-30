@@ -624,7 +624,7 @@ class RollingPeriodStats(Base):
     id = Column(Integer, primary_key=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
     period_type = Column(String(20), nullable=False)  # 'best' or 'worst'
-    period_length_days = Column(Integer, nullable=False, default=365)
+    period_length_days = Column(Integer, nullable=False, default=90)
 
     # Period date range
     start_date = Column(DateTime, nullable=False)

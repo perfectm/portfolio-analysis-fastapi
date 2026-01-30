@@ -105,10 +105,10 @@ async def upload_files_api(
                 except Exception as margin_error:
                     logger.warning(f"[API Upload] Error extracting margin data for portfolio {portfolio.id}: {margin_error}")
 
-                # Calculate and store rolling period statistics (best/worst 365-day periods)
+                # Calculate and store rolling period statistics (best/worst 90-day periods)
                 try:
                     success = RollingPeriodService.calculate_and_store_rolling_stats(
-                        db, portfolio.id, period_length_days=365, starting_capital=starting_capital
+                        db, portfolio.id, period_length_days=90, starting_capital=starting_capital
                     )
                     if success:
                         logger.info(f"[API Upload] Calculated and stored rolling period stats for portfolio {portfolio.id}")

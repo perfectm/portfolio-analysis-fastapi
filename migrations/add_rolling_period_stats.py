@@ -1,5 +1,5 @@
 """
-Database migration to add rolling_period_stats table for best/worst 365-day rolling period analysis.
+Database migration to add rolling_period_stats table for best/worst 90-day rolling period analysis.
 Run this script to create the table that stores pre-calculated rolling period statistics for portfolios.
 """
 
@@ -69,7 +69,7 @@ def run_migration():
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         portfolio_id INTEGER NOT NULL,
                         period_type VARCHAR(20) NOT NULL,
-                        period_length_days INTEGER NOT NULL DEFAULT 365,
+                        period_length_days INTEGER NOT NULL DEFAULT 90,
                         start_date TIMESTAMP NOT NULL,
                         end_date TIMESTAMP NOT NULL,
                         total_profit REAL NOT NULL,
@@ -131,7 +131,7 @@ def run_migration():
                             id SERIAL PRIMARY KEY,
                             portfolio_id INTEGER NOT NULL REFERENCES portfolios(id),
                             period_type VARCHAR(20) NOT NULL,
-                            period_length_days INTEGER NOT NULL DEFAULT 365,
+                            period_length_days INTEGER NOT NULL DEFAULT 90,
                             start_date TIMESTAMP NOT NULL,
                             end_date TIMESTAMP NOT NULL,
                             total_profit DOUBLE PRECISION NOT NULL,

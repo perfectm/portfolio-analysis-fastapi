@@ -1,6 +1,6 @@
 """
 Service for calculating and managing rolling period statistics for portfolios.
-Calculates best/worst 365-day rolling periods with overlapping windows.
+Calculates best/worst 90-day rolling periods with overlapping windows.
 """
 
 import logging
@@ -38,7 +38,7 @@ class RollingPeriodService:
     def calculate_rolling_periods(
         db: Session,
         portfolio_id: int,
-        period_length_days: int = 365,
+        period_length_days: int = 90,
         starting_capital: float = 100000.0,
         rf_rate: float = 0.0,  # Default to 0% for rolling period calculations
         sma_window: int = 20,
@@ -50,7 +50,7 @@ class RollingPeriodService:
         Args:
             db: Database session
             portfolio_id: Portfolio ID to analyze
-            period_length_days: Length of rolling period (default 365 days)
+            period_length_days: Length of rolling period (default 90 days)
             starting_capital: Starting capital for calculations
             rf_rate: Risk-free rate (default 0% for rolling calculations)
             sma_window: SMA window for trading filter
@@ -232,7 +232,7 @@ class RollingPeriodService:
         portfolio_id: int,
         best_period: Dict[str, Any],
         worst_period: Dict[str, Any],
-        period_length_days: int = 365
+        period_length_days: int = 90
     ) -> bool:
         """
         Store or update rolling period statistics in the database.
@@ -350,7 +350,7 @@ class RollingPeriodService:
     def get_rolling_period_stats(
         db: Session,
         portfolio_id: int,
-        period_length_days: int = 365
+        period_length_days: int = 90
     ) -> Dict[str, Optional[Dict[str, Any]]]:
         """
         Retrieve stored rolling period statistics for a portfolio.
@@ -393,7 +393,7 @@ class RollingPeriodService:
         db: Session,
         portfolio_ids: List[int],
         weights: List[float],
-        period_length_days: int = 365,
+        period_length_days: int = 90,
         starting_capital: float = 100000.0
     ) -> Dict[str, Optional[Dict[str, Any]]]:
         """
@@ -464,7 +464,7 @@ class RollingPeriodService:
         period_type: str,
         weights: List[float],
         starting_capital: float = 100000.0,
-        period_length_days: int = 365
+        period_length_days: int = 90
     ) -> Dict[str, Any]:
         """
         Blend metrics from individual portfolios for a specific period type.
@@ -536,7 +536,7 @@ class RollingPeriodService:
     def calculate_and_store_rolling_stats(
         db: Session,
         portfolio_id: int,
-        period_length_days: int = 365,
+        period_length_days: int = 90,
         starting_capital: float = 100000.0
     ) -> bool:
         """

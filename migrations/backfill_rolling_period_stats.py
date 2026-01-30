@@ -41,7 +41,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def backfill_rolling_stats(starting_capital: float = 100000.0, period_length_days: int = 365):
+def backfill_rolling_stats(starting_capital: float = 100000.0, period_length_days: int = 90):
     """
     Calculate and store rolling period stats for all existing portfolios.
 
@@ -139,8 +139,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Backfill rolling period stats for existing portfolios')
     parser.add_argument('--starting-capital', type=float, default=100000.0,
                        help='Starting capital for calculations (default: 100000)')
-    parser.add_argument('--period-days', type=int, default=365,
-                       help='Rolling period length in days (default: 365)')
+    parser.add_argument('--period-days', type=int, default=90,
+                       help='Rolling period length in days (default: 90)')
     parser.add_argument('--verify-only', action='store_true',
                        help='Only verify existing data, do not backfill')
     args = parser.parse_args()

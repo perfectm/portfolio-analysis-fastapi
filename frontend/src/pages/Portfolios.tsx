@@ -4976,7 +4976,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                       </div>
                     </div>
 
-                    {/* Rolling Period Analysis - Best/Worst 365-Day Periods */}
+                    {/* Rolling Period Analysis - Best/Worst 90-Day Periods */}
                     {analysisResults.blended_result.rolling_periods && (
                       analysisResults.blended_result.rolling_periods.best_period ||
                       analysisResults.blended_result.rolling_periods.worst_period
@@ -4989,7 +4989,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                           alignItems: "center",
                           gap: "0.5rem"
                         }}>
-                          📊 Best & Worst 365-Day Rolling Periods
+                          📊 Best & Worst 90-Day Rolling Periods
                         </h5>
                         <div
                           style={{
@@ -5033,7 +5033,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 alignItems: "center",
                                 gap: "0.5rem"
                               }}>
-                                🏆 Best 365-Day Period
+                                🏆 Best 90-Day Period
                                 <span style={{ fontSize: "0.75rem", fontWeight: "normal", color: theme.palette.text.secondary }}>(click for details)</span>
                               </div>
                               <div style={{
@@ -5128,7 +5128,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
                                 alignItems: "center",
                                 gap: "0.5rem"
                               }}>
-                                📉 Worst 365-Day Period
+                                📉 Worst 90-Day Period
                                 <span style={{ fontSize: "0.75rem", fontWeight: "normal", color: theme.palette.text.secondary }}>(click for details)</span>
                               </div>
                               <div style={{
@@ -7811,7 +7811,7 @@ The multipliers have been applied automatically. Click 'Analyze' to see the full
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             {rollingPeriodModalType === 'best' ? '🏆' : '📉'}
             <span style={{ color: rollingPeriodModalType === 'best' ? '#4CAF50' : '#f44336' }}>
-              {rollingPeriodModalType === 'best' ? 'Best' : 'Worst'} 365-Day Period - Portfolio Breakdown
+              {rollingPeriodModalType === 'best' ? 'Best' : 'Worst'} 90-Day Period - Portfolio Breakdown
             </span>
           </div>
         </DialogTitle>
