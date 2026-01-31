@@ -75,13 +75,13 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
     
     try:
         logger.info(f"[create_plots] Creating matplotlib figure")
-        # Create a 2x2 subplot grid with reduced figure size to save memory
-        # Use smaller size for better memory efficiency
-        fig = plt.figure(figsize=(12, 9), dpi=100)  # Further reduced from 16x12
-        
+        # Create a 3-row subplot grid: 2x2 on top, full-width bar chart on bottom
+        fig = plt.figure(figsize=(12, 13), dpi=100)
+        gs = fig.add_gridspec(3, 2, height_ratios=[1, 1, 0.8], hspace=0.35, wspace=0.3)
+
         # Plot 1: Cumulative P/L (top left)
         logger.info(f"[create_plots] Creating cumulative P/L plot")
-        ax1 = plt.subplot(2, 2, 1)
+        ax1 = fig.add_subplot(gs[0, 0])
         ax1.plot(df['Date'], df['Cumulative P/L'])
         ax1.set_title('Cumulative P/L Over Time')
         ax1.set_xlabel('Date')
@@ -93,7 +93,7 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
 
         # Plot 2: Drawdown (top right)
         logger.info(f"[create_plots] Creating drawdown plot")
-        ax2 = plt.subplot(2, 2, 2)
+        ax2 = fig.add_subplot(gs[0, 1])
 
         # Use pre-calculated drawdown percentage if available
         if 'Drawdown Pct' in df.columns:
@@ -114,7 +114,7 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
 
         # Plot 3: Daily Returns Distribution (bottom left)
         logger.info(f"[create_plots] Creating returns distribution plot")
-        ax3 = plt.subplot(2, 2, 3)
+        ax3 = fig.add_subplot(gs[1, 0])
         dollar_returns = df['Daily Return'].dropna() * df['Account Value'].shift(1)
         # Clean data for seaborn - remove infinite values and NaNs
         dollar_returns_clean = dollar_returns.replace([np.inf, -np.inf], np.nan).dropna()
@@ -138,7 +138,7 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         logger.info(f"[create_plots] DataFrame date range: {df['Date'].min()} to {df['Date'].max()}")
         logger.info(f"[create_plots] Available columns: {df.columns.tolist()}")
 
-        ax4 = plt.subplot(2, 2, 4)
+        ax4 = fig.add_subplot(gs[1, 1])
 
         # Use pre-calculated drawdown amount if available, otherwise calculate it
         if 'Drawdown Amount' in df.columns:
@@ -169,9 +169,21 @@ def create_plots(df: pd.DataFrame, metrics: Dict[str, Any], filename_prefix: str
         logger.info(f"[create_plots] Setting y-axis limits: {min_drawdown * 1.1:.2f} to 0")
         ax4.set_ylim(min_drawdown * 1.1, 0)  # Extend bottom slightly, zero at top
 
+        # Plot 5: Daily P/L Bar Chart (full-width bottom row)
+        logger.info(f"[create_plots] Creating daily P/L bar chart")
+        ax5 = fig.add_subplot(gs[2, :])
+        colors_bar = ['#4CAF50' if v >= 0 else '#f44336' for v in df['P/L']]
+        ax5.bar(df['Date'], df['P/L'], color=colors_bar, width=1.0, linewidth=0)
+        ax5.axhline(y=0, color='black', linestyle='-', linewidth=0.5, alpha=0.5)
+        ax5.set_title('Daily P/L')
+        ax5.set_xlabel('Date')
+        ax5.set_ylabel('P/L ($)')
+        ax5.grid(True, alpha=0.3)
+        ax5.tick_params(axis='x', rotation=45)
+        ax5.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('${x:,.0f}'))
+
         # Adjust layout to prevent overlap
         logger.info(f"[create_plots] Finalizing plot layout")
-        plt.tight_layout()
         
         # Save the combined plot with reduced DPI to save memory and disk space
         plot_path = os.path.join(plots_dir, f'{filename_prefix}_combined_analysis.png')
