@@ -96,6 +96,7 @@ class Portfolio(Base):
     regime_performance = relationship("RegimePerformance", back_populates="portfolio", cascade="all, delete-orphan")
     blended_mappings = relationship("BlendedPortfolioMapping", back_populates="portfolio", cascade="all, delete-orphan")
     rolling_period_stats = relationship("RollingPeriodStats", back_populates="portfolio", cascade="all, delete-orphan")
+    robustness_tests = relationship("RobustnessTest", back_populates="portfolio", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Portfolio(id={self.id}, name='{self.name}', filename='{self.filename}')>"
@@ -517,7 +518,7 @@ class RobustnessTest(Base):
     completed_at = Column(DateTime(timezone=True))
     
     # Relationships
-    portfolio = relationship("Portfolio")
+    portfolio = relationship("Portfolio", back_populates="robustness_tests")
     periods = relationship("RobustnessPeriod", back_populates="robustness_test", cascade="all, delete-orphan")
     statistics = relationship("RobustnessStatistic", back_populates="robustness_test", cascade="all, delete-orphan")
     
