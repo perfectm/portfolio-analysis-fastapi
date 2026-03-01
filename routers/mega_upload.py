@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends
-from starlette.formparsers import MultiPartParser
 from sqlalchemy.orm import Session
 import logging
 import pandas as pd
@@ -10,9 +9,6 @@ from portfolio_service import PortfolioService
 from portfolio_processor import extract_margin_data_from_df
 from margin_service import MarginService
 from rolling_period_service import RollingPeriodService
-
-# Increase max upload size to 50MB (default is 1MB)
-MultiPartParser.max_file_size = 50 * 1024 * 1024
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

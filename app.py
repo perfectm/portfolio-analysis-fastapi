@@ -7,6 +7,10 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.formparsers import MultiPartParser
+
+# Increase max upload size to 50MB (default is 1MB) for mega upload
+MultiPartParser.max_file_size = 50 * 1024 * 1024
 from sqlalchemy.orm import Session
 from typing import List
 import logging
