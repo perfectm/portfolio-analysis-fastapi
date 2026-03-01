@@ -18,6 +18,7 @@ const RobustnessTest = React.lazy(() => import("./pages/RobustnessTest"));
 const ProfitOptimization = React.lazy(() => import("./pages/ProfitOptimization"));
 const OptimizationHistory = React.lazy(() => import("./pages/OptimizationHistory"));
 const TearSheet = React.lazy(() => import("./pages/TearSheet"));
+const MegaUpload = React.lazy(() => import("./pages/MegaUpload"));
 
 // Loading component for lazy-loaded pages
 const PageLoader: React.FC = () => (
@@ -92,6 +93,7 @@ const AppContent: React.FC = () => {
             <Route path="/profit-optimization" element={<ProfitOptimization />} />
             <Route path="/optimization-history" element={<OptimizationHistory />} />
             <Route path="/tear-sheet" element={<TearSheet />} />
+            <Route path="/mega-upload" element={<MegaUpload />} />
             <Route path="*" element={<Home />} />
           </Routes>
         </Suspense>

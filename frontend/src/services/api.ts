@@ -140,6 +140,16 @@ export interface UploadResponse {
   advanced_plots?: AdvancedPlots;
 }
 
+export interface MegaUploadResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  created?: Array<{ id: number; name: string }>;
+  updated?: Array<{ id: number; name: string }>;
+  errors?: Array<{ name: string; error: string }>;
+  total_positions?: number;
+}
+
 // Fetch wrapper with error handling
 const apiCall = async (url: string, options: RequestInit = {}): Promise<any> => {
   console.log(`[API] Making request to: ${API_BASE_URL}${url}`, {
@@ -510,6 +520,30 @@ export const portfolioAPI = {
       method: 'POST',
       body: JSON.stringify({ portfolio_ids: portfolioIds }),
     });
+  },
+
+  // Mega upload - single CSV with Position Name column splits into multiple portfolios
+  megaUpload: async (file: File, startingCapital: number = 1000000): Promise<MegaUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('starting_capital', String(startingCapital));
+
+    const response = await fetch(`${API_BASE_URL}/api/mega-upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { detail: 'Mega upload failed' };
+      }
+      throw new Error(`${response.status}: ${errorData.detail || errorData.error || 'Mega upload failed'}`);
+    }
+
+    return response.json();
   },
 
   // Optimize portfolio weights for target profit

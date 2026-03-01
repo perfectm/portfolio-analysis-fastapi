@@ -76,6 +76,8 @@ PREMIUM_COLUMNS = ['Premium', 'Premium Collected', 'Premium Received', 'Initial 
 CONTRACTS_COLUMNS = ['No. of Contracts', 'Contracts', 'Contract Count', 'Number of Contracts', 'Qty', 'Quantity']
 
 # Margin/Buying Power column mappings (for automatic extraction during upload)
+POSITION_NAME_COLUMNS = ['Position Name', 'PositionName']
+
 MARGIN_COLUMNS = [
     'Buying Power', 'BuyingPower', 'Margin', 'Margin Requirement', 'MarginRequirement',
     'Initial Margin', 'InitialMargin', 'Required Margin', 'RequiredMargin',

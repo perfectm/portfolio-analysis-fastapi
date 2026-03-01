@@ -46,6 +46,7 @@ const Navigation: React.FC = () => {
   const standaloneItems: NavItem[] = [
     { path: "/", label: "Home" },
     { path: "/upload", label: "Upload" },
+    { path: "/mega-upload", label: "Mega Upload" },
     { path: "/portfolios", label: "Portfolios" },
   ];
 
