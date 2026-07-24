@@ -48,6 +48,8 @@ const Navigation: React.FC = () => {
     { path: "/upload", label: "Upload" },
     { path: "/mega-upload", label: "Mega Upload" },
     { path: "/portfolios", label: "Portfolios" },
+    { path: "/comparison", label: "Live vs Backtest" },
+    { path: "/live-dashboard", label: "Performance Dashboard" },
   ];
 
   // Grouped nav items (in dropdowns)

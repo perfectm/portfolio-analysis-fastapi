@@ -1,0 +1,776 @@
+<title>Live vs Backtest &mdash; Portfolio Performance</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    /* cool-biased neutrals */
+    --bg:#e9edf3; --surface:#ffffff; --surface-2:#f4f7fb; --surface-3:#eef2f8;
+    --border:#d8dfe9; --border-strong:#c3ccda;
+    --ink:#141922; --muted:#5a6675; --faint:#8b94a3;
+    --accent:#2f6db0; --accent-soft:#2f6db01a;
+    --cat-bt:#2f6db0; --cat-lv:#b7791f; --cat-3:#2a9d8f;
+    --good:#1a8f59; --good-soft:#1a8f591f;
+    --warn:#bd851a; --warn-soft:#bd851a1f;
+    --bad:#cf4436;  --bad-soft:#cf44361f;
+    --neutral:#8b94a3; --neutral-soft:#8b94a31f;
+    --shadow:0 1px 2px rgba(20,25,34,.06), 0 4px 16px rgba(20,25,34,.05);
+    --font-sans:-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --r:10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0c1017; --surface:#151b24; --surface-2:#1b232f; --surface-3:#212b38;
+      --border:#28313f; --border-strong:#374253;
+      --ink:#e5e9f0; --muted:#96a1b2; --faint:#68748699;
+      --accent:#4f8fd0; --accent-soft:#4f8fd022;
+      --cat-bt:#4f8fd0; --cat-lv:#bf8626; --cat-3:#2f9d8a;
+      --good:#3fb37a; --good-soft:#3fb37a24;
+      --warn:#d69a3c; --warn-soft:#d69a3c24;
+      --bad:#e5675a; --bad-soft:#e5675a24;
+      --neutral:#6b7789; --neutral-soft:#6b778924;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 6px 22px rgba(0,0,0,.30);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#e9edf3; --surface:#ffffff; --surface-2:#f4f7fb; --surface-3:#eef2f8;
+    --border:#d8dfe9; --border-strong:#c3ccda;
+    --ink:#141922; --muted:#5a6675; --faint:#8b94a3;
+    --accent:#2f6db0; --accent-soft:#2f6db01a;
+    --cat-bt:#2f6db0; --cat-lv:#b7791f; --cat-3:#2a9d8f;
+    --good:#1a8f59; --good-soft:#1a8f591f; --warn:#bd851a; --warn-soft:#bd851a1f;
+    --bad:#cf4436; --bad-soft:#cf44361f; --neutral:#8b94a3; --neutral-soft:#8b94a31f;
+    --shadow:0 1px 2px rgba(20,25,34,.06), 0 4px 16px rgba(20,25,34,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg:#0c1017; --surface:#151b24; --surface-2:#1b232f; --surface-3:#212b38;
+    --border:#28313f; --border-strong:#374253;
+    --ink:#e5e9f0; --muted:#96a1b2; --faint:#68748699;
+    --accent:#4f8fd0; --accent-soft:#4f8fd022;
+    --cat-bt:#4f8fd0; --cat-lv:#bf8626; --cat-3:#2f9d8a;
+    --good:#3fb37a; --good-soft:#3fb37a24; --warn:#d69a3c; --warn-soft:#d69a3c24;
+    --bad:#e5675a; --bad-soft:#e5675a24; --neutral:#6b7789; --neutral-soft:#6b778924;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 6px 22px rgba(0,0,0,.30);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-sans); font-size:14px; line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1200px; margin:0 auto; padding:28px 22px 80px; }
+  h1,h2,h3 { text-wrap:balance; margin:0; }
+  .mono { font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .num { font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  /* ---------- header ---------- */
+  header.top { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap; margin-bottom:22px; }
+  .eyebrow { font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--accent); font-weight:600; }
+  header.top h1 { font-size:27px; font-weight:680; letter-spacing:-.02em; margin-top:4px; }
+  header.top p.sub { color:var(--muted); margin-top:6px; max-width:60ch; font-size:13.5px; }
+  .theme-btn { border:1px solid var(--border-strong); background:var(--surface); color:var(--muted);
+    border-radius:8px; padding:7px 11px; cursor:pointer; font-size:12px; font-family:var(--font-sans); }
+  .theme-btn:hover { color:var(--ink); border-color:var(--accent); }
+
+  /* ---------- control bar ---------- */
+  .controls { display:flex; gap:18px; align-items:center; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+    padding:14px 18px; box-shadow:var(--shadow); margin-bottom:26px; }
+  .ctl { display:flex; flex-direction:column; gap:5px; }
+  .ctl label { font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600; }
+  .cap-input { display:flex; align-items:center; gap:6px; }
+  .cap-input span { color:var(--muted); font-family:var(--font-mono); }
+  .cap-input input[type=number] { width:120px; font-family:var(--font-mono); font-size:15px; font-weight:600;
+    padding:6px 8px; border:1px solid var(--border-strong); border-radius:7px; background:var(--surface-2); color:var(--ink);
+    font-variant-numeric:tabular-nums; }
+  input[type=range] { accent-color:var(--accent); width:180px; }
+  .ctl-note { color:var(--faint); font-size:11.5px; max-width:26ch; line-height:1.35; }
+  .periods { margin-left:auto; display:flex; gap:22px; }
+  .period-chip .k { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  .period-chip .v { font-family:var(--font-mono); font-size:12.5px; margin-top:2px; }
+  .period-chip .v b { font-weight:600; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px; vertical-align:baseline; }
+  .dot.bt { background:var(--cat-bt); } .dot.lv { background:var(--cat-lv); }
+
+  /* ---------- sections ---------- */
+  section { margin-bottom:34px; }
+  .sec-head { display:flex; align-items:baseline; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  .sec-head h2 { font-size:16px; font-weight:640; letter-spacing:-.01em; }
+  .sec-head .desc { color:var(--muted); font-size:12.5px; }
+  .toggles { display:flex; gap:6px; margin-left:auto; flex-wrap:wrap; }
+  .seg { display:inline-flex; background:var(--surface-3); border:1px solid var(--border); border-radius:8px; padding:2px; }
+  .seg button { border:0; background:transparent; color:var(--muted); font-family:var(--font-sans);
+    font-size:12px; padding:5px 11px; border-radius:6px; cursor:pointer; font-weight:500; }
+  .seg button.active { background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12); font-weight:600; }
+  .seg button:hover:not(.active) { color:var(--ink); }
+
+  /* ---------- baseline cards ---------- */
+  .baseline { display:grid; grid-template-columns:1.1fr repeat(2,1fr); gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:var(--r); overflow:hidden; box-shadow:var(--shadow); }
+  .baseline .cell { background:var(--surface); padding:12px 16px; }
+  .baseline .cell.head { background:var(--surface-2); display:flex; flex-direction:column; justify-content:center; }
+  .baseline .rowlabel { background:var(--surface-2); display:flex; align-items:center; font-size:12.5px; color:var(--muted); font-weight:500; }
+  .baseline .colhead { font-size:12px; font-weight:600; letter-spacing:.02em; display:flex; align-items:center; gap:7px; }
+  .baseline .colhead small { color:var(--faint); font-weight:500; font-family:var(--font-mono); font-size:11px; }
+  .metric-v { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:18px; font-weight:600; letter-spacing:-.01em; }
+  .metric-sub { font-size:11px; color:var(--faint); margin-top:1px; font-family:var(--font-mono); }
+  .pos { color:var(--good); } .neg { color:var(--bad); }
+
+  /* ---------- charts ---------- */
+  .charts { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:14px 16px 10px; box-shadow:var(--shadow); position:relative; }
+  .chart-card h3 { font-size:13px; font-weight:600; display:flex; align-items:center; gap:7px; }
+  .chart-card .cmeta { color:var(--faint); font-size:11px; font-family:var(--font-mono); margin:2px 0 8px; }
+  svg.linechart { width:100%; height:170px; display:block; overflow:visible; }
+  .grid-line { stroke:var(--border); stroke-width:1; }
+  .axis-txt { fill:var(--faint); font-size:10px; font-family:var(--font-mono); }
+  .tooltip { position:absolute; pointer-events:none; background:var(--surface); border:1px solid var(--border-strong);
+    border-radius:7px; padding:7px 9px; font-size:11.5px; box-shadow:var(--shadow); opacity:0; transition:opacity .08s; z-index:5; min-width:130px; }
+  .tooltip .tt-d { color:var(--faint); font-family:var(--font-mono); margin-bottom:3px; }
+  .tooltip .tt-r { display:flex; justify-content:space-between; gap:14px; font-family:var(--font-mono); }
+
+  /* ---------- tables ---------- */
+  .tbl-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden; }
+  .tbl-scroll { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:12.5px; }
+  thead th { position:sticky; top:0; background:var(--surface-2); text-align:right; font-weight:600; color:var(--muted);
+    padding:9px 12px; border-bottom:1px solid var(--border); white-space:nowrap; font-size:11px; letter-spacing:.02em; cursor:pointer; user-select:none; }
+  thead th.left { text-align:left; }
+  thead th:hover { color:var(--ink); }
+  thead th .arrow { opacity:.5; font-size:9px; }
+  tbody td { padding:8px 12px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap;
+    font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  tbody td.left { text-align:left; font-family:var(--font-sans); }
+  tbody tr:hover { background:var(--surface-2); }
+  tbody tr:last-child td { border-bottom:0; }
+  .gname { font-weight:550; }
+  .gsub { color:var(--faint); font-size:10.5px; font-family:var(--font-mono); }
+  .chip { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600;
+    font-family:var(--font-sans); }
+  .chip .cd { width:7px; height:7px; border-radius:50%; }
+  .chip.good { background:var(--good-soft); color:var(--good); } .chip.good .cd{background:var(--good);}
+  .chip.warn { background:var(--warn-soft); color:var(--warn); } .chip.warn .cd{background:var(--warn);}
+  .chip.bad  { background:var(--bad-soft);  color:var(--bad);  } .chip.bad .cd{background:var(--bad);}
+  .chip.neutral { background:var(--neutral-soft); color:var(--neutral); } .chip.neutral .cd{background:var(--neutral);}
+  .lown { color:var(--faint); font-size:10px; margin-left:5px; font-family:var(--font-sans); font-style:italic; }
+  .tbl-empty { padding:24px; text-align:center; color:var(--faint); font-size:12.5px; }
+  .barcell { position:relative; }
+  .devbar { position:absolute; top:50%; transform:translateY(-50%); height:16px; border-radius:3px; opacity:.16; right:50%; }
+
+  /* ---------- mapping panel ---------- */
+  details.map { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden; }
+  details.map > summary { cursor:pointer; padding:13px 18px; font-weight:600; font-size:14px; list-style:none; display:flex; align-items:center; gap:12px; }
+  details.map > summary::-webkit-details-marker { display:none; }
+  details.map > summary .caret { transition:transform .15s; color:var(--muted); }
+  details.map[open] > summary .caret { transform:rotate(90deg); }
+  .map-body { padding:0 18px 18px; }
+  .map-legend { display:flex; gap:14px; flex-wrap:wrap; margin:4px 0 12px; font-size:11.5px; color:var(--muted); }
+  .tier-badge { font-size:10px; padding:1px 7px; border-radius:12px; font-weight:600; font-family:var(--font-sans); }
+  .tier-exact{background:var(--good-soft);color:var(--good);}
+  .tier-containment{background:var(--accent-soft);color:var(--accent);}
+  .tier-fuzzy{background:var(--warn-soft);color:var(--warn);}
+  .tier-manual{background:var(--neutral-soft);color:var(--neutral);}
+  .tier-self{background:var(--bad-soft);color:var(--bad);}
+  .tier-override{background:var(--cat-lv);color:#fff;}
+  .map-body select { font-family:var(--font-sans); font-size:12px; padding:4px 6px; border:1px solid var(--border-strong);
+    border-radius:6px; background:var(--surface-2); color:var(--ink); max-width:230px; }
+  .map-reset { border:1px solid var(--border-strong); background:var(--surface); color:var(--muted); border-radius:7px;
+    padding:6px 12px; cursor:pointer; font-size:12px; margin-left:auto; }
+  .map-reset:hover { color:var(--bad); border-color:var(--bad); }
+
+  footer.method { margin-top:40px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted); font-size:12px; line-height:1.6; }
+  footer.method h3 { font-size:12.5px; color:var(--ink); margin-bottom:6px; letter-spacing:.02em; }
+  footer.method ul { margin:0 0 14px; padding-left:18px; }
+  footer.method code { font-family:var(--font-mono); background:var(--surface-3); padding:1px 5px; border-radius:4px; font-size:11px; }
+  .callout { background:var(--warn-soft); border:1px solid var(--warn); border-radius:8px; padding:10px 14px; font-size:12.5px; color:var(--ink); margin-bottom:18px; display:flex; gap:10px; }
+  .callout b { color:var(--warn); }
+
+  @media (max-width:820px){
+    .baseline{grid-template-columns:1fr 1fr; }
+    .baseline .rowlabel{grid-column:1/-1; border-top:1px solid var(--border); }
+    .charts{grid-template-columns:1fr;}
+    .periods{margin-left:0; width:100%;}
+  }
+
+  /* ---------- load / error overlay ---------- */
+  .loadstate { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:var(--bg); z-index:50; color:var(--muted); }
+  .loadstate .spinner { width:24px; height:24px; border:2.5px solid var(--border-strong); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; }
+  .loadstate .ls-card { max-width:440px; text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:26px 30px; box-shadow:var(--shadow); }
+  .loadstate.err .ls-title { color:var(--bad); font-weight:600; font-size:15px; margin-bottom:9px; }
+  .loadstate .ls-msg { color:var(--ink); margin-bottom:12px; font-size:13.5px; }
+  .loadstate .ls-hint { color:var(--muted); font-size:12.5px; line-height:1.55; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce){ .loadstate .spinner{ animation:none; } }
+</style>
+
+<div id="loadstate" class="loadstate"><div class="spinner"></div></div>
+<div class="wrap" style="display:none">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Portfolio Performance Review</div>
+      <h1>Live vs Backtest</h1>
+      <p class="sub">Baselines from the full backtest, drift of the most recent week &amp; month against each bot/strategy's own history and the overall portfolio, and live execution measured against the backtest.</p>
+    </div>
+    <button class="theme-btn" id="themeBtn">&#9681; Theme</button>
+  </header>
+
+  <div class="controls">
+    <div class="ctl">
+      <label for="capNum">Capital base</label>
+      <div class="cap-input"><span>$</span><input type="number" id="capNum" step="10000" min="10000"></div>
+    </div>
+    <div class="ctl">
+      <label for="capRange">Adjust</label>
+      <input type="range" id="capRange" min="50000" max="2000000" step="10000">
+    </div>
+    <div class="ctl-note">CAGR, Sharpe, Sortino, drawdown &amp; MAR scale with the capital base. Per-trade metrics (win rate, profit factor, avg P/L) do not.</div>
+    <div class="periods" id="periods"></div>
+  </div>
+
+  <!-- BASELINES -->
+  <section id="sec-baseline">
+    <div class="sec-head">
+      <h2>Portfolio baselines</h2>
+      <span class="desc">Full-history aggregate for each book, at the capital base above.</span>
+    </div>
+    <div class="baseline" id="baselineGrid"></div>
+  </section>
+
+  <!-- EQUITY CURVES -->
+  <section id="sec-equity">
+    <div class="sec-head">
+      <h2>Equity curves</h2>
+      <span class="desc">Indexed to 100 at each book's start. Shape is comparable; time spans differ.</span>
+    </div>
+    <div class="charts" id="charts"></div>
+  </section>
+
+  <!-- LIVE VS BACKTEST -->
+  <section id="sec-lvb">
+    <div class="sec-head">
+      <h2>Live vs Backtest</h2>
+      <span class="desc">Live (full) measured against the backtest. Ranked by widest avg-P/L shortfall.</span>
+      <div class="toggles">
+        <div class="seg" id="lvbGroup"><button data-v="strategy" class="active">By strategy</button><button data-v="bot">By bot</button></div>
+        <div class="seg" id="lvbWin"><button data-v="full" class="active">vs BT full</button><button data-v="month">vs BT month</button><button data-v="week">vs BT week</button></div>
+      </div>
+    </div>
+    <div class="tbl-card"><div class="tbl-scroll"><table id="lvbTable"></table></div></div>
+  </section>
+
+  <!-- DRIFT -->
+  <section id="sec-drift">
+    <div class="sec-head">
+      <h2>Recent drift</h2>
+      <span class="desc">Recent-window avg P/L per trade vs the group's own full history (z-score) and vs the portfolio's historical avg.</span>
+      <div class="toggles">
+        <div class="seg" id="driftDs"><button data-v="backtest" class="active">Backtest</button><button data-v="live">Live</button></div>
+        <div class="seg" id="driftGroup"><button data-v="strategy" class="active">By strategy</button><button data-v="bot">By bot</button></div>
+        <div class="seg" id="driftWin"><button data-v="month" class="active">Recent month</button><button data-v="week">Recent week</button></div>
+      </div>
+    </div>
+    <div class="tbl-card"><div class="tbl-scroll"><table id="driftTable"></table></div></div>
+  </section>
+
+  <!-- MAPPING -->
+  <section id="sec-map">
+    <details class="map" id="mapDetails">
+      <summary><span class="caret">&#9654;</span> Bot &rarr; strategy mapping <span id="mapCount" class="gsub"></span></summary>
+      <div class="map-body">
+        <div class="map-legend">
+          <span><span class="tier-badge tier-exact">exact</span> live name match</span>
+          <span><span class="tier-badge tier-containment">containment</span> strategy in name</span>
+          <span><span class="tier-badge tier-fuzzy">fuzzy</span> token match</span>
+          <span><span class="tier-badge tier-manual">manual</span> preset</span>
+          <span><span class="tier-badge tier-self">self</span> own name</span>
+          <span><span class="tier-badge tier-override">override</span> yours</span>
+          <button class="map-reset" id="mapReset">Reset overrides</button>
+        </div>
+        <div class="tbl-scroll"><table id="mapTable"></table></div>
+      </div>
+    </details>
+  </section>
+
+  <footer class="method">
+    <h3>How these are computed</h3>
+    <ul>
+      <li><b>Daily P/L</b> is summed by <b>entry/open date</b>; equity = capital + cumulative P/L. <b>CAGR</b> annualizes over the calendar span; <b>Sharpe/Sortino</b> use daily returns on running net-liq with a <code>4.3%</code> risk-free rate, annualized &times;&radic;252. <b>Max drawdown</b> is peak-to-trough on the equity curve.</li>
+      <li><b>Recent windows</b> are the last <span id="mWk"></span> and <span id="mMo"></span> calendar days relative to each book's most recent trade. <b>Drift z-score</b> = (recent avg P/L/trade &minus; full-history avg) &divide; full-history per-trade stdev; <code>&gt; +1&sigma;</code> improving, <code>&lt; &minus;1&sigma;</code> degrading. Rows with fewer than 3 recent trades are flagged <span class="lown">low-n</span> &mdash; treat as noise.</li>
+      <li><b>Bot &rarr; strategy</b> resolves in tiers: exact live-name match &rarr; strategy-name containment &rarr; fuzzy token match &rarr; manual preset &rarr; own name (timestamps stripped). Edit any mapping below; changes persist in this browser and recompute strategy rollups live.</li>
+      <li><b>Accounts are aggregated</b> &mdash; all 14 live accounts are treated as one book. The backtest's <code>Backtick Name</code> is ignored; <code>Position Name</code> is the bot key.</li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var el = document.getElementById('loadstate');
+  function showError(status, detail){
+    el.className = 'loadstate err';
+    el.innerHTML = '<div class="ls-card"><div class="ls-title">Dashboard data unavailable</div>' +
+      '<div class="ls-msg">' + (detail || ('HTTP ' + status)) + '</div>' +
+      '<div class="ls-hint">Upload a <b>live</b> (TradeSteward) and a <b>backtest</b> (Backtick) CSV on the Live vs Backtest page, then reload this dashboard.</div>' +
+      '</div>';
+  }
+  var token = null;
+  try { token = localStorage.getItem('auth_token'); } catch(e){}
+  var headers = token ? { Authorization: 'Bearer ' + token } : {};
+  fetch('/api/comparison/dashboard-data', {credentials:'include', headers: headers})
+    .then(function(r){
+      if(r.status===401 || r.status===403){ showError(r.status, 'Please sign in to the app, then reload this dashboard.'); return null; }
+      if(!r.ok){ return r.json().catch(function(){return {};}).then(function(j){ showError(r.status, j.detail); return null; }); }
+      return r.json();
+    })
+    .then(function(data){
+      if(!data) return;
+      el.style.display = 'none';
+      document.querySelector('.wrap').style.display = '';
+      boot(data);
+    })
+    .catch(function(e){ showError(0, String(e)); });
+})();
+</script>
+<script>
+function boot(DATA){
+/* ============================ engine ============================ */
+const M = DATA.meta;
+const RF = M.rf_annual, TD = M.trading_days;
+const LS_KEY = "lvb_overrides_v1", LS_CAP = "lvb_capital_v1", LS_THEME = "lvb_theme_v1";
+const LOWN = 3;
+
+// default mapping + tier
+const defMap = {}, tierMap = {};
+DATA.mapping.forEach(m => { defMap[m.bot] = m.strategy; tierMap[m.bot] = m.tier; });
+
+// overrides
+let overrides = {};
+try { overrides = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch(e){ overrides = {}; }
+function botStrategy(bot){ return overrides[bot] || defMap[bot]; }
+
+// datasets
+const BT = { names: DATA.backtest.bot_names, t: DATA.backtest.trades, base: M.backtest_base_date,
+             maxDay: Math.max(...DATA.backtest.trades.day) };
+const LV = { names: DATA.live.bot_names, strat: DATA.live.strat_names, t: DATA.live.trades, base: M.live_base_date,
+             maxDay: Math.max(...DATA.live.trades.day) };
+
+let CAPITAL = (function(){ const v = parseFloat(localStorage.getItem(LS_CAP)); return v>0 ? v : M.capital_default; })();
+
+// ---- stats helpers ----
+const sum = a => a.reduce((x,y)=>x+y,0);
+const mean = a => a.length ? sum(a)/a.length : 0;
+function std(a){ if(a.length<2) return 0; const m=mean(a); return Math.sqrt(sum(a.map(x=>(x-m)**2))/(a.length-1)); }
+
+function dayToDate(base, day){
+  const d = new Date(base+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+day);
+  return d.toISOString().slice(0,10);
+}
+function winMin(maxDay, win){ return win==="week" ? maxDay-M.recent_week_days : win==="month" ? maxDay-M.recent_month_days : -1e12; }
+
+/* Build per-group buckets for a dataset+grouping. Returns Map group -> {pls, days(map day->pl)} per window. */
+function buildGroups(ds, grouping){
+  const t = ds.t, n = t.pl.length;
+  const groups = new Map();
+  const wmWeek = winMin(ds.maxDay,"week"), wmMonth = winMin(ds.maxDay,"month");
+  function gkey(i){
+    if(grouping==="bot") return ds.names[t.bot[i]];
+    // strategy
+    if(ds===LV){ const s=t.strat[i]; return s>=0 ? ds.strat[s] : "(no strategy)"; }
+    return botStrategy(ds.names[t.bot[i]]);
+  }
+  for(let i=0;i<n;i++){
+    const g = gkey(i), pl = t.pl[i], day = t.day[i];
+    let rec = groups.get(g);
+    if(!rec){ rec = { full:mkw(), month:mkw(), week:mkw() }; groups.set(g,rec); }
+    addw(rec.full, day, pl);
+    if(day>=wmMonth) addw(rec.month, day, pl);
+    if(day>=wmWeek) addw(rec.week, day, pl);
+  }
+  return groups;
+}
+function mkw(){ return { pls:[], daymap:new Map() }; }
+function addw(w, day, pl){ w.pls.push(pl); w.daymap.set(day,(w.daymap.get(day)||0)+pl); }
+
+/* capital-independent group metrics */
+function groupMetrics(w){
+  const pls = w.pls; const n = pls.length; if(!n) return null;
+  const total = sum(pls);
+  const wins = pls.filter(x=>x>0), losses = pls.filter(x=>x<0);
+  const winRate = wins.length/n;
+  const lossSum = Math.abs(sum(losses));
+  const pf = lossSum!==0 ? sum(wins)/lossSum : null;
+  const daily = [...w.daymap.values()];
+  let sortino=null;
+  if(daily.length>1){ const m=mean(daily); const dn=daily.filter(x=>x<0); const ds=std(dn); sortino = ds>0 ? (m/ds)*Math.sqrt(TD) : null; }
+  return { trades:n, total, avg:total/n, winRate, pf, sortino,
+           plStd:std(pls), lWin:Math.max(...pls), lLoss:Math.min(...pls) };
+}
+
+/* portfolio-level (capital-dependent) metrics from a day->pl map */
+function portfolioMetrics(daymap, capital){
+  const days=[...daymap.keys()].sort((a,b)=>a-b); if(!days.length) return null;
+  let prev=capital, cum=0; const rets=[], eq=[];
+  for(const d of days){ const pl=daymap.get(d); rets.push(pl/prev); cum+=pl; const e=capital+cum; eq.push([d,e]); prev=e; }
+  const finalEq=eq[eq.length-1][1];
+  const span=(days[days.length-1]-days[0])||1;
+  const years=span/365.25;
+  const cagr = finalEq>0&&years>0 ? Math.pow(finalEq/capital,1/years)-1 : null;
+  const m=mean(rets), sd=std(rets), dn=rets.filter(x=>x<0), dsd=std(dn);
+  const sharpe = sd>0 ? (m*TD-RF)/(sd*Math.sqrt(TD)) : null;
+  const sortino = dsd>0 ? (m*TD-RF)/(dsd*Math.sqrt(TD)) : null;
+  let peak=-Infinity, mddp=0, mdd$=0;
+  for(const [,e] of eq){ if(e>peak) peak=e; const dd=(e-peak)/peak; if(dd<mddp) mddp=dd; if(e-peak<mdd$) mdd$=e-peak; }
+  const mar = (cagr!=null&&mddp<0) ? cagr/Math.abs(mddp) : null;
+  const all=[]; for(const [,e] of eq) all.push(e);
+  return { cagr, sharpe, sortino, maxddp:mddp, maxdd$:mdd$, mar, finalEq, span, eq };
+}
+function fullDayMap(ds){ const m=new Map(); const t=ds.t; for(let i=0;i<t.pl.length;i++) m.set(t.day[i],(m.get(t.day[i])||0)+t.pl[i]); return m; }
+function overallPerTrade(ds){ // portfolio avg pl per trade over full history
+  return sum(ds.t.pl)/ds.t.pl.length;
+}
+
+/* ============================ formatting ============================ */
+const f0 = new Intl.NumberFormat('en-US',{maximumFractionDigits:0});
+const f2 = new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const money = v => (v<0?"-$":"$")+f0.format(Math.abs(Math.round(v)));
+const moneyS = v => (v<0?"-$":"$")+f0.format(Math.abs(Math.round(v)));
+const pct = (v,d=1)=> v==null?"&mdash;":(v*100).toFixed(d)+"%";
+const ratio = (v,d=2)=> v==null?"&mdash;":v.toFixed(d);
+const signMoney = v => (v>0?"+":"")+money(v);
+function cls(v){ return v>0?"pos":v<0?"neg":""; }
+
+/* ============================ rendering ============================ */
+function renderPeriods(){
+  const el=document.getElementById("periods");
+  el.innerHTML = `
+    <div class="period-chip"><div class="k"><span class="dot bt"></span>Backtest</div>
+      <div class="v"><b>${M.backtest_base_date}</b> &rarr; ${M.backtest_max_date}</div></div>
+    <div class="period-chip"><div class="k"><span class="dot lv"></span>Live</div>
+      <div class="v"><b>${M.live_base_date}</b> &rarr; ${M.live_max_date}</div></div>`;
+}
+
+const BASE_ROWS = [
+  ["Total P/L", d=>signMoney(d.total), d=>d.total>=0?"pos":"neg", null],
+  ["CAGR", d=>pct(d.p.cagr), d=>d.p.cagr>=0?"pos":"neg", "capital"],
+  ["Sortino", d=>ratio(d.p.sortino), d=>d.p.sortino>=0?"pos":"neg", "capital"],
+  ["Sharpe", d=>ratio(d.p.sharpe), d=>d.p.sharpe>=0?"pos":"neg", "capital"],
+  ["Max drawdown", d=>pct(d.p.maxddp), ()=> "neg", "capital"],
+  ["MAR ratio", d=>ratio(d.p.mar), d=>(d.p.mar||0)>=0?"pos":"neg", "capital"],
+  ["Win rate", d=>pct(d.winRate), ()=>"", null],
+  ["Profit factor", d=>ratio(d.pf), d=>(d.pf||0)>=1?"pos":"neg", null],
+  ["Avg P/L / trade", d=>signMoney(d.avg), d=>d.avg>=0?"pos":"neg", null],
+  ["Trades", d=>f0.format(d.trades), ()=>"", null],
+];
+
+function computeBook(ds){
+  const fullPls = ds.t.pl;
+  const total = sum(fullPls), trades = fullPls.length;
+  const wins = fullPls.filter(x=>x>0), losses=fullPls.filter(x=>x<0);
+  const p = portfolioMetrics(fullDayMap(ds), CAPITAL);
+  return { total, trades, avg:total/trades, winRate:wins.length/trades,
+           pf: Math.abs(sum(losses))!==0 ? sum(wins)/Math.abs(sum(losses)) : null, p };
+}
+
+function renderBaseline(){
+  const bt=computeBook(BT), lv=computeBook(LV);
+  const grid=document.getElementById("baselineGrid");
+  let html = `<div class="cell head"></div>
+    <div class="cell head"><div class="colhead"><span class="dot bt"></span>Backtest <small>${f0.format(bt.trades)} tr</small></div></div>
+    <div class="cell head"><div class="colhead"><span class="dot lv"></span>Live <small>${f0.format(lv.trades)} tr</small></div></div>`;
+  for(const [label, fn, clsfn, tag] of BASE_ROWS){
+    html += `<div class="rowlabel">${label}${tag==="capital"?' <span class="gsub" style="margin-left:6px">&middot;cap</span>':''}</div>`;
+    for(const d of [bt,lv]){
+      const val = fn(d), c = clsfn(d);
+      html += `<div class="cell"><div class="metric-v ${c}">${val}</div></div>`;
+    }
+  }
+  grid.innerHTML = html;
+}
+
+/* ---- charts ---- */
+function lineChart(container, ds, color){
+  const p = portfolioMetrics(fullDayMap(ds), CAPITAL);
+  const pts = p.eq.map(([day,e])=>[day, 100*e/CAPITAL]);
+  const W=520, H=170, padL=38, padR=12, padT=12, padB=22;
+  const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+  const x0=Math.min(...xs), x1=Math.max(...xs);
+  let y0=Math.min(...ys, 100), y1=Math.max(...ys, 100);
+  const ypad=(y1-y0)*0.08||5; y0-=ypad; y1+=ypad;
+  const sx=v=>padL+(v-x0)/((x1-x0)||1)*(W-padL-padR);
+  const sy=v=>padT+(1-(v-y0)/((y1-y0)||1))*(H-padT-padB);
+  const dpath = pts.map((p,i)=>(i?"L":"M")+sx(p[0]).toFixed(1)+" "+sy(p[1]).toFixed(1)).join(" ");
+  const apath = dpath+` L ${sx(x1).toFixed(1)} ${sy(y0).toFixed(1)} L ${sx(x0).toFixed(1)} ${sy(y0).toFixed(1)} Z`;
+  // y gridlines
+  const ticks=4; let grid="";
+  for(let i=0;i<=ticks;i++){ const yv=y0+(y1-y0)*i/ticks; const yy=sy(yv);
+    grid+=`<line class="grid-line" x1="${padL}" y1="${yy.toFixed(1)}" x2="${W-padR}" y2="${yy.toFixed(1)}"/>`+
+          `<text class="axis-txt" x="${padL-6}" y="${(yy+3).toFixed(1)}" text-anchor="end">${yv.toFixed(0)}</text>`; }
+  // x labels start/end
+  const gid = "grad_"+Math.random().toString(36).slice(2,7);
+  const svg = `
+  <svg class="linechart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img">
+    <defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity="0.22"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${grid}
+    <line class="grid-line" x1="${padL}" y1="${sy(100).toFixed(1)}" x2="${W-padR}" y2="${sy(100).toFixed(1)}" stroke-dasharray="3 3"/>
+    <path d="${apath}" fill="url(#${gid})"/>
+    <path d="${dpath}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${sx(pts[pts.length-1][0]).toFixed(1)}" cy="${sy(pts[pts.length-1][1]).toFixed(1)}" r="3.5" fill="${color}"/>
+    <text class="axis-txt" x="${padL}" y="${H-6}" text-anchor="start">${dayToDate(ds.base,x0)}</text>
+    <text class="axis-txt" x="${W-padR}" y="${H-6}" text-anchor="end">${dayToDate(ds.base,x1)}</text>
+    <rect x="${padL}" y="${padT}" width="${W-padL-padR}" height="${H-padT-padB}" fill="transparent" class="hoverzone"/>
+    <line class="cross" x1="0" y1="${padT}" x2="0" y2="${H-padB}" stroke="${color}" stroke-width="1" opacity="0"/>
+    <circle class="crossdot" r="4" fill="${color}" stroke="var(--surface)" stroke-width="1.5" opacity="0"/>
+  </svg>`;
+  container.querySelector(".chart-plot").innerHTML = svg;
+  // hover
+  const svgEl=container.querySelector("svg");
+  const zone=svgEl.querySelector(".hoverzone");
+  const cross=svgEl.querySelector(".cross"), cdot=svgEl.querySelector(".crossdot");
+  const tt=container.querySelector(".tooltip");
+  function onMove(ev){
+    const r=svgEl.getBoundingClientRect();
+    const px=(ev.clientX-r.left)/r.width*W;
+    // nearest point
+    let best=0,bd=1e12; for(let i=0;i<pts.length;i++){ const d=Math.abs(sx(pts[i][0])-px); if(d<bd){bd=d;best=i;} }
+    const p0=pts[best]; const cxp=sx(p0[0]), cyp=sy(p0[1]);
+    cross.setAttribute("x1",cxp); cross.setAttribute("x2",cxp); cross.setAttribute("opacity","0.5");
+    cdot.setAttribute("cx",cxp); cdot.setAttribute("cy",cyp); cdot.setAttribute("opacity","1");
+    const eqv=CAPITAL*p0[1]/100;
+    tt.innerHTML=`<div class="tt-d">${dayToDate(ds.base,p0[0])}</div>
+      <div class="tt-r"><span>Index</span><b>${p0[1].toFixed(1)}</b></div>
+      <div class="tt-r"><span>Equity</span><b>${money(eqv)}</b></div>`;
+    tt.style.opacity="1";
+    const leftPx=(cxp/W)*r.width;
+    tt.style.left=Math.min(Math.max(leftPx,4),r.width-140)+"px";
+    tt.style.top=((cyp/H)*r.height-10)+"px";
+  }
+  zone.addEventListener("mousemove",onMove);
+  zone.addEventListener("mouseleave",()=>{cross.setAttribute("opacity","0");cdot.setAttribute("opacity","0");tt.style.opacity="0";});
+}
+
+function renderCharts(){
+  const c=document.getElementById("charts");
+  const bt=computeBook(BT), lv=computeBook(LV);
+  c.innerHTML=`
+    <div class="chart-card" id="chartBT">
+      <h3><span class="dot bt"></span>Backtest &mdash; full history</h3>
+      <div class="cmeta">final index ${(100*bt.p.finalEq/CAPITAL).toFixed(0)} &middot; ${money(bt.total)} &middot; max DD ${pct(bt.p.maxddp)}</div>
+      <div class="chart-plot"></div><div class="tooltip"></div>
+    </div>
+    <div class="chart-card" id="chartLV">
+      <h3><span class="dot lv"></span>Live &mdash; deployed period</h3>
+      <div class="cmeta">final index ${(100*lv.p.finalEq/CAPITAL).toFixed(1)} &middot; ${money(lv.total)} &middot; max DD ${pct(lv.p.maxddp)}</div>
+      <div class="chart-plot"></div><div class="tooltip"></div>
+    </div>`;
+  const styles=getComputedStyle(document.documentElement);
+  lineChart(document.getElementById("chartBT"), BT, styles.getPropertyValue("--cat-bt").trim());
+  lineChart(document.getElementById("chartLV"), LV, styles.getPropertyValue("--cat-lv").trim());
+}
+
+/* ---- live vs backtest table ---- */
+let lvbState={group:"strategy", win:"full", sort:"dev", dir:1};
+function matchChip(dev){
+  if(dev==null) return `<span class="chip neutral"><span class="cd"></span>n/a</span>`;
+  const a=Math.abs(dev);
+  if(a<0.15) return `<span class="chip good"><span class="cd"></span>${pct(dev,0)}</span>`;
+  if(a<0.30) return `<span class="chip warn"><span class="cd"></span>${pct(dev,0)}</span>`;
+  return `<span class="chip bad"><span class="cd"></span>${pct(dev,0)}</span>`;
+}
+function renderLVB(){
+  const lvG=buildGroups(LV, lvbState.group);
+  const btG=buildGroups(BT, lvbState.group);
+  const rows=[];
+  for(const [g,rec] of lvG){
+    const lm=groupMetrics(rec.full); if(!lm) continue;
+    const btRec=btG.get(g);
+    const bm = btRec ? groupMetrics(btRec[lvbState.win]) : null;
+    const dev = (bm && bm.avg!==0) ? (lm.avg-bm.avg)/Math.abs(bm.avg) : null;
+    const wdev = (bm && bm.winRate!==0) ? (lm.winRate-bm.winRate)/Math.abs(bm.winRate) : null;
+    rows.push({g, lm, bm, dev, wdev});
+  }
+  const S=lvbState.sort, dir=lvbState.dir;
+  rows.sort((a,b)=>{
+    let av,bv;
+    if(S==="g"){ return a.g.localeCompare(b.g)*dir; }
+    if(S==="dev"){ av=a.dev==null?1e9:a.dev; bv=b.dev==null?1e9:b.dev; }
+    else if(S==="live"){ av=a.lm.avg; bv=b.lm.avg; }
+    else if(S==="bt"){ av=a.bm?a.bm.avg:-1e12; bv=b.bm?b.bm.avg:-1e12; }
+    else if(S==="ltr"){ av=a.lm.trades; bv=b.lm.trades; }
+    else if(S==="lwr"){ av=a.lm.winRate; bv=b.lm.winRate; }
+    else av=0,bv=0;
+    return (av-bv)*dir;
+  });
+  const arrow=k=> S===k ? `<span class="arrow">${dir>0?'&#9650;':'&#9660;'}</span>` : "";
+  let html=`<thead><tr>
+    <th class="left" data-s="g">${lvbState.group==="bot"?"Bot":"Strategy"} ${arrow("g")}</th>
+    <th data-s="ltr">Live tr ${arrow("ltr")}</th>
+    <th data-s="live">Live avg ${arrow("live")}</th>
+    <th data-s="lwr">Live win ${arrow("lwr")}</th>
+    <th data-s="bt">BT avg ${arrow("bt")}</th>
+    <th>BT win</th>
+    <th data-s="dev">&Delta; avg P/L ${arrow("dev")}</th>
+    <th>Match</th></tr></thead><tbody>`;
+  if(!rows.length){ html+=`<tr><td colspan="8" class="tbl-empty">No overlapping groups.</td></tr>`; }
+  for(const r of rows){
+    const low = r.lm.trades<LOWN ? `<span class="lown">low-n</span>`:"";
+    html+=`<tr>
+      <td class="left"><span class="gname">${esc(r.g)}</span>${low}</td>
+      <td>${f0.format(r.lm.trades)}</td>
+      <td class="${cls(r.lm.avg)}">${signMoney(r.lm.avg)}</td>
+      <td>${pct(r.lm.winRate)}</td>
+      <td class="${r.bm?cls(r.bm.avg):''}">${r.bm?signMoney(r.bm.avg):"&mdash;"}</td>
+      <td>${r.bm?pct(r.bm.winRate):"&mdash;"}</td>
+      <td class="${r.dev==null?'':(r.dev<0?'neg':'pos')}">${r.dev==null?"&mdash;":pct(r.dev,0)}</td>
+      <td>${matchChip(r.dev)}</td></tr>`;
+  }
+  html+="</tbody>";
+  const t=document.getElementById("lvbTable"); t.innerHTML=html;
+  t.querySelectorAll("th[data-s]").forEach(th=>th.onclick=()=>{
+    const s=th.dataset.s; if(lvbState.sort===s) lvbState.dir*=-1; else {lvbState.sort=s; lvbState.dir = s==="g"?1:1;}
+    renderLVB();
+  });
+}
+
+/* ---- drift table ---- */
+let driftState={ds:"backtest", group:"strategy", win:"month", sort:"z", dir:1};
+function trendChip(z, n){
+  if(n<1) return `<span class="chip neutral"><span class="cd"></span>&mdash;</span>`;
+  if(z>1.0) return `<span class="chip good"><span class="cd"></span>improving</span>`;
+  if(z<-1.0) return `<span class="chip bad"><span class="cd"></span>degrading</span>`;
+  return `<span class="chip neutral"><span class="cd"></span>stable</span>`;
+}
+function renderDrift(){
+  const ds = driftState.ds==="backtest"?BT:LV;
+  const G = buildGroups(ds, driftState.group);
+  const portAvg = overallPerTrade(ds);
+  const win=driftState.win;
+  const rows=[];
+  for(const [g,rec] of G){
+    const full=groupMetrics(rec.full); if(!full || full.trades<5) continue;
+    const w=groupMetrics(rec[win]); if(!w || w.trades<1) continue;
+    const z = full.plStd>0 ? (w.avg-full.avg)/full.plStd : (full.avg!==0?(w.avg-full.avg)/Math.abs(full.avg):0);
+    rows.push({g, full, w, z, portRel:w.avg-portAvg});
+  }
+  const S=driftState.sort, dir=driftState.dir;
+  rows.sort((a,b)=>{
+    let av,bv;
+    if(S==="g") return a.g.localeCompare(b.g)*dir;
+    if(S==="z"){av=a.z;bv=b.z;}
+    else if(S==="rec"){av=a.w.avg;bv=b.w.avg;}
+    else if(S==="hist"){av=a.full.avg;bv=b.full.avg;}
+    else if(S==="port"){av=a.portRel;bv=b.portRel;}
+    else if(S==="rtr"){av=a.w.trades;bv=b.w.trades;}
+    else if(S==="rtot"){av=a.w.total;bv=b.w.total;}
+    else av=0,bv=0;
+    return (av-bv)*dir;
+  });
+  const arrow=k=> S===k ? `<span class="arrow">${dir>0?'&#9650;':'&#9660;'}</span>`:"";
+  let html=`<thead><tr>
+    <th class="left" data-s="g">${driftState.group==="bot"?"Bot":"Strategy"} ${arrow("g")}</th>
+    <th data-s="rtr">Recent tr ${arrow("rtr")}</th>
+    <th data-s="rec">Recent avg ${arrow("rec")}</th>
+    <th data-s="hist">Hist avg ${arrow("hist")}</th>
+    <th data-s="rtot">Recent P/L ${arrow("rtot")}</th>
+    <th data-s="z">Drift (&sigma;) ${arrow("z")}</th>
+    <th data-s="port">vs port avg ${arrow("port")}</th>
+    <th>Trend</th></tr></thead><tbody>`;
+  if(!rows.length){ html+=`<tr><td colspan="8" class="tbl-empty">No groups with &ge;5 historical trades and activity in this window.</td></tr>`; }
+  for(const r of rows){
+    const low=r.w.trades<LOWN?`<span class="lown">low-n</span>`:"";
+    html+=`<tr>
+      <td class="left"><span class="gname">${esc(r.g)}</span>${low}</td>
+      <td>${f0.format(r.w.trades)}</td>
+      <td class="${cls(r.w.avg)}">${signMoney(r.w.avg)}</td>
+      <td class="${cls(r.full.avg)}">${signMoney(r.full.avg)}</td>
+      <td class="${cls(r.w.total)}">${signMoney(r.w.total)}</td>
+      <td class="${r.z<0?'neg':'pos'}">${(r.z>0?'+':'')+r.z.toFixed(2)}&sigma;</td>
+      <td class="${cls(r.portRel)}">${signMoney(r.portRel)}</td>
+      <td>${trendChip(r.z, r.w.trades)}</td></tr>`;
+  }
+  html+="</tbody>";
+  const t=document.getElementById("driftTable"); t.innerHTML=html;
+  t.querySelectorAll("th[data-s]").forEach(th=>th.onclick=()=>{
+    const s=th.dataset.s; if(driftState.sort===s) driftState.dir*=-1; else {driftState.sort=s; driftState.dir=1;}
+    renderDrift();
+  });
+}
+
+/* ---- mapping table ---- */
+function renderMap(){
+  const strategies=[...new Set(Object.values(defMap).concat(DATA.live.strat_names))].sort((a,b)=>a.localeCompare(b));
+  const bots=DATA.mapping.map(m=>m.bot);
+  const nOver=Object.keys(overrides).length;
+  document.getElementById("mapCount").innerHTML=`&middot; 85 bots${nOver?` &middot; ${nOver} override${nOver>1?'s':''}`:''}`;
+  let html=`<thead><tr><th class="left">Backtest bot (Position Name)</th><th class="left">Strategy</th><th class="left">Source</th></tr></thead><tbody>`;
+  for(const bot of bots){
+    const cur=botStrategy(bot);
+    const overridden = overrides[bot]!=null;
+    const tier = overridden ? "override" : tierMap[bot];
+    let opts=strategies.map(s=>`<option ${s===cur?"selected":""}>${esc(s)}</option>`).join("");
+    if(!strategies.includes(cur)) opts=`<option selected>${esc(cur)}</option>`+opts;
+    html+=`<tr>
+      <td class="left"><span class="gname">${esc(bot)}</span></td>
+      <td class="left"><select data-bot="${esc(bot)}">${opts}</select></td>
+      <td class="left"><span class="tier-badge tier-${tier}">${tier}</span></td></tr>`;
+  }
+  html+="</tbody>";
+  const t=document.getElementById("mapTable"); t.innerHTML=html;
+  t.querySelectorAll("select[data-bot]").forEach(sel=>sel.onchange=()=>{
+    const bot=sel.dataset.bot, val=sel.value;
+    if(val===defMap[bot]) delete overrides[bot]; else overrides[bot]=val;
+    localStorage.setItem(LS_KEY, JSON.stringify(overrides));
+    renderMap(); renderLVB(); renderDrift();
+  });
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ============================ wiring ============================ */
+function setCapital(v, writeNum=true){
+  CAPITAL=Math.min(20000000, Math.max(25000, v||M.capital_default));
+  localStorage.setItem(LS_CAP, String(CAPITAL));
+  if(writeNum) document.getElementById("capNum").value=Math.round(CAPITAL);
+  document.getElementById("capRange").value=Math.min(2000000,Math.max(50000,CAPITAL));
+  renderBaseline(); renderCharts();
+}
+function segWire(id, obj, key, cb){
+  document.getElementById(id).querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    document.getElementById(id).querySelectorAll("button").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); obj[key]=b.dataset.v; cb();
+  });
+}
+function initTheme(){
+  const saved=localStorage.getItem(LS_THEME);
+  if(saved) document.documentElement.setAttribute("data-theme",saved);
+  document.getElementById("themeBtn").onclick=()=>{
+    const cur=document.documentElement.getAttribute("data-theme");
+    const isDark = cur ? cur==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    const next=isDark?"light":"dark";
+    document.documentElement.setAttribute("data-theme",next);
+    localStorage.setItem(LS_THEME,next);
+    renderCharts();
+  };
+}
+
+function init(){
+  initTheme();
+  renderPeriods();
+  document.getElementById("mWk").textContent=M.recent_week_days;
+  document.getElementById("mMo").textContent=M.recent_month_days;
+  const capNum=document.getElementById("capNum");
+  capNum.oninput=e=>{ const val=parseFloat(e.target.value); if(val>0) setCapital(val,false); };
+  capNum.onchange=e=>setCapital(parseFloat(e.target.value),true);
+  document.getElementById("capRange").oninput=e=>setCapital(parseFloat(e.target.value),true);
+  segWire("lvbGroup", lvbState, "group", renderLVB);
+  segWire("lvbWin", lvbState, "win", renderLVB);
+  segWire("driftDs", driftState, "ds", renderDrift);
+  segWire("driftGroup", driftState, "group", renderDrift);
+  segWire("driftWin", driftState, "win", renderDrift);
+  document.getElementById("mapReset").onclick=()=>{ overrides={}; localStorage.removeItem(LS_KEY); renderMap(); renderLVB(); renderDrift(); };
+  setCapital(CAPITAL);
+  renderLVB(); renderDrift(); renderMap();
+}
+init();
+} /* end boot */
+</script>

@@ -241,6 +241,7 @@ The backend uses FastAPI with a modular router architecture for better code orga
 - **robustness.py**: Portfolio robustness testing with random period analysis
 - **profit_optimization.py**: Profit optimization and contract sizing endpoints
 - **favorites.py**: User favorite portfolio settings persistence
+- **comparison.py**: Live vs Backtest comparison (TradeSteward + Backtick formats)
 
 ### Frontend Structure (React + TypeScript + Vite + Material-UI)
 Modern React application with Material-UI components and Recharts for data visualization:
@@ -256,6 +257,7 @@ Modern React application with Material-UI components and Recharts for data visua
   - **RobustnessTest.tsx**: Portfolio robustness testing with random period analysis
   - **ProfitOptimization.tsx**: Profit optimization and contract sizing interface
   - **OptimizationHistory.tsx**: Historical optimization results and tracking
+  - **Comparison.tsx**: Live vs Backtest per-bot comparison (TradeSteward + Backtick)
 - **src/services/api.ts**: Axios-based API client with authentication
 - **Frontend routes**: React Router with protected routes and catch-all backend routing
 
@@ -270,6 +272,8 @@ Modern React application with Material-UI components and Recharts for data visua
 - **regime_data**: Market regime analysis results (via yfinance S&P 500 data)
 - **margin_requirements**: Portfolio margin requirement configurations
 - **optimization_cache**: Cached optimization results for performance
+- **comparison_uploads**: One row per Live vs Backtest CSV upload (TradeSteward or Backtick); each new upload of a given (user_id, upload_type) replaces the prior one
+- **comparison_trades**: Per-trade rows linked to a comparison_upload (bot_name, strategy, entry/exit dates, P/L, win_loss, buying_power)
 
 ## Key Features & Endpoints
 
@@ -309,6 +313,13 @@ Modern React application with Material-UI components and Recharts for data visua
 - `POST /api/profit-optimization/optimize`: Optimize portfolio for maximum profit with contract sizing
 - `GET /api/profit-optimization/history`: Get historical optimization results
 - `GET /api/profit-optimization/{optimization_id}`: Get specific optimization result
+
+### Live vs Backtest Comparison
+- `POST /api/comparison/upload`: Upload a live (TradeSteward) or backtest (Backtick) CSV — `upload_type` form field is `live` or `backtest`. Format is auto-detected from the header and must match the declared type. Each upload replaces the prior one of the same type for the user.
+- `GET /api/comparison/status`: Returns the user's current live + backtest uploads (filename, period, trade count)
+- `GET /api/comparison/live-vs-backtest`: Per-bot comparison rows with deltas + match quality (green/yellow/red)
+- `GET /api/comparison/recent-vs-history?recent_window_days=30`: Per-bot recent-vs-historical trend (improving/stable/degrading) on the live data
+- `DELETE /api/comparison/upload/{upload_type}`: Remove a live or backtest upload
 
 ### Favorites & User Preferences
 - `POST /api/favorites/save`: Save current portfolio analysis settings as user favorites
@@ -527,6 +538,59 @@ POST /api/optimize-weights
 }
 ```
 
+## Live vs Backtest Comparison Feature
+
+A separate per-trade data store and analysis flow used to compare TradeSteward live performance against Backtick backtest exports. Distinct from the existing daily-aggregate Portfolio flow.
+
+### CSV Formats Supported
+- **TradeSteward** (live): identified by columns `BotName`, `Strategy`, `OpenDate`, `TotalNetProfitLoss`. One row per option trade. `AccountNum` is recorded but never used for grouping — all accounts are aggregated as one large account.
+- **Backtick** (backtest): identified by columns `Position Name`, `Entry Date`, `Trade P/L`, `Backtick Name`. `Backtick Name` is the parent backtest label and is **ignored** — `Position Name` is the per-bot identifier.
+
+### Join Model
+- **Bot key**: Backtick `Position Name` ↔ TradeSteward `BotName` (matched as exact strings).
+- **Strategy**: only present in live data (`Strategy` column). For backtest bots that exist in the live data, strategy is inherited via a bot→strategy lookup built from the live upload. Bots only in backtest show `null` strategy.
+- **Accounts**: aggregated. The `account_num` field is stored on each trade but never participates in grouping.
+
+### Upload Model
+- Each upload of a given `(user_id, upload_type)` **replaces** the prior one for that user — there is no append mode. The user is expected to re-upload their full history each time they refresh the data.
+- `upload_type` is `live` or `backtest`. Format auto-detection (`detect_format` in `comparison_parser.py`) must match the declared type or the request is rejected.
+
+### Backend Modules
+- **comparison_parser.py**: `parse_csv(content, filename)` → `ParseResult(source_format, trades, period_start, period_end)`. Uses `csv.DictReader`, BOM-tolerant decoding, loose date parsing across `%Y-%m-%d`, `%m/%d/%Y`, etc.
+- **comparison_service.py**:
+  - `aggregate_by_bot(trades, strategy_lookup)` → `dict[bot_name, BotMetrics]` (trade count, total P/L, avg P/L per trade, win rate, largest win/loss, profit factor)
+  - `compare_live_vs_backtest(live, backtest)` → list of per-bot rows with `pl_per_trade_deviation`, `win_rate_deviation`, `overall_deviation` (max of the two), `match_quality` (green/yellow/red/gray)
+  - `compare_recent_vs_historical(live_trades, recent_window_days)` → splits live data by `max_date - recent_window_days` and classifies per-bot trend using a z-score on avg P/L per trade vs the historical baseline mean/stdev
+  - `replace_upload(...)`: deletes prior upload of same type then bulk-inserts new trades
+- **routers/comparison.py**: registered at `/api/comparison/` prefix. All endpoints require authentication.
+
+### Match Quality Thresholds
+- `overall_deviation = max(|live - bt| / |bt|)` across `avg_pl_per_trade` and `win_rate`
+- Green: <15% deviation
+- Yellow: 15-30%
+- Red: >30%
+- Gray: backtest value is zero (undefined) or bot only appears on one side
+
+### Recent vs Historical Trend Classification
+- `avg_pl_per_trade` trend: z-score = `(recent_mean - hist_mean) / hist_stdev`
+  - Improving: z > +1.0σ
+  - Degrading: z < -1.0σ
+  - Stable: otherwise
+  - Falls back to ±10% pct change when hist_stdev is 0
+- `win_rate` trend: simple ±5 percentage-point band (delta > 0.05 improving, < -0.05 degrading)
+
+### Frontend
+- **Page**: `/comparison` (`Comparison.tsx`). Two view modes via dropdown:
+  1. **Live vs Backtest** — per-bot table with both sides side-by-side, deviation %, color-coded match dot
+  2. **Recent vs Historical** — per-bot table with adjustable recent window (default 30 days), trend icons
+- Upload zone has two side-by-side cards (Live | Backtest), each with Replace and Remove buttons.
+- Bot/strategy text filter and quality filter chips for narrowing the table.
+- **Navigation**: "Live vs Backtest" standalone nav button in the top bar.
+
+### Sample Files
+- `backtick- lastmonth.csv` — Backtick backtest export sample
+- `tradeSteward-performanceLogs-06192026095301.csv` — TradeSteward live performance log sample
+
 ## Important Development Notes
 
 ### Starting Capital Parameter Flow
@@ -658,6 +722,7 @@ The project uses manual SQLAlchemy migrations in the `/migrations/` directory:
 - **add_contracts_column.py**: Contract count tracking
 - **add_upi_column.py**: Unique Portfolio Identifier
 - **backfill_cvar_values.py**: Historical CVaR data population
+- **add_comparison_tables.py**: Live vs Backtest comparison tables (comparison_uploads, comparison_trades)
 
 **Running Migrations**: Execute migration files directly with `python migrations/filename.py`
 # important-instruction-reminders

@@ -43,6 +43,7 @@ from routers.profit_optimization import router as profit_optimization_router
 from routers.favorites import router as favorites_router
 from routers.tear_sheet import router as tear_sheet_router
 from routers.mega_upload import router as mega_upload_router
+from routers.comparison import router as comparison_router
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -166,6 +167,7 @@ app.include_router(profit_optimization_router, prefix="/api/profit-optimization"
 app.include_router(favorites_router)
 app.include_router(tear_sheet_router, prefix="/api")
 app.include_router(mega_upload_router, prefix="/api/mega-upload")
+app.include_router(comparison_router, prefix="/api/comparison")
 
 # Legacy upload endpoint for backward compatibility
 @app.post("/upload")
@@ -223,6 +225,20 @@ async def serve_vite_svg():
     else:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Vite SVG not found")
+
+
+@app.get("/comparison-dashboard.html", response_class=HTMLResponse)
+async def serve_comparison_dashboard():
+    """Serve the self-contained Live vs Backtest performance dashboard page.
+
+    Registered before the SPA catch-all so it isn't swallowed by index.html.
+    Prefers the built copy (dist), falls back to the source (public) for dev.
+    """
+    for path in ('frontend/dist/comparison-dashboard.html', 'frontend/public/comparison-dashboard.html'):
+        if os.path.exists(path):
+            return FileResponse(path, media_type="text/html")
+    from fastapi import HTTPException
+    raise HTTPException(status_code=404, detail="Dashboard page not found")
 
 
 # Removed conflicting /portfolios route to allow React frontend to handle it

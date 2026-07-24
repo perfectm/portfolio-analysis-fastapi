@@ -653,3 +653,60 @@ class RollingPeriodStats(Base):
 
     def __repr__(self):
         return f"<RollingPeriodStats(id={self.id}, portfolio_id={self.portfolio_id}, type='{self.period_type}', profit={self.total_profit})>"
+
+
+class ComparisonUpload(Base):
+    """
+    Tracks each Live vs Backtest comparison CSV upload (TradeSteward / Backtick formats).
+    Each upload of a given (user_id, upload_type) replaces prior uploads of that type.
+    """
+    __tablename__ = "comparison_uploads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    upload_type = Column(String(20), nullable=False)  # 'live' or 'backtest'
+    source_format = Column(String(30), nullable=False)  # 'tradesteward' or 'backtick'
+    filename = Column(String(255), nullable=False)
+    period_start = Column(DateTime, nullable=True)
+    period_end = Column(DateTime, nullable=True)
+    trade_count = Column(Integer, nullable=False, default=0)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    trades = relationship("ComparisonTrade", back_populates="upload", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index('idx_comparison_uploads_user_type', 'user_id', 'upload_type'),
+    )
+
+    def __repr__(self):
+        return f"<ComparisonUpload(id={self.id}, user_id={self.user_id}, type='{self.upload_type}', trades={self.trade_count})>"
+
+
+class ComparisonTrade(Base):
+    """
+    One row per option trade from either a TradeSteward (live) or Backtick (backtest) CSV.
+    Bot is the primary identity; strategy is a secondary grouping (only available in live data).
+    """
+    __tablename__ = "comparison_trades"
+
+    id = Column(Integer, primary_key=True, index=True)
+    upload_id = Column(Integer, ForeignKey("comparison_uploads.id"), nullable=False, index=True)
+    bot_name = Column(String(255), nullable=False, index=True)
+    strategy = Column(String(255), nullable=True)  # null for backtest unless mapped via live data
+    entry_date = Column(DateTime, nullable=False, index=True)
+    exit_date = Column(DateTime, nullable=True)
+    pl = Column(Float, nullable=False)
+    win_loss = Column(Integer, nullable=True)  # 1 = win, 0 = loss
+    buying_power = Column(Float, nullable=True)
+    contracts = Column(Integer, nullable=True)
+    account_num = Column(String(50), nullable=True)  # stored but never used for grouping
+
+    upload = relationship("ComparisonUpload", back_populates="trades")
+
+    __table_args__ = (
+        Index('idx_comparison_trades_bot_date', 'bot_name', 'entry_date'),
+        Index('idx_comparison_trades_upload_bot', 'upload_id', 'bot_name'),
+    )
+
+    def __repr__(self):
+        return f"<ComparisonTrade(id={self.id}, bot='{self.bot_name}', date={self.entry_date}, pl={self.pl})>"
