@@ -31,8 +31,6 @@ from routers.portfolio import router as portfolio_router
 from routers.strategies import router as strategies_router
 from routers.upload import router as upload_router
 from routers.optimization import router as optimization_router
-from routers.regime import router as regime_router
-from routers.auth import router as auth_router
 from routers.margin import router as margin_router
 from routers.robustness import router as robustness_router
 from routers.profit_optimization import router as profit_optimization_router
@@ -149,12 +147,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router)
 app.include_router(portfolio_router, prefix="/api/portfolio")
 app.include_router(strategies_router, prefix="/api/strategies")
 app.include_router(upload_router, prefix="/api/upload")
 app.include_router(optimization_router, prefix="/api")
-app.include_router(regime_router)
 app.include_router(margin_router, prefix="/api/margin")
 app.include_router(robustness_router, prefix="/api/robustness")
 app.include_router(profit_optimization_router, prefix="/api/profit-optimization")
